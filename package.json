@@ -2,14 +2,14 @@
   "name": "antara",
   "type": "module",
   "scripts": {
-    "start": "ts-node --esm example.ts"
+    "build": "tsc",
+    "start": "npm run build && node dist/example.js"
   },
   "dependencies": {
     "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@types/uuid": "^9.0.0",
-    "ts-node": "^10.9.2",
     "typescript": "^5.0.0"
   }
 }

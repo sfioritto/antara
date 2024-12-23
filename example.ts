@@ -1,5 +1,5 @@
-import { workflow, step, action, reducer, on } from './dsl';
-import type { WorkflowEvent } from './dsl';
+import { workflow, step, action, reducer, on } from './dsl.js';
+import type { WorkflowEvent } from './dsl.js';
 
 // Simple notification handler
 async function notifyComplete(event: WorkflowEvent) {
@@ -98,5 +98,96 @@ userRegistration.run()
     console.log(JSON.stringify(state, null, 2));
   })
   .catch(error => {
-    console.error("�� Workflow failed:", error);
+    console.error(" Workflow failed:", error);
   });
+
+
+  // Usage example
+// const improveTestCoverage = workflow({
+//   initialState: {
+//     project: null,
+//     coverage: null,
+//     files: {
+//       lowest_coverage: null,
+//       related: [],
+//       test: null
+//     },
+//   },
+//   steps: [
+//     step(
+//       "Find file with lowest coverage",
+//       action(async (state) => {
+//         const coverage = await TestCoverage.analyze();
+//         return {
+//           coverage,
+//           lowest_coverage_file: coverage.find_lowest()
+//         };
+//       }),
+//       reducer((state, result) => ({
+//         ...state,
+//         coverage: result.coverage,
+//         files: {
+//           ...state.files,
+//           lowest_coverage: result.lowest_coverage_file
+//         }
+//       })),
+//       on("step:complete", notifySlack),
+//       on("step:error", requestReview)
+//     ),
+
+//     step(
+//       "Generate test",
+//       action(async (state) => {
+//         const codeFile = new CodeFile(state.files.lowest_coverage);
+//         const relatedFiles = state.files.related;
+//         const testFile = await new TestGenerator(codeFile, relatedFiles).generate();
+//         return { test_file: testFile };
+//       }),
+//       reducer((state, result) => ({
+//         ...state,
+//         files: {
+//           ...state.files,
+//           test: result.test_file
+//         }
+//       })),
+//       on("step:complete", notifySlack)
+//     ),
+
+//     step(
+//       "Validate and commit",
+//       action(async (state) => {
+//         const testFile = state.files.test;
+//         const result = await testFile.validate();
+//         if (result.is_valid) {
+//           const commit = await new GitCommit(testFile)
+//             .withMessage("Add test coverage")
+//             .push();
+//           return {
+//             validation: result,
+//             commit
+//           };
+//         }
+//         throw new Error("ValidationError");
+//       }),
+//       reducer((state, result) => ({
+//         ...state,
+//         validation: result.validation,
+//         commit: result.commit
+//       })),
+//       on("step:error", requestReview)
+//     ),
+
+//     step(
+//       "Clean up temporary files",
+//       action(async (state) => {
+//         await cleanup_temp_files();
+//         return { status: 'cleaned' };
+//       }),
+//       on("step:complete", async (event) => {
+//         if (event.result?.status === 'cleaned') {
+//           console.log("Cleanup successful");
+//         }
+//       })
+//     )
+//   ]
+// });
