@@ -150,21 +150,6 @@ function workflow(config: WorkflowConfig) {
   };
 }
 
-// Event handlers example
-async function notifySlack(event: WorkflowEvent) {
-  if (event.error) {
-    console.log(`Error in step: ${event.error}`);
-  } else {
-    console.log(`Step complete: ${event.result}`);
-  }
-}
-
-async function requestReview(event: WorkflowEvent) {
-  if (event.error) {
-    console.log(`Review needed for error: ${event.error}`);
-  }
-}
-
 export {
   workflow,
   step,
