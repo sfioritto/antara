@@ -212,20 +212,22 @@ console.log("🚀 Starting user registration workflow...\n");
 
 userRegistration.run()
   .then(({ state, status }) => {
-    console.log("\n✨ Workflow completed!");
-    console.log("\nFinal Status:");
+    console.log("\n✨ Workflow Status:\n");
     status.forEach(step => {
       const icon = step.status === 'complete' ? '✅' :
                    step.status === 'error' ? '❌' :
                    step.status === 'running' ? '⏳' : '⏸️';
-      console.log(`${icon} ${step.name}: ${step.status}`);
+      console.log(`${icon} ${step.name}`);
+      if (step.error) {
+        console.log(`   Error: ${step.error.message}`);
+      }
+      console.log('   State:');
+      console.log('   ', JSON.stringify(step.state, null, 2).replace(/\n/g, '\n    '));
+      console.log();
     });
-
-    console.log("\nFinal State:");
-    console.log(JSON.stringify(state, null, 2));
   })
   .catch(error => {
-    console.error(" Workflow failed:", error);
+    console.error("❌ Unexpected workflow error:", error);
   });
 
 

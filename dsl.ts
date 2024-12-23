@@ -96,28 +96,26 @@ interface StepStatus {
   name: string;
   status: 'pending' | 'running' | 'complete' | 'error';
   error?: Error;
+  state: State | null;
 }
 
 function workflow(config: WorkflowConfig) {
   let state = config.initialState ?? {};
-  // Initialize status array upfront with all steps in 'pending' state
   let status: StepStatus[] = config.steps.map(step => ({
     id: step.id,
     name: step.title,
-    status: 'pending'
+    status: 'pending',
+    state: null
   }));
 
   const run = async () => {
     for (const { id, action, reduce, events } of config.steps) {
-      // Update status to running
       const statusIndex = status.findIndex(s => s.id === id);
       status[statusIndex].status = 'running';
 
       try {
         const result = await action(state);
         state = reduce?.(state, result) ?? state;
-
-        // Update to complete
         status[statusIndex].status = 'complete';
 
         for (const { event, handler } of events) {
@@ -126,7 +124,6 @@ function workflow(config: WorkflowConfig) {
           }
         }
       } catch (error) {
-        // Update to error
         status[statusIndex].status = 'error';
         status[statusIndex].error = error as Error;
 
@@ -135,7 +132,10 @@ function workflow(config: WorkflowConfig) {
             await handler({ event, state, error: error as Error });
           }
         }
-        throw error;
+        break;
+      } finally {
+        // Always capture the state snapshot, regardless of success or failure
+        status[statusIndex].state = { ...state };
       }
     }
 
