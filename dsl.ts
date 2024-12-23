@@ -90,8 +90,6 @@ interface WorkflowConfig {
 function workflow(config: WorkflowConfig) {
   let state = config.initialState ?? {};
 
-  const getState = () => ({ ...state });
-
   const run = async () => {
     for (const { title, action, reduce, events } of config.steps) {
       try {
@@ -114,12 +112,11 @@ function workflow(config: WorkflowConfig) {
       }
     }
 
-    return getState();
+    return { state: { ...state } };
   };
 
   return {
     run,
-    getState
   };
 }
 
