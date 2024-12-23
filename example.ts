@@ -17,9 +17,41 @@ const userRegistration = workflow({
   initialState: {
     user: null,
     validationResult: null,
-    notification: null
+    notification: null,
+    security: {
+      mfaEnabled: false,
+      securityQuestions: [],
+    },
+    onboarding: {
+      progress: 0,
+      completedSteps: [],
+    },
+    preferences: null,
+    analytics: {
+      registrationStart: null,
+      timeToComplete: null,
+    }
   },
   steps: [
+    step(
+      "Initialize analytics",
+      action(async (state) => {
+        return {
+          startTime: new Date().toISOString(),
+          sessionId: Math.random().toString(36).substring(7)
+        };
+      }),
+      reducer((state, result) => ({
+        ...state,
+        analytics: {
+          ...state.analytics,
+          registrationStart: result.startTime,
+          sessionId: result.sessionId
+        }
+      })),
+      on("step:complete", notifyComplete)
+    ),
+
     step(
       "Validate user input",
       action(async (state) => {
@@ -62,6 +94,57 @@ const userRegistration = workflow({
     ),
 
     step(
+      "Security assessment",
+      action(async (state) => {
+        await delay(1200);
+        const geoLocation = await fetch('https://api.example.com/geo').then(r => r.json());
+        return {
+          riskScore: Math.random() * 100,
+          requiresMFA: true,
+          location: geoLocation,
+          recommendedSecurityLevel: 'high'
+        };
+      }),
+      reducer((state, result) => ({
+        ...state,
+        security: {
+          ...state.security,
+          riskAssessment: result,
+          mfaRequired: result.requiresMFA
+        }
+      })),
+      on("step:complete", notifyComplete),
+      on("step:error", notifyError)
+    ),
+
+    step(
+      "Setup security preferences",
+      action(async (state) => {
+        await delay(1000);
+        const securityQuestions = [
+          { question: "First pet's name?", answer: "encrypted_answer" },
+          { question: "City of birth?", answer: "encrypted_answer" }
+        ];
+        return {
+          mfaSecret: 'GENERATED_SECRET',
+          backupCodes: Array(8).fill(0).map(() => Math.random().toString(36).substring(7)),
+          securityQuestions
+        };
+      }),
+      reducer((state, result) => ({
+        ...state,
+        security: {
+          ...state.security,
+          mfaEnabled: true,
+          mfaSecret: result.mfaSecret,
+          backupCodes: result.backupCodes,
+          securityQuestions: result.securityQuestions
+        }
+      })),
+      on("step:complete", notifyComplete)
+    ),
+
+    step(
       "Send welcome email",
       action(async (state) => {
         await delay(800); // Simulate email sending
@@ -76,6 +159,50 @@ const userRegistration = workflow({
       })),
       on("step:complete", notifyComplete),
       on("step:error", notifyError)
+    ),
+
+    step(
+      "Initialize user preferences",
+      action(async (state) => {
+        await delay(500);
+        return {
+          theme: 'light',
+          notifications: {
+            email: true,
+            push: false,
+            sms: false
+          },
+          language: 'en',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+      }),
+      reducer((state, result) => ({
+        ...state,
+        preferences: result
+      })),
+      on("step:complete", notifyComplete)
+    ),
+
+    step(
+      "Complete analytics",
+      action(async (state) => {
+        const endTime = new Date();
+        const startTime = new Date(state.analytics.registrationStart);
+        return {
+          timeToComplete: endTime.getTime() - startTime.getTime(),
+          steps: state.onboarding.completedSteps,
+          success: true
+        };
+      }),
+      reducer((state, result) => ({
+        ...state,
+        analytics: {
+          ...state.analytics,
+          timeToComplete: result.timeToComplete,
+          completionStatus: result.success
+        }
+      })),
+      on("step:complete", notifyComplete)
     )
   ]
 });
