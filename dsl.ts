@@ -1,3 +1,5 @@
+import { v4 as uuidv4 } from 'uuid';
+
 type State = Record<string, any>;
 type Result = Record<string, any>;
 
@@ -29,6 +31,7 @@ interface StepReducer {
 }
 
 interface Step {
+  id: string;
   title: string;
   action: Action;
   reduce?: Reducer;
@@ -75,6 +78,7 @@ function step(title: string, ...args: StepArgs) {
   });
 
   return {
+    id: uuidv4(),
     title,
     action: stepAction!,  // Safe to use ! because type system ensures action exists
     reduce: stepReducer,
@@ -87,15 +91,34 @@ interface WorkflowConfig {
   steps: Step[];
 }
 
+interface StepStatus {
+  id: string;
+  name: string;
+  status: 'pending' | 'running' | 'complete' | 'error';
+  error?: Error;
+}
+
 function workflow(config: WorkflowConfig) {
   let state = config.initialState ?? {};
+  // Initialize status array upfront with all steps in 'pending' state
+  let status: StepStatus[] = config.steps.map(step => ({
+    id: step.id,
+    name: step.title,
+    status: 'pending'
+  }));
 
   const run = async () => {
-    for (const { title, action, reduce, events } of config.steps) {
+    for (const { id, title, action, reduce, events } of config.steps) {
+      // Update status to running
+      const statusIndex = status.findIndex(s => s.id === id);
+      status[statusIndex].status = 'running';
+
       try {
-        state.current_step = title;
         const result = await action(state);
         state = reduce?.(state, result) ?? state;
+
+        // Update to complete
+        status[statusIndex].status = 'complete';
 
         for (const { event, handler } of events) {
           if (event === 'step:complete') {
@@ -103,6 +126,10 @@ function workflow(config: WorkflowConfig) {
           }
         }
       } catch (error) {
+        // Update to error
+        status[statusIndex].status = 'error';
+        status[statusIndex].error = error as Error;
+
         for (const { event, handler } of events) {
           if (event === 'step:error') {
             await handler({ event, state, error: error as Error });
@@ -112,7 +139,10 @@ function workflow(config: WorkflowConfig) {
       }
     }
 
-    return { state: { ...state } };
+    return {
+      state: { ...state },
+      status: status.map(s => ({ ...s }))
+    };
   };
 
   return {
@@ -145,7 +175,6 @@ const improveTestCoverage = workflow({
       related: [],
       test: null
     },
-    current_step: null
   },
   steps: [
     step(
