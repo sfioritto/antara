@@ -108,7 +108,7 @@ function workflow(config: WorkflowConfig) {
   }));
 
   const run = async () => {
-    for (const { id, title, action, reduce, events } of config.steps) {
+    for (const { id, action, reduce, events } of config.steps) {
       // Update status to running
       const statusIndex = status.findIndex(s => s.id === id);
       status[statusIndex].status = 'running';
@@ -334,9 +334,15 @@ async function cleanup_temp_files(): Promise<void> {
 }
 
 export {
-  CodeFile,
-  TestGenerator,
-  GitCommit,
-  TestCoverage,
-  cleanup_temp_files
+  workflow,
+  step,
+  action,
+  reducer,
+  on,
+};
+
+export type {
+  WorkflowEvent,
+  State,
+  Result
 };

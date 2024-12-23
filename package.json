@@ -1,17 +1,15 @@
 {
-  "name": "workflows",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "antara",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "ts-node --esm example.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "eslint": "^9.17.0",
-    "typescript": "^5.7.2",
-    "uuid": "^11.0.3"
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0"
   }
 }
