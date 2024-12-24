@@ -6,6 +6,7 @@
     "start": "npm run build && node dist/example.js"
   },
   "dependencies": {
+    "type-fest": "^4.30.2",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
