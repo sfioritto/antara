@@ -130,13 +130,13 @@ function workflow(initialState: State = {}, ...steps: Step[]) {
         break;
       } finally {
         // Always capture the state snapshot, regardless of success or failure
-        status[statusIndex].state = { ...state };
+        status[statusIndex].state = JSON.parse(JSON.stringify(state));
       }
     }
 
     return {
-      state: { ...state },
-      status: status.map(s => ({ ...s }))
+      state: JSON.parse(JSON.stringify(state)),
+      status: status.map(s => JSON.parse(JSON.stringify(s)))
     };
   };
 

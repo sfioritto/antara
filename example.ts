@@ -13,25 +13,26 @@ async function notifyError(event: WorkflowEvent) {
 // Simulate some async operations
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const userRegistration = workflow(
-  {
-    user: null,
-    validationResult: null,
-    notification: null,
-    security: {
-      mfaEnabled: false,
-      securityQuestions: [],
-    },
-    onboarding: {
-      progress: 0,
-      completedSteps: [],
-    },
-    preferences: null,
-    analytics: {
-      registrationStart: null,
-      timeToComplete: null,
-    }
+const initialState = {
+  user: null,
+  validationResult: null,
+  notification: null,
+  security: {
+    mfaEnabled: false,
+    securityQuestions: [],
   },
+  onboarding: {
+    progress: 0,
+    completedSteps: [],
+  },
+  preferences: null,
+  analytics: {
+    registrationStart: null,
+    timeToComplete: null,
+  }
+};
+
+const userRegistration = workflow(initialState,
   step(
     "Initialize analytics",
     action(async (state) => {
