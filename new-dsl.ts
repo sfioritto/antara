@@ -35,10 +35,10 @@ function step<StateShape>(
 const workflow = <StateShape>(
   ...steps: Step<StateShape>[]
 ): {
-  run: (initialState: StateShape) => StateShape
+  run: (initialState: StateShape) => Promise<StateShape>
 } => {
   return {
-    run: (initialState) => initialState,
+    run: async (initialState) => initialState,
   }
 };
 
@@ -51,4 +51,4 @@ workflow<typeof initialState>(
     "First step",
     action((state) => console.log(state.hello)),
   ),
-).run(initialState);
+).run(initialState).then(finalState => finalState.hello);
