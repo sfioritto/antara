@@ -1,160 +1,148 @@
 import { v4 as uuidv4 } from 'uuid';
+import { JsonObject } from 'type-fest';
 
-type State = Record<string, any>;
-type Result = Record<string, any>;
+type State<StateShape> = StateShape extends JsonObject ? StateShape : never;
+type ActionHandler<StateShape, ResultShape = any> = (state: StateShape) => (Promise<ResultShape> | ResultShape);
+type ReduceHandler<StateShape, ResultShape> = (result: ResultShape, state: StateShape) => StateShape;
 
-interface WorkflowEvent {
-  event: string;
-  state: State;
-  result?: Result;
-  error?: Error;
-}
-
-type EventHandler = (event: WorkflowEvent) => Promise<void>;
-type Action = (state: State) => Promise<Result>;
-type Reducer = (state: State, result: Result) => State;
-
-// Core builder types
-interface StepEvent {
-  event: 'step:complete' | 'step:error';
-  handler: EventHandler;
-}
-
-interface StepAction {
-  type: 'action';
-  fn: Action;
-}
-
-interface StepReducer {
-  type: 'reducer';
-  fn: Reducer;
-}
-
-interface Step {
-  id: string;
-  title: string;
-  action: Action;
-  reduce?: Reducer;
-  events: StepEvent[];
-}
-
-// Core builders
-const action = (fn: Action): StepAction => ({
-  type: 'action',
-  fn
-});
-
-const reducer = (fn: Reducer): StepReducer => ({
-  type: 'reducer',
-  fn
-});
-
-const on = (event: 'step:complete' | 'step:error', handler: EventHandler): StepEvent => ({
-  event,
-  handler
-});
-
-// Type that ensures StepAction is present and only one StepReducer
-type StepArgs =
-  | [StepAction, ...Array<StepEvent>]
-  | [StepAction, StepReducer, ...Array<StepEvent>]
-  | [...Array<StepEvent>, StepAction]
-  | [...Array<StepEvent>, StepAction, StepReducer]
-  | [StepReducer, StepAction, ...Array<StepEvent>]
-  | [StepReducer, ...Array<StepEvent>, StepAction];
-
-function step(title: string, ...args: StepArgs) {
-  let stepAction: Action | undefined;
-  let stepReducer: Reducer | undefined;
-  const events: StepEvent[] = [];
-
-  args.forEach(arg => {
-    if ('type' in arg) {
-      if (arg.type === 'action') stepAction = arg.fn;
-      if (arg.type === 'reducer') stepReducer = arg.fn;
-    } else {
-      events.push(arg);
-    }
-  });
-
-  return {
-    id: uuidv4(),
-    title,
-    action: stepAction!,  // Safe to use ! because type system ensures action exists
-    reduce: stepReducer,
-    events
-  };
-}
-
-interface StepStatus {
+interface StepStatus<StateShape> {
   id: string;
   name: string;
   status: 'pending' | 'running' | 'complete' | 'error';
   error?: Error;
-  state: State | null;
+  state: StateShape | null;
 }
 
-function workflow(initialState: State = {}, ...steps: Step[]) {
-  let state = initialState;
-  let status: StepStatus[] = steps.map(step => ({
-    id: step.id,
-    name: step.title,
-    status: 'pending',
-    state: null
-  }));
+interface Action<StateShape, ResultShape> {
+  type: "action";
+  fn: ActionHandler<StateShape, ResultShape>;
+}
 
-  const run = async () => {
-    for (const { id, action, reduce, events } of steps) {
-      const statusIndex = status.findIndex(s => s.id === id);
-      status[statusIndex].status = 'running';
+interface Reducer<StateShape, ResultShape> {
+  type: "reducer";
+  fn: ReduceHandler<StateShape, ResultShape>;
+}
 
-      try {
-        const result = await action(state);
-        state = reduce?.(state, result) ?? state;
-        status[statusIndex].status = 'complete';
+type StepEventTypes = 'step:complete' | 'step:error';
 
-        for (const { event, handler } of events) {
-          if (event === 'step:complete') {
-            await handler({ event, state, result });
-          }
-        }
-      } catch (error) {
-        status[statusIndex].status = 'error';
-        status[statusIndex].error = error as Error;
+type EventHandler<StateShape, ResultShape> = (params: {
+  event?: StepEventTypes,
+  state?: StateShape,
+  result?: ResultShape,
+  error?: Error
+}) => void;
 
-        for (const { event, handler } of events) {
-          if (event === 'step:error') {
-            await handler({ event, state, error: error as Error });
-          }
-        }
-        break;
-      } finally {
-        // Always capture the state snapshot, regardless of success or failure
-        status[statusIndex].state = JSON.parse(JSON.stringify(state));
-      }
-    }
+interface Event<StateShape, ResultShape> {
+  type: "event";
+  event: StepEventTypes;
+  handler: EventHandler<StateShape, ResultShape>;
+}
 
-    return {
-      state: JSON.parse(JSON.stringify(state)),
-      status: status.map(s => JSON.parse(JSON.stringify(s)))
-    };
-  };
+interface Step<StateShape, ResultShape = any> {
+  id: string;
+  title: string;
+  action: Action<StateShape, ResultShape>;
+  reducer?: Reducer<StateShape, ResultShape>;
+  events: Event<StateShape, ResultShape>[];
+}
+
+// Core builders
+const action = <StateShape, ResultShape>(
+  fn: ActionHandler<StateShape, ResultShape>
+): Action<StateShape, ResultShape> => ({
+  type: "action",
+  fn
+});
+
+const reduce = <StateShape, ResultShape>(
+  fn: ReduceHandler<StateShape, ResultShape>
+): Reducer<StateShape, ResultShape> => ({
+  type: "reducer",
+  fn,
+});
+
+const on = <StateShape, ResultShape>(
+  event: StepEventTypes,
+  handler: EventHandler<StateShape, ResultShape>
+): Event<StateShape, ResultShape> => ({
+  type: "event",
+  event,
+  handler,
+});
+
+type StepArgs<StateShape, ResultShape> =
+  | [Action<StateShape, ResultShape>, ...Event<StateShape, ResultShape>[]]
+  | [Action<StateShape, ResultShape>, Reducer<StateShape, ResultShape>, ...Event<StateShape, ResultShape>[]];
+
+function step<StateShape, ResultShape>(
+  title: string,
+  ...args: StepArgs<StateShape, ResultShape>
+): Step<StateShape, ResultShape> {
+  const [action, ...rest] = args;
+
+  const hasReducer = rest[0]?.type === "reducer";
+  const reducer = hasReducer ? rest[0] as Reducer<StateShape, ResultShape> : undefined;
+  const events = (hasReducer ? rest.slice(1) : rest) as Event<StateShape, ResultShape>[];
 
   return {
-    run,
+    id: uuidv4(),
+    title,
+    action,
+    reducer,
+    events,
   };
 }
 
-export {
-  workflow,
-  step,
-  action,
-  reducer,
-  on,
+const workflow = <StateShape>(
+  ...steps: Step<StateShape>[]
+): {
+  run: (initialState: State<StateShape>) => Promise<{ state: State<StateShape>, status: StepStatus<StateShape>[] }>
+} => {
+  return {
+    run: async (initialState) => {
+      let state = JSON.parse(JSON.stringify(initialState));
+      const stepStatuses: StepStatus<StateShape>[] = steps.map(step => ({
+        id: step.id,
+        name: step.title,
+        status: 'pending',
+        state: null
+      }));
+
+      for (const { id, action, reducer, events } of steps) {
+        const status = stepStatuses.find(status => status.id === id);
+        if (!status) {
+          throw new Error(`Step ${id} not found in stepStatuses`);
+        }
+        status.status = 'running';
+        try {
+          const result = await action.fn(state);
+          state = JSON.parse(JSON.stringify(reducer?.fn(result, state) ?? state));
+          for (const { event, handler } of events) {
+            if (event === 'step:complete') {
+              await handler({ event, state, result });
+            }
+          }
+        } catch (error) {
+          status.status = 'error';
+          status.error = error as Error;
+
+          for (const { event, handler } of events) {
+            if (event === 'step:error') {
+              await handler({ event, state, error: error as Error });
+            }
+          }
+        } finally {
+          status.status = 'complete';
+          status.state = JSON.parse(JSON.stringify(state));
+        }
+      }
+
+      return {
+        state,
+        status: stepStatuses,
+      };
+    },
+  }
 };
 
-export type {
-  WorkflowEvent,
-  State,
-  Result
-};
+export { workflow, step, action, reduce, on };

@@ -1,4 +1,4 @@
-import { workflow, step, action, reduce, on } from './new-dsl';
+import { workflow, step, action, reduce, on } from './dsl.js';
 import type { JsonObject } from 'type-fest';
 
 // Simulate async operations
@@ -147,3 +147,8 @@ const userRegistration = workflow<RegistrationState>(
     on("step:error", notifyError)
   )
 );
+
+userRegistration.run(initialState).then(({ state, status }) => {
+  console.log(status);
+  return state;
+});
