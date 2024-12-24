@@ -5,7 +5,7 @@ type State<StateShape> = StateShape extends JsonObject ? StateShape : never;
 type Action<StateShape, ResultShape = any> = (state: StateShape) => (Promise<ResultShape> | ResultShape);
 type Reduce<StateShape, ResultShape> = (result: ResultShape, state: StateShape) => StateShape;
 
-interface StateStatus<StateShape> {
+interface StepStatus<StateShape> {
   id: string;
   name: string;
   status: 'pending' | 'running' | 'complete' | 'error';
@@ -86,12 +86,12 @@ function step<StateShape, ResultShape>(
 const workflow = <StateShape>(
   ...steps: Step<StateShape>[]
 ): {
-  run: (initialState: State<StateShape>) => Promise<{ state: State<StateShape>, status: StateStatus<StateShape>[] }>
+  run: (initialState: State<StateShape>) => Promise<{ state: State<StateShape>, status: StepStatus<StateShape>[] }>
 } => {
   return {
     run: async (initialState) => {
       let state = JSON.parse(JSON.stringify(initialState));
-      const stepStatuses: StateStatus<StateShape>[] = steps.map(step => ({
+      const stepStatuses: StepStatus<StateShape>[] = steps.map(step => ({
         id: step.id,
         name: step.title,
         status: 'pending',
