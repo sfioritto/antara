@@ -5,6 +5,14 @@ type State<StateShape> = StateShape extends JsonObject ? StateShape : never;
 type Action<StateShape, ResultShape = any> = (state: StateShape) => (Promise<ResultShape> | ResultShape);
 type Reduce<StateShape, ResultShape> = (result: ResultShape, state: StateShape) => StateShape;
 
+interface StepStatus<StateShape> {
+  id: string;
+  name: string;
+  status: 'pending' | 'running' | 'complete' | 'error';
+  error?: Error;
+  state: StateShape | null;
+}
+
 interface ActionStep<StateShape, ResultShape> {
   type: "action";
   fn: Action<StateShape, ResultShape>;
@@ -58,15 +66,29 @@ const workflow = <StateShape>(
   return {
     run: async (initialState) => {
       let state = JSON.parse(JSON.stringify(initialState));
-      try {
-        for (const { id, title, action, reducer } of steps) {
+      const stepStatuses: StepStatus<StateShape>[] = steps.map(step => ({
+        id: step.id,
+        name: step.title,
+        status: 'pending',
+        state: null
+      }));
+
+      for (const { id, title, action, reducer } of steps) {
+        const status = stepStatuses.find(status => status.id === id);
+        if (!status) {
+          throw new Error(`Step ${id} not found in stepStatuses`);
+        }
+        status.status = 'running';
+        try {
           const result = await action.fn(state);
           state = reducer?.fn(result, state) ?? state;
+        } catch (error) {
+          status.status = 'error';
+          status.error = error as Error;
+        } finally {
+          status.status = 'complete';
+          status.state = JSON.parse(JSON.stringify(state));
         }
-      } catch {
-
-      } finally {
-
       }
 
       return state;
