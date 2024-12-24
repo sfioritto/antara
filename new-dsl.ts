@@ -144,37 +144,3 @@ const workflow = <StateShape>(
     },
   }
 };
-
-// simple example to check types
-
-const initialState: { hello: string } = { hello: "world" };
-
-workflow<typeof initialState>(
-  step("FirstStep",
-    action((state) => state.hello),
-    on('step:complete', ({ state, result }) => {
-      console.log(state);
-      console.log(result);
-    })
-  ),
-)
-
-workflow<typeof initialState>(
-  step(
-    "First step",
-    action((state): string => state.hello),
-    reduce((result, state) => {
-      return {
-        ...state,
-        hello: result,
-      };
-    }),
-    on('step:complete', ({ state, result, }) => {
-      console.log(state);
-      console.log(result);
-    }),
-  ),
-).run(initialState).then(({ state, status }) => {
-  console.log(status);
-  return state.hello;
-});
