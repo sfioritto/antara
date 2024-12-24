@@ -61,7 +61,7 @@ function step<StateShape, ResultShape>(
 const workflow = <StateShape>(
   ...steps: Step<StateShape>[]
 ): {
-  run: (initialState: State<StateShape>) => Promise<State<StateShape>>
+  run: (initialState: State<StateShape>) => Promise<{ state: State<StateShape>, status: StepStatus<StateShape>[] }>
 } => {
   return {
     run: async (initialState) => {
@@ -81,7 +81,7 @@ const workflow = <StateShape>(
         status.status = 'running';
         try {
           const result = await action.fn(state);
-          state = reducer?.fn(result, state) ?? state;
+          state = JSON.parse(JSON.stringify(reducer?.fn(result, state) ?? state));
         } catch (error) {
           status.status = 'error';
           status.error = error as Error;
@@ -91,7 +91,10 @@ const workflow = <StateShape>(
         }
       }
 
-      return state;
+      return {
+        state,
+        status: stepStatuses,
+      };
     },
   }
 };
@@ -111,4 +114,7 @@ workflow<typeof initialState>(
       };
     })
   ),
-).run(initialState).then(finalState => finalState.hello);
+).run(initialState).then(({ state, status }) => {
+  console.log(status);
+  return state.hello;
+});
