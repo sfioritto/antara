@@ -35,10 +35,23 @@ function step<StateShape>(
 const workflow = <StateShape>(
   ...steps: Step<StateShape>[]
 ): {
-  run: (initialState: StateShape) => Promise<StateShape>
+  run: (initialState: State<StateShape>) => Promise<State<StateShape>>
 } => {
   return {
-    run: async (initialState) => initialState,
+    run: async (initialState) => {
+      let state = JSON.parse(JSON.stringify(initialState));
+      try {
+        for (const { id, title, action } of steps) {
+          const result = await action(state);
+        }
+      } catch {
+
+      } finally {
+
+      }
+
+      return state;
+    },
   }
 };
 
