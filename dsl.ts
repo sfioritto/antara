@@ -86,11 +86,6 @@ function step(title: string, ...args: StepArgs) {
   };
 }
 
-interface WorkflowConfig {
-  initialState?: State;
-  steps: Step[];
-}
-
 interface StepStatus {
   id: string;
   name: string;
@@ -99,9 +94,9 @@ interface StepStatus {
   state: State | null;
 }
 
-function workflow(config: WorkflowConfig) {
-  let state = config.initialState ?? {};
-  let status: StepStatus[] = config.steps.map(step => ({
+function workflow(initialState: State = {}, ...steps: Step[]) {
+  let state = initialState;
+  let status: StepStatus[] = steps.map(step => ({
     id: step.id,
     name: step.title,
     status: 'pending',
@@ -109,7 +104,7 @@ function workflow(config: WorkflowConfig) {
   }));
 
   const run = async () => {
-    for (const { id, action, reduce, events } of config.steps) {
+    for (const { id, action, reduce, events } of steps) {
       const statusIndex = status.findIndex(s => s.id === id);
       status[statusIndex].status = 'running';
 
