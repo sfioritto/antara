@@ -23,11 +23,17 @@ interface ReducerStep<StateShape, ResultShape> {
   fn: Reduce<StateShape, ResultShape>;
 }
 
+interface StepEvent<StateShape, ResultShape> {
+  event: 'step:complete' | 'step:error';
+  handler: (state: StateShape, result: ResultShape) => void;
+}
+
 interface Step<StateShape, ResultShape = any> {
   id: string;
   title: string;
   action: ActionStep<StateShape, ResultShape>;
   reducer?: ReducerStep<StateShape, ResultShape>;
+  events: StepEvent<StateShape, ResultShape>[];
 }
 
 // Core builders
@@ -45,16 +51,26 @@ const reduce = <StateShape, ResultShape>(
   fn,
 });
 
+const on = <StateShape, ResultShape>(
+  event: 'step:complete' | 'step:error',
+  handler: (state: StateShape, result: ResultShape) => void
+): StepEvent<StateShape, ResultShape> => ({
+  event,
+  handler,
+});
+
 function step<StateShape, ResultShape>(
   title: string,
   action: ActionStep<StateShape, ResultShape>,
   reducer?: ReducerStep<StateShape, ResultShape>,
+  ...events: StepEvent<StateShape, ResultShape>[]
 ): Step<StateShape, ResultShape> {
   return {
     id: uuidv4(),
     title,
     action,
     reducer,
+    events,
   };
 }
 
@@ -73,7 +89,7 @@ const workflow = <StateShape>(
         state: null
       }));
 
-      for (const { id, title, action, reducer } of steps) {
+      for (const { id, action, reducer, events } of steps) {
         const status = stepStatuses.find(status => status.id === id);
         if (!status) {
           throw new Error(`Step ${id} not found in stepStatuses`);
@@ -82,9 +98,20 @@ const workflow = <StateShape>(
         try {
           const result = await action.fn(state);
           state = JSON.parse(JSON.stringify(reducer?.fn(result, state) ?? state));
+          for (const { event, handler } of events) {
+            if (event === 'step:complete') {
+              await handler(state, result);
+            }
+          }
         } catch (error) {
           status.status = 'error';
           status.error = error as Error;
+
+          for (const { event, handler } of events) {
+            if (event === 'step:error') {
+              await handler(state, error as Error);
+            }
+          }
         } finally {
           status.status = 'complete';
           status.state = JSON.parse(JSON.stringify(state));
@@ -112,7 +139,11 @@ workflow<typeof initialState>(
         ...state,
         hello: result,
       };
-    })
+    }),
+    on('step:complete', (state, result) => {
+      console.log(state);
+      console.log(result);
+    }),
   ),
 ).run(initialState).then(({ state, status }) => {
   console.log(status);
