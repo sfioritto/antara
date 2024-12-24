@@ -5,7 +5,7 @@ type State<StateShape> = StateShape extends JsonObject ? StateShape : never;
 type Action<StateShape, ResultShape = any> = (state: StateShape) => (Promise<ResultShape> | ResultShape);
 type Reduce<StateShape, ResultShape> = (result: ResultShape, state: StateShape) => StateShape;
 
-interface StepStatus<StateShape> {
+interface StateStatus<StateShape> {
   id: string;
   name: string;
   status: 'pending' | 'running' | 'complete' | 'error';
@@ -23,9 +23,18 @@ interface ReducerStep<StateShape, ResultShape> {
   fn: Reduce<StateShape, ResultShape>;
 }
 
-interface StepEvent<StateShape, ResultShape> {
-  event: 'step:complete' | 'step:error';
-  handler: (state: StateShape, result: ResultShape) => void;
+type StepEventTypes = 'step:complete' | 'step:error';
+
+type EventHandler<StateShape, ResultShape> = ({ event, state, result, error }: {
+  event: StepEventTypes,
+  state: StateShape,
+  result?: ResultShape,
+  error?: Error
+}) => void;
+
+interface EventStep<StateShape, ResultShape> {
+  event: StepEventTypes;
+  handler: EventHandler<StateShape, ResultShape>;
 }
 
 interface Step<StateShape, ResultShape = any> {
@@ -33,7 +42,7 @@ interface Step<StateShape, ResultShape = any> {
   title: string;
   action: ActionStep<StateShape, ResultShape>;
   reducer?: ReducerStep<StateShape, ResultShape>;
-  events: StepEvent<StateShape, ResultShape>[];
+  events: EventStep<StateShape, ResultShape>[];
 }
 
 // Core builders
@@ -51,10 +60,10 @@ const reduce = <StateShape, ResultShape>(
   fn,
 });
 
-const on = <StateShape, ResultShape>(
-  event: 'step:complete' | 'step:error',
-  handler: (state: StateShape, result: ResultShape) => void
-): StepEvent<StateShape, ResultShape> => ({
+const on = <StateShape, ResultShape> (
+  event: StepEventTypes,
+  handler: EventHandler<StateShape, ResultShape>
+): EventStep<StateShape, ResultShape> => ({
   event,
   handler,
 });
@@ -63,7 +72,7 @@ function step<StateShape, ResultShape>(
   title: string,
   action: ActionStep<StateShape, ResultShape>,
   reducer?: ReducerStep<StateShape, ResultShape>,
-  ...events: StepEvent<StateShape, ResultShape>[]
+  ...events: EventStep<StateShape, ResultShape>[]
 ): Step<StateShape, ResultShape> {
   return {
     id: uuidv4(),
@@ -77,12 +86,12 @@ function step<StateShape, ResultShape>(
 const workflow = <StateShape>(
   ...steps: Step<StateShape>[]
 ): {
-  run: (initialState: State<StateShape>) => Promise<{ state: State<StateShape>, status: StepStatus<StateShape>[] }>
+  run: (initialState: State<StateShape>) => Promise<{ state: State<StateShape>, status: StateStatus<StateShape>[] }>
 } => {
   return {
     run: async (initialState) => {
       let state = JSON.parse(JSON.stringify(initialState));
-      const stepStatuses: StepStatus<StateShape>[] = steps.map(step => ({
+      const stepStatuses: StateStatus<StateShape>[] = steps.map(step => ({
         id: step.id,
         name: step.title,
         status: 'pending',
@@ -100,7 +109,7 @@ const workflow = <StateShape>(
           state = JSON.parse(JSON.stringify(reducer?.fn(result, state) ?? state));
           for (const { event, handler } of events) {
             if (event === 'step:complete') {
-              await handler(state, result);
+              await handler({ event, state, result });
             }
           }
         } catch (error) {
@@ -109,7 +118,7 @@ const workflow = <StateShape>(
 
           for (const { event, handler } of events) {
             if (event === 'step:error') {
-              await handler(state, error as Error);
+              await handler({ event, state, error: error as Error });
             }
           }
         } finally {
@@ -140,7 +149,7 @@ workflow<typeof initialState>(
         hello: result,
       };
     }),
-    on('step:complete', (state, result) => {
+    on('step:complete', ({ state, result, }) => {
       console.log(state);
       console.log(result);
     }),
