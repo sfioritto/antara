@@ -25,9 +25,9 @@ interface Reducer<StateShape, ResultShape> {
 
 type StepEventTypes = 'step:complete' | 'step:error';
 
-type EventHandler<StateShape, ResultShape> = ({ event, state, result, error }: {
-  event: StepEventTypes,
-  state: StateShape,
+type EventHandler<StateShape, ResultShape> = (params: {
+  event?: StepEventTypes,
+  state?: StateShape,
   result?: ResultShape,
   error?: Error
 }) => void;
@@ -144,3 +144,5 @@ const workflow = <StateShape>(
     },
   }
 };
+
+export { workflow, step, action, reduce, on };
