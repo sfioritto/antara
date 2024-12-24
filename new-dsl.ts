@@ -2,8 +2,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { JsonObject } from 'type-fest';
 
 type State<StateShape> = StateShape extends JsonObject ? StateShape : never;
-type Action<StateShape, ResultShape = any> = (state: StateShape) => (Promise<ResultShape> | ResultShape);
-type Reduce<StateShape, ResultShape> = (result: ResultShape, state: StateShape) => StateShape;
+type ActionHandler<StateShape, ResultShape = any> = (state: StateShape) => (Promise<ResultShape> | ResultShape);
+type ReduceHandler<StateShape, ResultShape> = (result: ResultShape, state: StateShape) => StateShape;
 
 interface StepStatus<StateShape> {
   id: string;
@@ -13,14 +13,14 @@ interface StepStatus<StateShape> {
   state: StateShape | null;
 }
 
-interface ActionStep<StateShape, ResultShape> {
+interface Action<StateShape, ResultShape> {
   type: "action";
-  fn: Action<StateShape, ResultShape>;
+  fn: ActionHandler<StateShape, ResultShape>;
 }
 
-interface ReducerStep<StateShape, ResultShape> {
+interface Reducer<StateShape, ResultShape> {
   type: "reducer";
-  fn: Reduce<StateShape, ResultShape>;
+  fn: ReduceHandler<StateShape, ResultShape>;
 }
 
 type StepEventTypes = 'step:complete' | 'step:error';
@@ -32,7 +32,8 @@ type EventHandler<StateShape, ResultShape> = ({ event, state, result, error }: {
   error?: Error
 }) => void;
 
-interface EventStep<StateShape, ResultShape> {
+interface Event<StateShape, ResultShape> {
+  type: "event";
   event: StepEventTypes;
   handler: EventHandler<StateShape, ResultShape>;
 }
@@ -40,40 +41,49 @@ interface EventStep<StateShape, ResultShape> {
 interface Step<StateShape, ResultShape = any> {
   id: string;
   title: string;
-  action: ActionStep<StateShape, ResultShape>;
-  reducer?: ReducerStep<StateShape, ResultShape>;
-  events: EventStep<StateShape, ResultShape>[];
+  action: Action<StateShape, ResultShape>;
+  reducer?: Reducer<StateShape, ResultShape>;
+  events: Event<StateShape, ResultShape>[];
 }
 
 // Core builders
 const action = <StateShape, ResultShape>(
-  fn: Action<StateShape, ResultShape>
-): ActionStep<StateShape, ResultShape> => ({
+  fn: ActionHandler<StateShape, ResultShape>
+): Action<StateShape, ResultShape> => ({
   type: "action",
   fn
 });
 
 const reduce = <StateShape, ResultShape>(
-  fn: Reduce<StateShape, ResultShape>
-): ReducerStep<StateShape, ResultShape> => ({
+  fn: ReduceHandler<StateShape, ResultShape>
+): Reducer<StateShape, ResultShape> => ({
   type: "reducer",
   fn,
 });
 
-const on = <StateShape, ResultShape> (
+const on = <StateShape, ResultShape>(
   event: StepEventTypes,
   handler: EventHandler<StateShape, ResultShape>
-): EventStep<StateShape, ResultShape> => ({
+): Event<StateShape, ResultShape> => ({
+  type: "event",
   event,
   handler,
 });
 
+type StepArgs<StateShape, ResultShape> =
+  | [Action<StateShape, ResultShape>, ...Event<StateShape, ResultShape>[]]
+  | [Action<StateShape, ResultShape>, Reducer<StateShape, ResultShape>, ...Event<StateShape, ResultShape>[]];
+
 function step<StateShape, ResultShape>(
   title: string,
-  action: ActionStep<StateShape, ResultShape>,
-  reducer?: ReducerStep<StateShape, ResultShape>,
-  ...events: EventStep<StateShape, ResultShape>[]
+  ...args: StepArgs<StateShape, ResultShape>
 ): Step<StateShape, ResultShape> {
+  const [action, ...rest] = args;
+
+  const hasReducer = rest[0]?.type === "reducer";
+  const reducer = hasReducer ? rest[0] as Reducer<StateShape, ResultShape> : undefined;
+  const events = (hasReducer ? rest.slice(1) : rest) as Event<StateShape, ResultShape>[];
+
   return {
     id: uuidv4(),
     title,
@@ -138,6 +148,16 @@ const workflow = <StateShape>(
 // simple example to check types
 
 const initialState: { hello: string } = { hello: "world" };
+
+workflow<typeof initialState>(
+  step("FirstStep",
+    action((state) => state.hello),
+    on('step:complete', ({ state, result }) => {
+      console.log(state);
+      console.log(result);
+    })
+  ),
+)
 
 workflow<typeof initialState>(
   step(
