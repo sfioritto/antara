@@ -32,7 +32,7 @@ type EventHandler<StateShape, ResultShape> = (params: {
   error?: Error
 }) => void;
 
-interface Event<StateShape, ResultShape> {
+interface StepEvent<StateShape, ResultShape> {
   type: "event";
   event: StepEventTypes;
   handler: EventHandler<StateShape, ResultShape>;
@@ -43,7 +43,7 @@ interface Step<StateShape, ResultShape = any> {
   title: string;
   action: Action<StateShape, ResultShape>;
   reducer?: Reducer<StateShape, ResultShape>;
-  events: Event<StateShape, ResultShape>[];
+  events: StepEvent<StateShape, ResultShape>[];
 }
 
 type WorkflowEventTypes =
@@ -71,7 +71,7 @@ type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 function on<StateShape, ResultShape>(
   event: StepEventTypes,
   handler: EventHandler<StateShape, ResultShape>
-): Event<StateShape, ResultShape>;
+): StepEvent<StateShape, ResultShape>;
 function on<StateShape>(
   event: WorkflowEventTypes,
   handler: WorkflowEventHandler<StateShape>
@@ -79,7 +79,7 @@ function on<StateShape>(
 function on<StateShape, ResultShape>(
   event: AllEventTypes,
   handler: EventHandler<StateShape, ResultShape> | WorkflowEventHandler<StateShape>
-): Event<StateShape, ResultShape> | WorkflowEvent<StateShape> {
+): StepEvent<StateShape, ResultShape> | WorkflowEvent<StateShape> {
   if (event.startsWith('workflow:')) {
     return {
       type: "workflow",
@@ -110,8 +110,8 @@ const reduce = <StateShape, ResultShape>(
 });
 
 type StepArgs<StateShape, ResultShape> =
-  | [Action<StateShape, ResultShape>, ...Event<StateShape, ResultShape>[]]
-  | [Action<StateShape, ResultShape>, Reducer<StateShape, ResultShape>, ...Event<StateShape, ResultShape>[]];
+  | [Action<StateShape, ResultShape>, ...StepEvent<StateShape, ResultShape>[]]
+  | [Action<StateShape, ResultShape>, Reducer<StateShape, ResultShape>, ...StepEvent<StateShape, ResultShape>[]];
 
 function step<StateShape, ResultShape>(
   title: string,
@@ -121,7 +121,7 @@ function step<StateShape, ResultShape>(
 
   const hasReducer = rest[0]?.type === "reducer";
   const reducer = hasReducer ? rest[0] as Reducer<StateShape, ResultShape> : undefined;
-  const events = (hasReducer ? rest.slice(1) : rest) as Event<StateShape, ResultShape>[];
+  const events = (hasReducer ? rest.slice(1) : rest) as StepEvent<StateShape, ResultShape>[];
 
   return {
     id: uuidv4(),
@@ -133,7 +133,7 @@ function step<StateShape, ResultShape>(
 }
 
 async function dispatchEvents<StateShape, ResultShape>(
-  events: Array<Event<StateShape, ResultShape> | WorkflowEvent<StateShape>>,
+  events: Array<StepEvent<StateShape, ResultShape> | WorkflowEvent<StateShape>>,
   eventType: AllEventTypes,
   params: {
     state: StateShape,
@@ -168,11 +168,11 @@ const workflow = <StateShape>(
       status: StepStatus<StateShape>[],
     }>
 } => {
-  const events = args.filter((arg): arg is WorkflowEvent<StateShape> =>
+  const workflowEvents = args.filter((arg): arg is WorkflowEvent<StateShape> =>
     'type' in arg && arg.type === 'workflow'
   );
   const steps = args.filter((arg): arg is Step<StateShape> =>
-    !('type' in arg) || arg.type !== 'workflow'
+    !('type' in arg && arg.type === 'workflow')
   );
 
   return {
@@ -185,7 +185,7 @@ const workflow = <StateShape>(
         state: null
       }));
 
-      await dispatchEvents(events, 'workflow:start', { state, statuses: stepStatuses });
+      await dispatchEvents(workflowEvents, 'workflow:start', { state, statuses: stepStatuses });
 
       for (const { id, action, reducer, events: stepEvents } of steps) {
         const status = stepStatuses.find(status => status.id === id);
