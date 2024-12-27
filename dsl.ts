@@ -139,7 +139,8 @@ async function dispatchEvents<StateShape, ResultShape>(
     state: StateShape,
     statuses?: StepStatus<StateShape>[],
     result?: ResultShape,
-    error?: Error
+    error?: Error,
+    status?: StepStatus<StateShape>
   }
 ) {
   for (const event of events) {
@@ -197,14 +198,29 @@ const workflow = <StateShape>(
           const result = await action.fn(state);
           state = structuredClone(reducer?.fn(result, state) ?? state) as State<StateShape>;
           await dispatchEvents(stepEvents, 'step:complete', { state, result });
+          await dispatchEvents(
+            workflowEvents,
+            'workflow:update',
+            { state, statuses: stepStatuses, status }
+          );
         } catch (error) {
           status.status = 'error';
           status.error = error as Error;
           await dispatchEvents(stepEvents, 'step:error', { state, error: error as Error });
+          await dispatchEvents(
+            workflowEvents,
+            'workflow:error',
+            { state, statuses: stepStatuses, error: error as Error, status }
+          );
         } finally {
           status.status = 'complete';
           status.state = structuredClone(state);
         }
+        await dispatchEvents(
+          workflowEvents,
+          'workflow:complete',
+          { state, statuses: stepStatuses }
+        );
       }
 
       return {

@@ -64,6 +64,18 @@ const initialState: RegistrationState = {
 };
 
 const userRegistration = workflow<RegistrationState>(
+  on("workflow:start", () => {
+    console.log("Workflow started");
+  }),
+  on("workflow:complete", () => {
+    console.log("Workflow completed");
+  }),
+  on("workflow:error", () => {
+    console.log("Workflow failed");
+  }),
+  on("workflow:update", () => {
+    console.log("Workflow updated");
+  }),
   step(
     "Initialize analytics",
     action(() => ({
