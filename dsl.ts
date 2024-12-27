@@ -47,10 +47,6 @@ interface Step<StateShape, ResultShape = any> {
   events: Event<StateShape, ResultShape>[];
 }
 
-const deepClone = <T extends JsonObject>(state: T): T => {
-  return structuredClone(state);
-};
-
 // Core builders
 const action = <StateShape, ResultShape>(
   fn: ActionHandler<StateShape, ResultShape>
@@ -108,7 +104,7 @@ const workflow = <StateShape>(
 } => {
   return {
     run: async (initialState) => {
-      let state = deepClone(initialState);
+      let state = structuredClone(initialState);
       const stepStatuses: StepStatus<StateShape>[] = steps.map(step => ({
         id: step.id,
         name: step.title,
@@ -124,7 +120,7 @@ const workflow = <StateShape>(
         status.status = 'running';
         try {
           const result = await action.fn(state);
-          state = deepClone(reducer?.fn(result, state) ?? state) as State<StateShape>;
+          state = structuredClone(reducer?.fn(result, state) ?? state) as State<StateShape>;
           for (const { event, handler } of events) {
             if (event === 'step:complete') {
               await handler({ event, state, result });
@@ -141,7 +137,7 @@ const workflow = <StateShape>(
           }
         } finally {
           status.status = 'complete';
-          status.state = deepClone(state);
+          status.state = structuredClone(state);
         }
       }
 
