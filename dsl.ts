@@ -47,6 +47,58 @@ interface Step<StateShape, ResultShape = any> {
   events: Event<StateShape, ResultShape>[];
 }
 
+type WorkflowEventTypes =
+  | 'workflow:start'
+  | 'workflow:complete'
+  | 'workflow:update'
+  | 'workflow:error';
+
+type WorkflowEventHandler<StateShape> = (params: {
+  event: WorkflowEventTypes;
+  status?: StepStatus<StateShape>;
+  error?: Error;
+  statuses: StepStatus<StateShape>[];
+  state: StateShape;
+}) => void;
+
+interface WorkflowEvent<StateShape> {
+  type: "workflow_event";
+  event: WorkflowEventTypes;
+  handler: WorkflowEventHandler<StateShape>;
+}
+
+// ... existing code ...
+
+// Combined event types
+type AllEventTypes = StepEventTypes | WorkflowEventTypes;
+
+// Combined handler type using function overloads
+function on<StateShape, ResultShape>(
+  event: StepEventTypes,
+  handler: EventHandler<StateShape, ResultShape>
+): Event<StateShape, ResultShape>;
+function on<StateShape>(
+  event: WorkflowEventTypes,
+  handler: WorkflowEventHandler<StateShape>
+): WorkflowEvent<StateShape>;
+function on<StateShape, ResultShape>(
+  event: AllEventTypes,
+  handler: EventHandler<StateShape, ResultShape> | WorkflowEventHandler<StateShape>
+): Event<StateShape, ResultShape> | WorkflowEvent<StateShape> {
+  if (event.startsWith('workflow:')) {
+    return {
+      type: "workflow_event",
+      event: event as WorkflowEventTypes,
+      handler: handler as WorkflowEventHandler<StateShape>,
+    };
+  }
+  return {
+    type: "event",
+    event: event as StepEventTypes,
+    handler: handler as EventHandler<StateShape, ResultShape>,
+  };
+}
+
 // Core builders
 const action = <StateShape, ResultShape>(
   fn: ActionHandler<StateShape, ResultShape>
@@ -60,15 +112,6 @@ const reduce = <StateShape, ResultShape>(
 ): Reducer<StateShape, ResultShape> => ({
   type: "reducer",
   fn,
-});
-
-const on = <StateShape, ResultShape>(
-  event: StepEventTypes,
-  handler: EventHandler<StateShape, ResultShape>
-): Event<StateShape, ResultShape> => ({
-  type: "event",
-  event,
-  handler,
 });
 
 type StepArgs<StateShape, ResultShape> =
