@@ -39,7 +39,6 @@ interface Event<StateShape, ResultShape> {
 }
 
 interface Step<StateShape, ResultShape = any> {
-
   id: string;
   title: string;
   action: Action<StateShape, ResultShape>;
@@ -62,17 +61,13 @@ type WorkflowEventHandler<StateShape> = (params: {
 }) => void;
 
 interface WorkflowEvent<StateShape> {
-  type: "workflow_event";
+  type: "workflow";
   event: WorkflowEventTypes;
   handler: WorkflowEventHandler<StateShape>;
 }
 
-// ... existing code ...
-
-// Combined event types
 type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 
-// Combined handler type using function overloads
 function on<StateShape, ResultShape>(
   event: StepEventTypes,
   handler: EventHandler<StateShape, ResultShape>
@@ -87,7 +82,7 @@ function on<StateShape, ResultShape>(
 ): Event<StateShape, ResultShape> | WorkflowEvent<StateShape> {
   if (event.startsWith('workflow:')) {
     return {
-      type: "workflow_event",
+      type: "workflow",
       event: event as WorkflowEventTypes,
       handler: handler as WorkflowEventHandler<StateShape>,
     };
@@ -137,14 +132,49 @@ function step<StateShape, ResultShape>(
   };
 }
 
+async function dispatchEvents<StateShape, ResultShape>(
+  events: Array<Event<StateShape, ResultShape> | WorkflowEvent<StateShape>>,
+  eventType: AllEventTypes,
+  params: {
+    state: StateShape,
+    statuses?: StepStatus<StateShape>[],
+    result?: ResultShape,
+    error?: Error
+  }
+) {
+  for (const event of events) {
+    if (event.event === eventType) {
+      if (event.type === "workflow") {
+        await event.handler({
+          event: eventType as WorkflowEventTypes,
+          ...params,
+          statuses: params.statuses!
+        });
+      } else {
+        await event.handler({
+          event: eventType as StepEventTypes,
+          ...params
+        });
+      }
+    }
+  }
+}
+
 const workflow = <StateShape>(
-  ...steps: Step<StateShape>[]
+  ...args: Array<Step<StateShape> | WorkflowEvent<StateShape>>
 ): {
     run: (initialState: State<StateShape>) => Promise<{
       state: State<StateShape>,
-      status: StepStatus<StateShape>[]
+      status: StepStatus<StateShape>[],
     }>
 } => {
+  const events = args.filter((arg): arg is WorkflowEvent<StateShape> =>
+    'type' in arg && arg.type === 'workflow'
+  );
+  const steps = args.filter((arg): arg is Step<StateShape> =>
+    !('type' in arg) || arg.type !== 'workflow'
+  );
+
   return {
     run: async (initialState) => {
       let state = structuredClone(initialState);
@@ -155,7 +185,9 @@ const workflow = <StateShape>(
         state: null
       }));
 
-      for (const { id, action, reducer, events } of steps) {
+      await dispatchEvents(events, 'workflow:start', { state, statuses: stepStatuses });
+
+      for (const { id, action, reducer, events: stepEvents } of steps) {
         const status = stepStatuses.find(status => status.id === id);
         if (!status) {
           throw new Error(`Step ${id} not found in stepStatuses`);
@@ -164,20 +196,11 @@ const workflow = <StateShape>(
         try {
           const result = await action.fn(state);
           state = structuredClone(reducer?.fn(result, state) ?? state) as State<StateShape>;
-          for (const { event, handler } of events) {
-            if (event === 'step:complete') {
-              await handler({ event, state, result });
-            }
-          }
+          await dispatchEvents(stepEvents, 'step:complete', { state, result });
         } catch (error) {
           status.status = 'error';
           status.error = error as Error;
-
-          for (const { event, handler } of events) {
-            if (event === 'step:error') {
-              await handler({ event, state, error: error as Error });
-            }
-          }
+          await dispatchEvents(stepEvents, 'step:error', { state, error: error as Error });
         } finally {
           status.status = 'complete';
           status.state = structuredClone(state);
