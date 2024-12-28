@@ -1,6 +1,6 @@
+import { JsonObject } from 'type-fest';
 import { workflow, step, action, reduce, on } from './dsl.js';
 
-// Types to match the Python models
 interface ImportPath {
   current_import_path: string;
   target_file_path: string;
@@ -10,7 +10,7 @@ interface ImportPaths {
   imports: ImportPath[];
 }
 
-interface WorkflowState {
+interface WorkflowState extends JsonObject {
   coverage: { initial: number; current: number; };
   originalTest: string;
   testFilePath: string;
@@ -19,7 +19,6 @@ interface WorkflowState {
   suggestions: string[];
 }
 
-// Mock external services
 const mockAnthropicClient = {
   analyze: async (content: string): Promise<ImportPaths> => ({
     imports: [
@@ -42,9 +41,7 @@ const mockCoverageService = {
     Math.min(100, Math.floor(Math.random() * 30) + 70) // Returns 70-100
 };
 
-// Helper functions
 const calculateRelativeImport = (fromPath: string, toPath: string): string => {
-  // Simplified version of the Python implementation
   return toPath.replace('.new', '').replace('.old', '');
 };
 
@@ -61,7 +58,6 @@ const updateImports = (
   return updated;
 };
 
-// Create the workflow
 const testImprovementWorkflow = workflow<WorkflowState>(
   {
     name: "Test Coverage Improvement",

@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { JsonObject } from 'type-fest';
 
-type State<StateShape> = StateShape;
+type State<StateShape> = StateShape extends JsonObject ? StateShape : never;
 type ActionHandler<StateShape, ResultShape = any> = (state: StateShape) => (Promise<ResultShape> | ResultShape);
 type ReduceHandler<StateShape, ResultShape> = (result: ResultShape, state: StateShape) => StateShape;
 
@@ -166,8 +166,7 @@ interface WorkflowMetadata {
   description?: string;
 }
 
-interface Workflow<StateShape> {
-  metadata: WorkflowMetadata;
+interface Workflow<StateShape> extends WorkflowMetadata {
   run: (initialState: State<StateShape>) => Promise<{
     state: State<StateShape>,
     status: StepStatus<StateShape>[],
@@ -191,7 +190,7 @@ const workflow = <StateShape>(
   );
 
   return {
-    metadata: normalizedMetadata,
+    ...normalizedMetadata,
     run: async (initialState) => {
       let state = structuredClone(initialState);
       const stepStatuses: StepStatus<StateShape>[] = steps.map(step => ({
