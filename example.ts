@@ -1,166 +1,147 @@
 import { workflow, step, action, reduce, on } from './dsl.js';
-import type { JsonObject } from 'type-fest';
 
-// Simulate async operations
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Event handlers
-const notifyComplete = ({ result }: { result?: any }) => {
-  console.log(`✅ Step completed: ${JSON.stringify(result)}`);
-};
-
-const notifyError = ({ error }: { error?: Error }) => {
-  console.log(`❌ Step failed: ${error?.message}`);
-};
-
-// Define the state shape
-interface RegistrationState extends JsonObject {
-  user: null | {
-    id?: string;
-    email?: string;
-    name?: string;
-    createdAt?: string;
-  };
-  validationResult: any;
-  notification: any;
-  security: {
-    mfaEnabled: boolean;
-    mfaRequired?: boolean;
-    mfaSecret?: string;
-    backupCodes?: string[];
-    securityQuestions: Array<{ question: string; answer: string }>;
-    riskAssessment?: any;
-  };
-  onboarding: {
-    progress: number;
-    completedSteps: string[];
-  };
-  preferences: any;
-  analytics: {
-    registrationStart: string | null;
-    sessionId?: string;
-    timeToComplete: number | null;
-    completionStatus?: boolean;
-  };
+// Types to match the Python models
+interface ImportPath {
+  current_import_path: string;
+  target_file_path: string;
 }
 
-const initialState: RegistrationState = {
-  user: null,
-  validationResult: null,
-  notification: null,
-  security: {
-    mfaEnabled: false,
-    securityQuestions: [],
-  },
-  onboarding: {
-    progress: 0,
-    completedSteps: [],
-  },
-  preferences: null,
-  analytics: {
-    registrationStart: null,
-    timeToComplete: null,
-  }
+interface ImportPaths {
+  imports: ImportPath[];
+}
+
+interface WorkflowState {
+  coverage: { initial: number; current: number; };
+  originalTest: string;
+  testFilePath: string;
+  forgePath: string;
+  updatedTest: string;
+  suggestions: string[];
+}
+
+// Mock external services
+const mockAnthropicClient = {
+  analyze: async (content: string): Promise<ImportPaths> => ({
+    imports: [
+      {
+        current_import_path: './old/path',
+        target_file_path: './new/correct/path'
+      }
+    ]
+  }),
+
+  suggestImprovements: async (test: string): Promise<string[]> => ([
+    "Add test case for error handling",
+    "Include boundary condition tests",
+    "Test null input scenarios"
+  ])
 };
 
-const userRegistration = workflow<RegistrationState>("User Registration",
-  on("workflow:start", () => {
-    console.log("Workflow started");
-  }),
-  on("workflow:complete", () => {
-    console.log("Workflow completed");
-  }),
-  on("workflow:error", () => {
-    console.log("Workflow failed");
-  }),
-  on("workflow:update", () => {
-    console.log("Workflow updated");
-  }),
-  step(
-    "Initialize analytics",
-    action(() => ({
-      startTime: new Date().toISOString(),
-      sessionId: Math.random().toString(36).substring(7)
-    })),
-    reduce((result, state) => ({
+const mockCoverageService = {
+  measure: async (test: string): Promise<number> =>
+    Math.min(100, Math.floor(Math.random() * 30) + 70) // Returns 70-100
+};
+
+// Helper functions
+const calculateRelativeImport = (fromPath: string, toPath: string): string => {
+  // Simplified version of the Python implementation
+  return toPath.replace('.new', '').replace('.old', '');
+};
+
+const updateImports = (
+  testFile: string,
+  filePath: string,
+  importPaths: ImportPaths
+): string => {
+  let updated = testFile;
+  for (const importPath of importPaths.imports) {
+    const updatedPath = calculateRelativeImport(filePath, importPath.target_file_path);
+    updated = updated.replace(importPath.current_import_path, updatedPath);
+  }
+  return updated;
+};
+
+// Create the workflow
+const testImprovementWorkflow = workflow<WorkflowState>(
+  {
+    name: "Test Coverage Improvement",
+    description: "Workflow to analyze and improve test coverage"
+  },
+
+  // Step 1: Analyze imports and fix paths
+  step("Analyze and fix import paths",
+    action(async (state: WorkflowState) => {
+      const importPaths = await mockAnthropicClient.analyze(state.originalTest);
+      return importPaths;
+    }),
+    reduce((importPaths: ImportPaths, state: WorkflowState) => ({
       ...state,
-      analytics: {
-        ...state.analytics,
-        registrationStart: result.startTime,
-        sessionId: result.sessionId
-      }
+      updatedTest: updateImports(
+        state.originalTest,
+        state.testFilePath.toLowerCase().replace(state.forgePath.toLowerCase() + '/', ''),
+        importPaths
+      )
     })),
-    on("step:complete", notifyComplete)
+    on('step:complete', ({ state }) => {
+      console.log('Import paths updated successfully');
+    })
   ),
 
-  step(
-    "Validate user input",
-    action(async () => {
-      await delay(1000);
-      return {
-        isValid: true,
-        validatedData: {
-          email: "user@example.com",
-          name: "Test User"
-        }
-      };
+  // Step 2: Measure initial coverage
+  step("Measure initial test coverage",
+    action(async (state: WorkflowState) => {
+      const coverage = await mockCoverageService.measure(state.updatedTest);
+      return coverage;
     }),
-    reduce((result, state) => ({
+    reduce((coverage: number, state: WorkflowState) => ({
       ...state,
-      validationResult: result,
-      user: result.validatedData
-    })),
-    on("step:complete", notifyComplete),
-    on("step:error", notifyError)
-  ),
-
-  // ... remaining steps follow the same pattern
-  step(
-    "Create user account",
-    action(async () => {
-      await delay(1500);
-      return {
-        userId: "123",
-        created: new Date().toISOString()
-      };
-    }),
-    reduce((result, state) => ({
-      ...state,
-      user: {
-        ...state.user,
-        id: result.userId,
-        createdAt: result.created
+      coverage: {
+        initial: coverage,
+        current: coverage
       }
     })),
-    on("step:complete", notifyComplete)
+    on('step:complete', ({ state }) => {
+      console.log(`Initial coverage: ${state.coverage?.initial}%`);
+    })
   ),
 
-  step(
-    "Security assessment",
-    action(async () => {
-      await delay(1200);
-      const geoLocation = await fetch('https://api.example.com/geo').then(r => r.json());
-      return {
-        riskScore: Math.random() * 100,
-        requiresMFA: true,
-        location: geoLocation,
-        recommendedSecurityLevel: 'high'
-      };
+  // Step 3: Get improvement suggestions
+  step("Generate test improvement suggestions",
+    action(async (state: WorkflowState) => {
+      const suggestions = await mockAnthropicClient.suggestImprovements(state.updatedTest);
+      return suggestions;
     }),
-    reduce((result, state) => ({
+    reduce((suggestions: string[], state: WorkflowState) => ({
       ...state,
-      security: {
-        ...state.security,
-        riskAssessment: result,
-        mfaRequired: result.requiresMFA
-      }
+      suggestions
     })),
-    on("step:complete", notifyComplete),
-    on("step:error", notifyError)
-  )
+    on('step:complete', ({ state }) => {
+      console.log('Generated improvement suggestions:', state.suggestions);
+    })
+  ),
+
+  // Workflow-level events
+  on('workflow:start', () => {
+    console.log('Starting test improvement workflow');
+  }),
+  on('workflow:complete', ({ state }) => {
+    console.log('Workflow completed');
+    console.log('Final coverage:', state.coverage?.current);
+    console.log('Suggestions:', state.suggestions);
+  })
 );
 
-userRegistration.run(initialState).then(({ state, status }) => {
-  console.log(status);
-  return state;
+// Example usage
+const initialState: WorkflowState = {
+  originalTest: "import { something } from './old/path';\n// test content",
+  testFilePath: "/forge/tests/example.test.ts",
+  forgePath: "/forge",
+  coverage: { initial: 0, current: 0 },
+  updatedTest: "",
+  suggestions: []
+};
+
+testImprovementWorkflow.run(initialState).then(({ state, status }) => {
+  console.log('Final state:', state);
+  console.log('Step statuses:', status);
 });

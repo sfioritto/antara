@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { JsonObject } from 'type-fest';
 
-type State<StateShape> = StateShape extends JsonObject ? StateShape : never;
+type State<StateShape> = StateShape;
 type ActionHandler<StateShape, ResultShape = any> = (state: StateShape) => (Promise<ResultShape> | ResultShape);
 type ReduceHandler<StateShape, ResultShape> = (result: ResultShape, state: StateShape) => StateShape;
 
@@ -27,7 +27,7 @@ type StepEventTypes = 'step:complete' | 'step:error';
 
 type EventHandler<StateShape, ResultShape> = (params: {
   event?: StepEventTypes,
-  state?: StateShape,
+  state: StateShape,
   result?: ResultShape,
   error?: Error
 }) => void;
