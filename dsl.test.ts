@@ -67,3 +67,59 @@ describe('workflow level event listeners', () => {
     ]);
   });
 });
+
+describe('step level event listeners', () => {
+  it('should fire step events only for their respective steps', async () => {
+    interface SimpleState extends JsonObject {
+      value: number;
+    }
+
+    const stepOneEvents: string[] = [];
+    const stepTwoEvents: string[] = [];
+
+    const twoStepWorkflow = workflow<SimpleState>(
+      'Two Step Workflow',
+      // Step 1: Double the value
+      step(
+        "Double step",
+        action(async (state: SimpleState) => state.value * 2),
+        reduce((newValue: number, state: SimpleState) => ({
+          value: newValue
+        })),
+        on('step:complete', ({ state, result }) => {
+          stepOneEvents.push('step:complete');
+          expect(result).toBe(2); // 1 * 2
+          expect(state.value).toBe(2);
+        })
+      ),
+      // Step 2: Add 1 to the value
+      step(
+        "Add one step",
+        action(async (state: SimpleState) => state.value + 1),
+        reduce((newValue: number, state: SimpleState) => ({
+          value: newValue
+        })),
+        on('step:complete', ({ state, result }) => {
+          stepTwoEvents.push('step:complete');
+          expect(result).toBe(3); // 2 + 1
+          expect(state.value).toBe(3);
+        })
+      )
+    );
+
+    const { state, status } = await twoStepWorkflow.run({ value: 1 });
+
+    // Verify final state
+    expect(state.value).toBe(3);
+
+    // Verify each step's events were called exactly once
+    expect(stepOneEvents).toEqual(['step:complete']);
+    expect(stepTwoEvents).toEqual(['step:complete']);
+
+    // Verify both steps completed
+    expect(status).toHaveLength(2);
+    expect(status[0].status).toBe('complete');
+    expect(status[1].status).toBe('complete');
+  });
+});
+
