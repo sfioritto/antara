@@ -63,7 +63,7 @@ const initialState: RegistrationState = {
   }
 };
 
-const userRegistration = workflow<RegistrationState>(
+const userRegistration = workflow<RegistrationState>("User Registration",
   on("workflow:start", () => {
     console.log("Workflow started");
   }),

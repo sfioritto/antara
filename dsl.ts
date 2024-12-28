@@ -161,14 +161,28 @@ async function dispatchEvents<StateShape, ResultShape>(
   }
 }
 
+interface WorkflowMetadata {
+  name: string;
+  description?: string;
+}
+
+interface Workflow<StateShape> {
+  metadata: WorkflowMetadata;
+  run: (initialState: State<StateShape>) => Promise<{
+    state: State<StateShape>,
+    status: StepStatus<StateShape>[],
+  }>;
+}
+
 const workflow = <StateShape>(
+  metadata: string | WorkflowMetadata,
   ...args: Array<Step<StateShape> | WorkflowEvent<StateShape>>
-): {
-    run: (initialState: State<StateShape>) => Promise<{
-      state: State<StateShape>,
-      status: StepStatus<StateShape>[],
-    }>
-} => {
+): Workflow<StateShape> => {
+  // Convert string to WorkflowMetadata if needed
+  const normalizedMetadata: WorkflowMetadata = typeof metadata === 'string'
+    ? { name: metadata }
+    : metadata;
+
   const workflowEvents = args.filter((arg): arg is WorkflowEvent<StateShape> =>
     'type' in arg && arg.type === 'workflow'
   );
@@ -177,6 +191,7 @@ const workflow = <StateShape>(
   );
 
   return {
+    metadata: normalizedMetadata,
     run: async (initialState) => {
       let state = structuredClone(initialState);
       const stepStatuses: StepStatus<StateShape>[] = steps.map(step => ({
