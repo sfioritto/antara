@@ -13,6 +13,7 @@
     "incremental": true,
     "isolatedModules": true,
     "outDir": "./dist",
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "types": ["jest", "node"],
   }
 }

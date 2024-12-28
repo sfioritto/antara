@@ -3,7 +3,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "npm run build && node dist/example.js"
+    "start": "npm run build && node dist/example.js",
+    "test": "jest --silent"
   },
   "dependencies": {
     "jest": "^29.7.0",
@@ -11,7 +12,9 @@
     "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/uuid": "^9.0.0",
+    "ts-jest": "^29.2.5",
     "typescript": "^5.0.0"
   }
 }
