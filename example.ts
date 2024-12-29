@@ -60,7 +60,7 @@ const updateImports = (
 
 const testImprovementWorkflow = workflow<WorkflowState>(
   {
-    name: "Test Coverage Improvement",
+    title: "Test Coverage Improvement",
     description: "Workflow to analyze and improve test coverage"
   },
 
@@ -97,7 +97,7 @@ const testImprovementWorkflow = workflow<WorkflowState>(
       }
     })),
     on('step:complete', ({ state }) => {
-      console.log(`Initial coverage: ${state.coverage?.initial}%`);
+      console.log(`Initial coverage: ${state?.coverage?.initial}%`);
     })
   ),
 
@@ -112,7 +112,7 @@ const testImprovementWorkflow = workflow<WorkflowState>(
       suggestions
     })),
     on('step:complete', ({ state }) => {
-      console.log('Generated improvement suggestions:', state.suggestions);
+      console.log('Generated improvement suggestions:', state?.suggestions);
     })
   ),
 
@@ -122,8 +122,8 @@ const testImprovementWorkflow = workflow<WorkflowState>(
   }),
   on('workflow:complete', ({ state }) => {
     console.log('Workflow completed');
-    console.log('Final coverage:', state.coverage?.current);
-    console.log('Suggestions:', state.suggestions);
+    console.log('Final coverage:', state?.coverage?.current);
+    console.log('Suggestions:', state?.suggestions);
   })
 );
 

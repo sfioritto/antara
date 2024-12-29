@@ -5,14 +5,6 @@ type State<StateShape> = StateShape extends JsonObject ? StateShape : never;
 type ActionHandler<StateShape, ResultShape = any> = (state: StateShape) => (Promise<ResultShape> | ResultShape);
 type ReduceHandler<StateShape, ResultShape> = (result: ResultShape, state: StateShape) => StateShape;
 
-interface StepStatus<StateShape> {
-  id: string;
-  name: string;
-  status: 'pending' | 'running' | 'complete' | 'error';
-  error?: Error;
-  state: StateShape | null;
-}
-
 interface Action<StateShape, ResultShape> {
   type: "action";
   fn: ActionHandler<StateShape, ResultShape>;
@@ -27,7 +19,7 @@ type StepEventTypes = 'step:complete' | 'step:error';
 
 type EventHandler<StateShape, ResultShape> = (params: {
   event?: StepEventTypes,
-  state: StateShape,
+  state: StateShape | null,
   result?: ResultShape,
   error?: Error
 }) => void;
@@ -44,6 +36,13 @@ interface Step<StateShape, ResultShape = any> {
   action: Action<StateShape, ResultShape>;
   reducer?: Reducer<StateShape, ResultShape>;
   events: StepEvent<StateShape, ResultShape>[];
+  status: 'pending' | 'running' | 'complete' | 'error';
+  error?: Error;
+  state: StateShape | null;
+  run: (state: StateShape) => Promise<{
+    error?: Error;
+    state: StateShape,
+  }>;
 }
 
 type WorkflowEventTypes =
@@ -54,10 +53,9 @@ type WorkflowEventTypes =
 
 type WorkflowEventHandler<StateShape> = (params: {
   event: WorkflowEventTypes;
-  status?: StepStatus<StateShape>;
+  state: StateShape | null;
+  status: 'pending' | 'running' | 'complete' | 'error';
   error?: Error;
-  statuses: StepStatus<StateShape>[];
-  state: StateShape;
 }) => void;
 
 interface WorkflowEvent<StateShape> {
@@ -113,34 +111,16 @@ type StepArgs<StateShape, ResultShape> =
   | [Action<StateShape, ResultShape>, ...StepEvent<StateShape, ResultShape>[]]
   | [Action<StateShape, ResultShape>, Reducer<StateShape, ResultShape>, ...StepEvent<StateShape, ResultShape>[]];
 
-function step<StateShape, ResultShape>(
-  title: string,
-  ...args: StepArgs<StateShape, ResultShape>
-): Step<StateShape, ResultShape> {
-  const [action, ...rest] = args;
-
-  const hasReducer = rest[0]?.type === "reducer";
-  const reducer = hasReducer ? rest[0] as Reducer<StateShape, ResultShape> : undefined;
-  const events = (hasReducer ? rest.slice(1) : rest) as StepEvent<StateShape, ResultShape>[];
-
-  return {
-    id: uuidv4(),
-    title,
-    action,
-    reducer,
-    events,
-  };
-}
-
 async function dispatchEvents<StateShape, ResultShape>(
   events: Array<StepEvent<StateShape, ResultShape> | WorkflowEvent<StateShape>>,
   eventType: AllEventTypes,
   params: {
-    state: StateShape,
-    statuses?: StepStatus<StateShape>[],
-    result?: ResultShape,
+    id: string,
+    title: string,
+    state: StateShape | null,
+    status: 'pending' | 'running' | 'complete' | 'error',
     error?: Error,
-    status?: StepStatus<StateShape>
+    result?: ResultShape,
   }
 ) {
   for (const event of events) {
@@ -149,7 +129,6 @@ async function dispatchEvents<StateShape, ResultShape>(
         await event.handler({
           event: eventType as WorkflowEventTypes,
           ...params,
-          statuses: params.statuses!
         });
       } else {
         await event.handler({
@@ -161,15 +140,91 @@ async function dispatchEvents<StateShape, ResultShape>(
   }
 }
 
+class StepClass<StateShape, ResultShape> {
+  public id: string;
+  public title: string;
+  public action: Action<StateShape, ResultShape>;
+  public events: StepEvent<StateShape, ResultShape>[];
+  public reducer?: Reducer<StateShape, ResultShape>;
+  public status: 'pending' | 'running' | 'complete' | 'error';
+  public error?: Error;
+  public state: StateShape | null;
+
+  constructor(
+    title: string,
+    action: Action<StateShape, ResultShape>,
+    events: StepEvent<StateShape, ResultShape>[],
+    reducer?: Reducer<StateShape, ResultShape>,
+  ) {
+    this.id = uuidv4();
+    this.title = title;
+    this.action = action;
+    this.events = events;
+    this.reducer = reducer;
+    this.status = 'pending';
+    this.state = null;
+  }
+
+  async run(state: StateShape): Promise<{
+    error?: Error;
+    state: StateShape;
+  }> {
+    try {
+      const result = await this.action.fn(state);
+      const nextState = this.reducer?.fn(result, state) ?? state;
+      this.state = structuredClone(nextState);
+      this.status = 'complete';
+      await dispatchEvents(this.events, 'step:complete', {
+        id: this.id,
+        title: this.title,
+        state: this.state,
+        status: this.status,
+        result,
+        error: this.error,
+      });
+      return {
+        state: nextState
+      };
+    } catch (error) {
+      this.error = error as Error;
+      this.status = 'error';
+      await dispatchEvents(this.events, 'step:error', {
+        id: this.id,
+        title: this.title,
+        state: this.state,
+        status: this.status,
+        error: this.error,
+      });
+      return {
+        error: this.error,
+        state: state
+      };
+    }
+  }
+}
+
+function step<StateShape, ResultShape>(
+  title: string,
+  ...args: StepArgs<StateShape, ResultShape>
+): StepClass<StateShape, ResultShape> {
+  const [action, ...rest] = args;
+  const hasReducer = rest[0]?.type === "reducer";
+  const reducer = hasReducer ? rest[0] as Reducer<StateShape, ResultShape> : undefined;
+  const events = (hasReducer ? rest.slice(1) : rest) as StepEvent<StateShape, ResultShape>[];
+
+  return new StepClass(title, action, events, reducer);
+}
+
 interface WorkflowMetadata {
-  name: string;
+  title: string;
   description?: string;
 }
 
 interface Workflow<StateShape> extends WorkflowMetadata {
   run: (initialState: State<StateShape>) => Promise<{
     state: State<StateShape>,
-    status: StepStatus<StateShape>[],
+    steps: Step<StateShape>[],
+    status: 'pending' | 'running' | 'complete' | 'error',
   }>;
 }
 
@@ -179,8 +234,11 @@ const workflow = <StateShape>(
 ): Workflow<StateShape> => {
   // Convert string to WorkflowMetadata if needed
   const normalizedMetadata: WorkflowMetadata = typeof metadata === 'string'
-    ? { name: metadata }
+    ? { title: metadata }
     : metadata;
+
+  const workflowId = uuidv4();
+  const { title: workflowTitle } = normalizedMetadata;
 
   const workflowEvents = args.filter((arg): arg is WorkflowEvent<StateShape> =>
     'type' in arg && arg.type === 'workflow'
@@ -192,56 +250,58 @@ const workflow = <StateShape>(
   return {
     ...normalizedMetadata,
     run: async (initialState) => {
-      let state = structuredClone(initialState);
-      const stepStatuses: StepStatus<StateShape>[] = steps.map(step => ({
-        id: step.id,
-        name: step.title,
-        status: 'pending',
-        state: null
-      }));
+      let clonedInitialState = structuredClone(initialState);
 
-      await dispatchEvents(workflowEvents, 'workflow:start', { state, statuses: stepStatuses });
-
-      for (const { id, action, reducer, events: stepEvents } of steps) {
-        const status = stepStatuses.find(status => status.id === id);
-        if (!status) {
-          throw new Error(`Step ${id} not found in stepStatuses`);
+      await dispatchEvents(
+        workflowEvents,
+        'workflow:start', {
+          id: workflowId,
+          title: workflowTitle,
+          state: clonedInitialState,
+          status: 'pending',
         }
-        status.status = 'running';
-        try {
-          const result = await action.fn(state);
-          state = structuredClone(reducer?.fn(result, state) ?? state) as State<StateShape>;
-          await dispatchEvents(stepEvents, 'step:complete', { state, result });
-          await dispatchEvents(
-            workflowEvents,
-            'workflow:update',
-            { state, statuses: stepStatuses, status }
-          );
-          status.status = 'complete';
-        } catch (error) {
-          status.status = 'error';
-          status.error = error as Error;
-          await dispatchEvents(stepEvents, 'step:error', { state, error: error as Error });
-          await dispatchEvents(
-            workflowEvents,
-            'workflow:error',
-            { state, statuses: stepStatuses, error: error as Error, status }
-          );
+      );
+
+      let currentState = clonedInitialState as StateShape;
+      for (const step of steps) {
+        const { state: nextState, error } = await step.run(currentState);
+        if (error) {
+          await dispatchEvents(workflowEvents, 'workflow:error', {
+            id: workflowId,
+            title: workflowTitle,
+            state: nextState,
+            status: 'error',
+            error: error as Error,
+          });
           break;
-        } finally {
-          status.state = structuredClone(state);
+        } else {
+          await dispatchEvents(
+            workflowEvents,
+            'workflow:update', {
+              id: workflowId,
+              title: workflowTitle,
+              state: nextState,
+              status: 'running',
+            }
+          );
+          currentState = nextState;
         }
       }
 
       await dispatchEvents(
         workflowEvents,
-        'workflow:complete',
-        { state, statuses: stepStatuses }
+        'workflow:complete', {
+          id: workflowId,
+          title: workflowTitle,
+          state: currentState,
+          status: 'complete',
+        }
       );
 
       return {
-        state,
-        status: stepStatuses,
+        state: currentState as State<StateShape>,
+        steps,
+        status: 'complete',
       };
     },
   }

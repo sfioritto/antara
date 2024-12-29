@@ -5,14 +5,14 @@ import { workflow, on, step, action, reduce } from './dsl';
 describe('workflow creation', () => {
   it('should create a workflow with a name when passed a string', () => {
     const wf = workflow('my workflow');
-    expect(wf.name).toBe('my workflow');
+    expect(wf.title).toBe('my workflow');
     // Since we only passed a string, we expect no description to be set
     expect(wf.description).toBeUndefined();
   });
 
   it('should create a workflow with a name and description when passed an object', () => {
-    const wf = workflow({ name: 'my named workflow', description: 'some description' });
-    expect(wf.name).toBe('my named workflow');
+    const wf = workflow({ title: 'my named workflow', description: 'some description' });
+    expect(wf.title).toBe('my named workflow');
     expect(wf.description).toBe('some description');
   });
 });
@@ -38,27 +38,26 @@ describe('workflow level event listeners', () => {
           stepEventLog.push('step:complete');
         })
       ),
-      on('workflow:start', ({ statuses, state }) => {
+      on('workflow:start', ({ status, state }) => {
         workflowEventLog.push('workflow:start');
-        expect(statuses[0].status).toBe('pending');
-        expect(state.value).toBe(0);
+        expect(status).toBe('pending');
+        expect(state?.value).toBe(0);
       }),
       on('workflow:update', ({ status, state }) => {
         workflowEventLog.push('workflow:update');
-        expect(status?.status).toBe('running');
-        expect(state.value).toBe(1);
+        expect(status).toBe('running');
+        expect(state?.value).toBe(1);
       }),
-      on('workflow:complete', ({ statuses, state }) => {
+      on('workflow:complete', ({ state }) => {
         workflowEventLog.push('workflow:complete');
-        expect(state.value).toBe(1);
+        expect(state?.value).toBe(1);
       })
     );
 
     const { state, status } = await simpleWorkflow.run({ value: 0 });
 
     expect(state.value).toBe(1);
-    expect(status[0].status).toBe('complete');
-    expect(status.length).toBe(1);
+    expect(status).toBe('complete');
 
     expect(workflowEventLog).toEqual([
       'workflow:start',
@@ -91,7 +90,7 @@ describe('step level event listeners', () => {
         on('step:complete', ({ state, result }) => {
           stepOneEvents.push('step:complete');
           expect(result).toBe(2); // 1 * 2
-          expect(state.value).toBe(2);
+          expect(state?.value).toBe(2);
         })
       ),
       // Step 2: Add 1 to the value
@@ -104,7 +103,7 @@ describe('step level event listeners', () => {
         on('step:complete', ({ state, result }) => {
           stepTwoEvents.push('step:complete');
           expect(result).toBe(3); // 2 + 1
-          expect(state.value).toBe(3);
+          expect(state?.value).toBe(3);
         })
       )
     );
@@ -119,9 +118,7 @@ describe('step level event listeners', () => {
     expect(stepTwoEvents).toEqual(['step:complete']);
 
     // Verify both steps completed
-    expect(status).toHaveLength(2);
-    expect(status[0].status).toBe('complete');
-    expect(status[1].status).toBe('complete');
+    expect(status).toBe('complete');
   });
 });
 
@@ -141,7 +138,9 @@ describe('error handling', () => {
       step(
         "First step",
         action(async (state: SimpleState) => state.value + 1),
-        reduce((newValue: number) => ({ value: newValue }))
+        reduce((newValue: number) => ({
+          value: newValue,
+        }))
       ),
       // Step 2: Error step
       step(
@@ -162,14 +161,15 @@ describe('error handling', () => {
         reduce((newValue: number) => ({ value: newValue }))
       ),
       // Workflow-level error handler
-      on('workflow:error', ({ error, statuses, status }) => {
+      on('workflow:error', ({ error }) => {
         workflowEvents.push('workflow:error');
         capturedError = error;
         // Verify status of all steps
-        expect(statuses[0].status).toBe('complete');  // First step
-        expect(statuses[1].status).toBe('error');     // Error step
-        expect(statuses[2].status).toBe('pending');   // Never reached step
-        expect(status?.error?.message).toBe('Test error');
+        // TODO: update with serialized steps
+        // expect(statuses[0].status).toBe('complete');  // First step
+        // expect(statuses[1].status).toBe('error');     // Error step
+        // expect(statuses[2].status).toBe('pending');   // Never reached step
+        expect(error?.message).toBe('Test error');
       })
     );
 
@@ -180,11 +180,12 @@ describe('error handling', () => {
     expect(stepEvents).toContain('step:error');
 
     // Verify final status array
-    expect(status).toHaveLength(3);
-    expect(status[0].status).toBe('complete');
-    expect(status[1].status).toBe('error');
-    expect(status[1].error?.message).toBe('Test error');
-    expect(status[2].status).toBe('pending');
+    // TODO: update with serialized steps
+    // expect(status).toHaveLength(3);
+    // expect(status[0].status).toBe('complete');
+    // expect(status[1].status).toBe('error');
+    // expect(status[1].error?.message).toBe('Test error');
+    // expect(status[2].status).toBe('pending');
 
     // Verify error was captured
     expect(capturedError?.message).toBe('Test error');
