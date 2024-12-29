@@ -217,6 +217,7 @@ const workflow = <StateShape>(
             'workflow:update',
             { state, statuses: stepStatuses, status }
           );
+          status.status = 'complete';
         } catch (error) {
           status.status = 'error';
           status.error = error as Error;
@@ -226,16 +227,17 @@ const workflow = <StateShape>(
             'workflow:error',
             { state, statuses: stepStatuses, error: error as Error, status }
           );
+          break;
         } finally {
-          status.status = 'complete';
           status.state = structuredClone(state);
         }
-        await dispatchEvents(
-          workflowEvents,
-          'workflow:complete',
-          { state, statuses: stepStatuses }
-        );
       }
+
+      await dispatchEvents(
+        workflowEvents,
+        'workflow:complete',
+        { state, statuses: stepStatuses }
+      );
 
       return {
         state,

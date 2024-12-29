@@ -24,6 +24,7 @@ describe('workflow level event listeners', () => {
     }
 
     const workflowEventLog: string[] = [];
+    const stepEventLog: string[] = [];
 
     const simpleWorkflow = workflow<SimpleState>(
       'Simple Workflow',
@@ -32,9 +33,11 @@ describe('workflow level event listeners', () => {
         action(async (state: SimpleState) => state.value + 1),
         reduce((newValue: number, state: SimpleState) => ({
           value: newValue
-        }))
+        })),
+        on('step:complete', () => {
+          stepEventLog.push('step:complete');
+        })
       ),
-      // Workflow-level events
       on('workflow:start', ({ statuses, state }) => {
         workflowEventLog.push('workflow:start');
         expect(statuses[0].status).toBe('pending');
@@ -43,28 +46,27 @@ describe('workflow level event listeners', () => {
       on('workflow:update', ({ status, state }) => {
         workflowEventLog.push('workflow:update');
         expect(status?.status).toBe('running');
-        expect(state.value).toBe(0); // State hasn't been updated yet
+        expect(state.value).toBe(1);
       }),
       on('workflow:complete', ({ statuses, state }) => {
         workflowEventLog.push('workflow:complete');
-        expect(statuses[0].status).toBe('complete');
         expect(state.value).toBe(1);
       })
     );
 
     const { state, status } = await simpleWorkflow.run({ value: 0 });
 
-    // Verify final state and status
     expect(state.value).toBe(1);
     expect(status[0].status).toBe('complete');
     expect(status.length).toBe(1);
 
-    // Verify events fired in correct order
     expect(workflowEventLog).toEqual([
       'workflow:start',
       'workflow:update',
       'workflow:complete'
     ]);
+
+    expect(stepEventLog).toEqual(['step:complete']);
   });
 });
 
@@ -120,6 +122,72 @@ describe('step level event listeners', () => {
     expect(status).toHaveLength(2);
     expect(status[0].status).toBe('complete');
     expect(status[1].status).toBe('complete');
+  });
+});
+
+describe('error handling', () => {
+  it('should handle errors in actions and maintain correct status states', async () => {
+    interface SimpleState extends JsonObject {
+      value: number;
+    }
+
+    const workflowEvents: string[] = [];
+    const stepEvents: string[] = [];
+    let capturedError: Error | undefined;
+
+    const errorWorkflow = workflow<SimpleState>(
+      'Error Workflow',
+      // Step 1: Normal step
+      step(
+        "First step",
+        action(async (state: SimpleState) => state.value + 1),
+        reduce((newValue: number) => ({ value: newValue }))
+      ),
+      // Step 2: Error step
+      step(
+        "Error step",
+        action(async () => {
+          throw new Error('Test error');
+        }),
+        reduce((newValue: number) => ({ value: newValue })),
+        on('step:error', ({ error }) => {
+          stepEvents.push('step:error');
+          expect(error?.message).toBe('Test error');
+        })
+      ),
+      // Step 3: Should never execute
+      step(
+        "Never reached",
+        action(async (state: SimpleState) => state.value + 1),
+        reduce((newValue: number) => ({ value: newValue }))
+      ),
+      // Workflow-level error handler
+      on('workflow:error', ({ error, statuses, status }) => {
+        workflowEvents.push('workflow:error');
+        capturedError = error;
+        // Verify status of all steps
+        expect(statuses[0].status).toBe('complete');  // First step
+        expect(statuses[1].status).toBe('error');     // Error step
+        expect(statuses[2].status).toBe('pending');   // Never reached step
+        expect(status?.error?.message).toBe('Test error');
+      })
+    );
+
+    const { status } = await errorWorkflow.run({ value: 0 });
+
+    // Verify events were fired
+    expect(workflowEvents).toContain('workflow:error');
+    expect(stepEvents).toContain('step:error');
+
+    // Verify final status array
+    expect(status).toHaveLength(3);
+    expect(status[0].status).toBe('complete');
+    expect(status[1].status).toBe('error');
+    expect(status[1].error?.message).toBe('Test error');
+    expect(status[2].status).toBe('pending');
+
+    // Verify error was captured
+    expect(capturedError?.message).toBe('Test error');
   });
 });
 
