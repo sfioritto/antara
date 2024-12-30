@@ -1,6 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 import { JsonObject } from 'type-fest';
 
+type SerializedError = {
+  name: string;
+  message: string;
+  stack?: string;
+}
+
 type State<StateShape> = StateShape extends JsonObject ? StateShape : never;
 type Action<StateShape, ResultShape = any> = (state: StateShape) => (Promise<ResultShape> | ResultShape);
 type Reducer<StateShape, ResultShape> = (result: ResultShape, state: StateShape) => StateShape;
@@ -57,14 +63,14 @@ type StepEventHandler<StateShape, ResultShape> = (params: {
   state: StateShape | null,
   status: StatusOptions,
   result?: ResultShape,
-  error?: Error
+  error?: SerializedError
 }) => void;
 
 type WorkflowEventHandler<StateShape> = (params: {
   event: WorkflowEventTypes;
   state: StateShape | null;
   status: StatusOptions;
-  error?: Error;
+  error?: SerializedError;
 }) => void;
 
 // Function to dispatch events to the appropriate handlers
@@ -76,7 +82,7 @@ async function dispatchEvents<StateShape, ResultShape>(
     title: string,
     state: StateShape | null,
     status: StatusOptions,
-    error?: Error,
+    error?: SerializedError,
     result?: ResultShape,
   }
 ) {
@@ -110,7 +116,7 @@ class StepBlock<StateShape, ResultShape = any> {
   public events: StepEventBlock<StateShape, ResultShape>[];
   public reducer?: ReducerBlock<StateShape, ResultShape>;
   public status: StatusOptions;
-  public error?: Error;
+  public error?: SerializedError;
   public state: StateShape | null;
 
   constructor(
@@ -129,7 +135,7 @@ class StepBlock<StateShape, ResultShape = any> {
   }
 
   async run(state: StateShape): Promise<{
-    error?: Error;
+    error?: SerializedError;
     state: StateShape;
   }> {
     try {
@@ -148,8 +154,13 @@ class StepBlock<StateShape, ResultShape = any> {
       return {
         state: nextState
       };
-    } catch (error) {
-      this.error = error as Error;
+    } catch (err) {
+      const error = err as Error;
+      this.error = {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      };
       this.status = 'error';
       await dispatchEvents(this.events, 'step:error', {
         id: this.id,
@@ -274,7 +285,7 @@ const workflow = <StateShape>(
             title: workflowTitle,
             state: nextState,
             status: 'error',
-            error: error as Error,
+            error: error as SerializedError,
           });
           break;
         } else {
