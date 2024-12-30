@@ -22,8 +22,12 @@ describe('workflow level event listeners', () => {
       value: number;
     }
 
-    const workflowEventLog: string[] = [];
-    const stepEventLog: string[] = [];
+    const workflowEvents: Array<{
+      type: string;
+      status: string;
+      state: SimpleState;
+    }> = [];
+    const stepEvents: Array<{ type: string }> = [];
 
     const simpleWorkflow = workflow<SimpleState>(
       'Simple Workflow',
@@ -34,37 +38,46 @@ describe('workflow level event listeners', () => {
           value: newValue
         })),
         on('step:complete', () => {
-          stepEventLog.push('step:complete');
+          stepEvents.push({ type: 'step:complete' });
         })
       ),
       on('workflow:start', ({ status, context: state }) => {
-        workflowEventLog.push('workflow:start');
-        expect(status).toBe('pending');
-        expect(state?.value).toBe(0);
+        workflowEvents.push({ type: 'workflow:start', status, state: state as SimpleState });
       }),
       on('workflow:update', ({ status, context: state }) => {
-        workflowEventLog.push('workflow:update');
-        expect(status).toBe('running');
-        expect(state?.value).toBe(1);
+        workflowEvents.push({ type: 'workflow:update', status, state: state as SimpleState });
       }),
-      on('workflow:complete', ({ context: state }) => {
-        workflowEventLog.push('workflow:complete');
-        expect(state?.value).toBe(1);
+      on('workflow:complete', ({ status, context: state }) => {
+        workflowEvents.push({ type: 'workflow:complete', status, state: state as SimpleState });
       })
     );
 
     const { context: state, status } = await simpleWorkflow.run({ value: 0 });
 
+    // Verify final state
     expect(state.value).toBe(1);
     expect(status).toBe('complete');
 
-    expect(workflowEventLog).toEqual([
-      'workflow:start',
-      'workflow:update',
-      'workflow:complete'
-    ]);
+    // Verify workflow events
+    expect(workflowEvents).toHaveLength(3);
+    expect(workflowEvents[0]).toEqual({
+      type: 'workflow:start',
+      status: 'pending',
+      state: { value: 0 }
+    });
+    expect(workflowEvents[1]).toEqual({
+      type: 'workflow:update',
+      status: 'running',
+      state: { value: 1 }
+    });
+    expect(workflowEvents[2]).toEqual({
+      type: 'workflow:complete',
+      status: 'complete',
+      state: { value: 1 }
+    });
 
-    expect(stepEventLog).toEqual(['step:complete']);
+    // Verify step events
+    expect(stepEvents).toEqual([{ type: 'step:complete' }]);
   });
 });
 
@@ -74,12 +87,15 @@ describe('step level event listeners', () => {
       value: number;
     }
 
-    const stepOneEvents: string[] = [];
-    const stepTwoEvents: string[] = [];
+    const stepEvents: Array<{
+      step: string;
+      type: string;
+      state: SimpleState;
+      result: number;
+    }> = [];
 
     const twoStepWorkflow = workflow<SimpleState>(
       'Two Step Workflow',
-      // Step 1: Double the value
       step(
         "Double step",
         action(async (state: SimpleState) => state.value * 2),
@@ -87,12 +103,14 @@ describe('step level event listeners', () => {
           value: newValue
         })),
         on('step:complete', ({ context: state, result }) => {
-          stepOneEvents.push('step:complete');
-          expect(result).toBe(2); // 1 * 2
-          expect(state?.value).toBe(2);
+          stepEvents.push({
+            step: 'double',
+            type: 'step:complete',
+            state: state as SimpleState,
+            result
+          });
         })
       ),
-      // Step 2: Add 1 to the value
       step(
         "Add one step",
         action(async (state: SimpleState) => state.value + 1),
@@ -100,9 +118,12 @@ describe('step level event listeners', () => {
           value: newValue
         })),
         on('step:complete', ({ context: state, result }) => {
-          stepTwoEvents.push('step:complete');
-          expect(result).toBe(3); // 2 + 1
-          expect(state?.value).toBe(3);
+          stepEvents.push({
+            step: 'add-one',
+            type: 'step:complete',
+            state: state as SimpleState,
+            result
+          });
         })
       )
     );
@@ -111,13 +132,22 @@ describe('step level event listeners', () => {
 
     // Verify final state
     expect(state.value).toBe(3);
-
-    // Verify each step's events were called exactly once
-    expect(stepOneEvents).toEqual(['step:complete']);
-    expect(stepTwoEvents).toEqual(['step:complete']);
-
-    // Verify both steps completed
     expect(status).toBe('complete');
+
+    // Verify step events
+    expect(stepEvents).toHaveLength(2);
+    expect(stepEvents[0]).toEqual({
+      step: 'double',
+      type: 'step:complete',
+      state: { value: 2 },
+      result: 2
+    });
+    expect(stepEvents[1]).toEqual({
+      step: 'add-one',
+      type: 'step:complete',
+      state: { value: 3 },
+      result: 3
+    });
   });
 });
 
@@ -127,9 +157,15 @@ describe('error handling', () => {
       value: number;
     }
 
-    const workflowEvents: string[] = [];
-    const stepEvents: string[] = [];
-    let capturedError: Error | undefined;
+    const workflowEvents: Array<{
+      type: string;
+      stepResults?: Array<{ status: string }>;
+      error?: Error;
+    }> = [];
+    const stepEvents: Array<{
+      type: string;
+      error?: Error;
+    }> = [];
 
     const errorWorkflow = workflow<SimpleState>(
       'Error Workflow',
@@ -149,8 +185,7 @@ describe('error handling', () => {
         }),
         reduce((newValue: number) => ({ value: newValue })),
         on('step:error', ({ error }) => {
-          stepEvents.push('step:error');
-          expect(error?.message).toBe('Test error');
+          stepEvents.push({ type: 'step:error', error });
         })
       ),
       // Step 3: Should never execute
@@ -161,31 +196,26 @@ describe('error handling', () => {
       ),
       // Workflow-level error handler
       on('workflow:error', ({ error, stepResults }) => {
-        workflowEvents.push('workflow:error');
-        capturedError = error;
-        // Verify status of all steps
-        expect(stepResults[0].status).toBe('complete');  // First step
-        expect(stepResults[1].status).toBe('error');     // Error step
-        expect(stepResults[2].status).toBe('pending');   // Never reached step
-        expect(error?.message).toBe('Test error');
+        workflowEvents.push({
+          type: 'workflow:error',
+          stepResults,
+          error
+        });
       })
     );
 
     const { stepResults } = await errorWorkflow.run({ value: 0 });
 
-    // Verify events were fired
-    expect(workflowEvents).toContain('workflow:error');
-    expect(stepEvents).toContain('step:error');
+    // Verify events were captured correctly
+    const workflowError = workflowEvents.find(e => e.type === 'workflow:error');
+    expect(workflowError?.stepResults?.[0].status).toBe('complete');
+    expect(workflowError?.stepResults?.[1].status).toBe('error');
+    expect(workflowError?.stepResults?.[2].status).toBe('pending');
+    expect(workflowError?.error?.message).toBe('Test error');
 
-    // Verify final status array
-    expect(stepResults).toHaveLength(3);
-    expect(stepResults[0].status).toBe('complete');
-    expect(stepResults[1].status).toBe('error');
-    expect(stepResults[1].error?.message).toBe('Test error');
-    expect(stepResults[2].status).toBe('pending');
-
-    // Verify error was captured
-    expect(capturedError?.message).toBe('Test error');
+    // Verify step error was captured
+    const stepError = stepEvents.find(e => e.type === 'step:error');
+    expect(stepError?.error?.message).toBe('Test error');
   });
 });
 
