@@ -189,3 +189,36 @@ describe('error handling', () => {
   });
 });
 
+describe('step creation', () => {
+  it('should create a step without a reducer', () => {
+    interface SimpleState extends JsonObject {
+      value: number;
+    }
+
+    const simpleStep = step<SimpleState, number>(
+      "Simple step",
+      action(async (state) => state.value),
+      on('step:complete', () => {})
+    );
+
+    expect(simpleStep.reducer).toBeUndefined();
+    expect(simpleStep.events).toHaveLength(1);
+  });
+
+  it('should create a step with a reducer', () => {
+    interface SimpleState extends JsonObject {
+      value: number;
+    }
+
+    const stepWithReducer = step<SimpleState, number>(
+      "Step with reducer",
+      action(async (state) => state.value + 1),
+      reduce((result, state) => ({ value: result })),
+      on('step:complete', () => {})
+    );
+
+    expect(stepWithReducer.reducer).toBeDefined();
+    expect(stepWithReducer.events).toHaveLength(1);
+  });
+});
+
