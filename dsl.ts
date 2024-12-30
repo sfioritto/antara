@@ -27,6 +27,21 @@ interface WorkflowEventBlock<StateShape> {
   handler: WorkflowEventHandler<StateShape>;
 }
 
+interface StepBlock<StateShape, ResultShape = any> {
+  id: string;
+  title: string;
+  action: ActionBlock<StateShape, ResultShape>;
+  reducer?: ReducerBlock<StateShape, ResultShape>;
+  events: StepEventBlock<StateShape, ResultShape>[];
+  status: StatusOptions;
+  error?: Error;
+  state: StateShape | null;
+  run: (state: StateShape) => Promise<{
+    error?: Error;
+    state: StateShape,
+  }>;
+}
+
 interface WorkflowMetadata {
   title: string;
   description?: string;
@@ -35,7 +50,7 @@ interface WorkflowMetadata {
 interface WorkflowBlock<StateShape> extends WorkflowMetadata {
   run: (initialState: State<StateShape>) => Promise<{
     state: State<StateShape>,
-    steps: Step<StateShape>[],
+    steps: StepBlock<StateShape>[],
     status: 'pending' | 'running' | 'complete' | 'error',
   }>;
 }
@@ -59,21 +74,6 @@ type StepEventHandler<StateShape, ResultShape> = (params: {
   result?: ResultShape,
   error?: Error
 }) => void;
-
-interface Step<StateShape, ResultShape = any> {
-  id: string;
-  title: string;
-  action: ActionBlock<StateShape, ResultShape>;
-  reducer?: ReducerBlock<StateShape, ResultShape>;
-  events: StepEventBlock<StateShape, ResultShape>[];
-  status: StatusOptions;
-  error?: Error;
-  state: StateShape | null;
-  run: (state: StateShape) => Promise<{
-    error?: Error;
-    state: StateShape,
-  }>;
-}
 
 type WorkflowEventHandler<StateShape> = (params: {
   event: WorkflowEventTypes;
@@ -238,7 +238,7 @@ function step<StateShape, ResultShape>(
 
 const workflow = <StateShape>(
   metadata: string | WorkflowMetadata,
-  ...args: Array<Step<StateShape> | WorkflowEventBlock<StateShape>>
+  ...args: Array<StepBlock<StateShape> | WorkflowEventBlock<StateShape>>
 ): WorkflowBlock<StateShape> => {
   // Convert string to WorkflowMetadata if needed
   const normalizedMetadata = typeof metadata === 'string'
@@ -251,7 +251,7 @@ const workflow = <StateShape>(
   const workflowEvents = args.filter((arg): arg is WorkflowEventBlock<StateShape> =>
     'type' in arg && arg.type === 'workflow'
   );
-  const steps = args.filter((arg): arg is Step<StateShape> =>
+  const steps = args.filter((arg): arg is StepBlock<StateShape> =>
     !('type' in arg && arg.type === 'workflow')
   );
 
