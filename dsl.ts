@@ -35,8 +35,8 @@ interface WorkflowMetadata {
 interface WorkflowBlock<StateShape> extends WorkflowMetadata {
   run: (initialState: State<StateShape>) => Promise<{
     state: State<StateShape>,
-    steps: Omit<StepBlock<StateShape>, 'run'>[],
-    status: 'pending' | 'running' | 'complete' | 'error',
+    steps: Omit<StepBlock<StateShape>, 'run' | 'action' | 'events' | 'reducer'>[],
+    status: StatusOptions,
   }>;
 }
 
@@ -109,7 +109,7 @@ class StepBlock<StateShape, ResultShape = any> {
   public action: ActionBlock<StateShape, ResultShape>;
   public events: StepEventBlock<StateShape, ResultShape>[];
   public reducer?: ReducerBlock<StateShape, ResultShape>;
-  public status: 'pending' | 'running' | 'complete' | 'error';
+  public status: StatusOptions;
   public error?: Error;
   public state: StateShape | null;
 
@@ -170,9 +170,6 @@ const serializedStepBlock = function <StateShape, ResultShape>(step: StepBlock<S
   return structuredClone({
     id: step.id,
     title: step.title,
-    action: step.action,
-    events: step.events,
-    reducer: step.reducer,
     status: step.status,
     state: step.state,
     error: step.error,
