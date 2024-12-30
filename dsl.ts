@@ -27,21 +27,6 @@ interface WorkflowEventBlock<StateShape> {
   handler: WorkflowEventHandler<StateShape>;
 }
 
-interface StepBlock<StateShape, ResultShape = any> {
-  id: string;
-  title: string;
-  action: ActionBlock<StateShape, ResultShape>;
-  reducer?: ReducerBlock<StateShape, ResultShape>;
-  events: StepEventBlock<StateShape, ResultShape>[];
-  status: StatusOptions;
-  error?: Error;
-  state: StateShape | null;
-  run: (state: StateShape) => Promise<{
-    error?: Error;
-    state: StateShape,
-  }>;
-}
-
 interface WorkflowMetadata {
   title: string;
   description?: string;
@@ -118,7 +103,7 @@ async function dispatchEvents<StateShape, ResultShape>(
 }
 
 // Class to manage step block state and logic
-class StepClass<StateShape, ResultShape> {
+class StepBlock<StateShape, ResultShape = any> {
   public id: string;
   public title: string;
   public action: ActionBlock<StateShape, ResultShape>;
@@ -227,13 +212,13 @@ function step<StateShape, ResultShape>(
   title: string,
   ...args: | [ActionBlock<StateShape, ResultShape>, ...StepEventBlock<StateShape, ResultShape>[]]
         | [ActionBlock<StateShape, ResultShape>, ReducerBlock<StateShape, ResultShape>, ...StepEventBlock<StateShape, ResultShape>[]]
-): StepClass<StateShape, ResultShape> {
+): StepBlock<StateShape, ResultShape> {
   const [action, ...rest] = args;
   const hasReducer = rest[0]?.type === "reducer";
   const reducer = hasReducer ? rest[0] as ReducerBlock<StateShape, ResultShape> : undefined;
   const events = (hasReducer ? rest.slice(1) : rest) as StepEventBlock<StateShape, ResultShape>[];
 
-  return new StepClass(title, action, events, reducer);
+  return new StepBlock(title, action, events, reducer);
 }
 
 const workflow = <StateShape>(
