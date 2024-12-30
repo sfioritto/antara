@@ -160,14 +160,13 @@ describe('error handling', () => {
         reduce((newValue: number) => ({ value: newValue }))
       ),
       // Workflow-level error handler
-      on('workflow:error', ({ error }) => {
+      on('workflow:error', ({ error, stepResults }) => {
         workflowEvents.push('workflow:error');
         capturedError = error;
         // Verify status of all steps
-        // TODO: update with serialized steps
-        // expect(statuses[0].status).toBe('complete');  // First step
-        // expect(statuses[1].status).toBe('error');     // Error step
-        // expect(statuses[2].status).toBe('pending');   // Never reached step
+        expect(stepResults[0].status).toBe('complete');  // First step
+        expect(stepResults[1].status).toBe('error');     // Error step
+        expect(stepResults[2].status).toBe('pending');   // Never reached step
         expect(error?.message).toBe('Test error');
       })
     );

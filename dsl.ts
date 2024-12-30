@@ -63,6 +63,7 @@ type WorkflowEventHandler<ContextShape> = (params: {
   context: ContextShape | null;
   status: StatusOptions;
   error?: SerializedError;
+  stepResults: StepResult<ContextShape>[];
 }) => void;
 
 interface StepResult<ContextShape> {
@@ -151,8 +152,30 @@ class WorkflowBlock<ContextShape> {
     public description?: string
   ) { }
 
+  #stepResults(
+    currentContext: ContextShape,
+    results: StepResult<ContextShape>[] = [],
+  ): StepResult<ContextShape>[] {
+    // If a step has an error then all of the steps after it will not create a result
+    // But we want to return a result for each step, so we stub one out for each step
+    // that comes after the step with an error
+    return this.steps.map((step): StepResult<ContextShape> => {
+      const result = results.find((result) => result.id === step.id);
+      if (!result) {
+        return {
+          id: step.id,
+          title: step.title,
+          status: 'pending',
+          context: currentContext,
+        };
+      }
+      return result;
+    });
+  }
+
   async dispatchEvents(args: {
     eventType: WorkflowEventTypes,
+    stepResults: StepResult<ContextShape>[],
     context: ContextShape,
     status: StatusOptions,
     error?: SerializedError,
@@ -176,6 +199,7 @@ class WorkflowBlock<ContextShape> {
       eventType: 'workflow:start',
       context: clonedInitialContext,
       status: 'pending',
+      stepResults: this.#stepResults(clonedInitialContext),
     });
 
     let currentContext = clonedInitialContext as ContextShape;
@@ -193,6 +217,7 @@ class WorkflowBlock<ContextShape> {
           context: nextContext,
           status: 'error',
           error,
+          stepResults: this.#stepResults(nextContext, results),
         });
         break;
       } else {
@@ -200,6 +225,7 @@ class WorkflowBlock<ContextShape> {
           eventType: 'workflow:update',
           context: nextContext,
           status: 'running',
+          stepResults: this.#stepResults(nextContext, results),
         });
         currentContext = nextContext;
       }
@@ -209,27 +235,12 @@ class WorkflowBlock<ContextShape> {
       eventType: 'workflow:complete',
       context: currentContext,
       status: 'complete',
-    });
-
-    // If a step has an error then all of the steps after it will not create a result
-    // But we want to return a result for each step, so we stub one out for each step
-    // that comes after the step with an error
-    const stepResults = this.steps.map((step): StepResult<ContextShape> => {
-      const result = results.find((result) => result.id === step.id);
-      if (!result) {
-        return {
-          id: step.id,
-          title: step.title,
-          status: 'pending',
-          context: currentContext,
-        };
-      }
-      return result;
+      stepResults: this.#stepResults(currentContext, results),
     });
 
     return {
       context: currentContext,
-      stepResults,
+      stepResults: this.#stepResults(currentContext, results),
       status: 'complete',
     };
   }
