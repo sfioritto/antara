@@ -60,7 +60,7 @@ type StatusOptions = 'pending' | 'running' | 'complete' | 'error';
 
 type StepEventHandler<ContextShape, ResultShape> = (params: {
   eventType: StepEventTypes,
-  context: ContextShape | null,
+  context: ContextShape,
   status: StatusOptions,
   result?: ResultShape,
   error?: SerializedError
@@ -68,7 +68,7 @@ type StepEventHandler<ContextShape, ResultShape> = (params: {
 
 type WorkflowEventHandler<ContextShape> = (params: {
   eventType: WorkflowEventTypes;
-  context: ContextShape | null;
+  context: ContextShape;
   status: StatusOptions;
   error?: SerializedError;
   stepResults: StepResult<ContextShape>[];

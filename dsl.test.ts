@@ -17,44 +17,44 @@ describe('workflow creation', () => {
 
 describe('workflow level event listeners', () => {
   it('should fire workflow events in correct order with proper state/status', async () => {
-    interface SimpleState {
+    interface SimpleContext {
       value: number;
     }
 
     const workflowEvents: Array<{
       type: string;
       status: string;
-      state: SimpleState;
+      context: SimpleContext;
     }> = [];
     const stepEvents: Array<{ type: string }> = [];
 
-    const simpleWorkflow = workflow<SimpleState>(
+    const simpleWorkflow = workflow<SimpleContext>(
       'Simple Workflow',
       step(
         "Increment step",
-        action(async (state: SimpleState) => state.value + 1),
-        reduce((newValue: number, state: SimpleState) => ({
+        action(async (context: SimpleContext) => context.value + 1),
+        reduce((newValue: number) => ({
           value: newValue,
         })),
         on('step:complete', () => {
           stepEvents.push({ type: 'step:complete' });
         })
       ),
-      on('workflow:start', ({ status, context: state }) => {
-        workflowEvents.push({ type: 'workflow:start', status, state: state as SimpleState });
+      on('workflow:start', ({ status, context }) => {
+        workflowEvents.push({ type: 'workflow:start', status, context });
       }),
-      on('workflow:update', ({ status, context: state }) => {
-        workflowEvents.push({ type: 'workflow:update', status, state: state as SimpleState });
+      on('workflow:update', ({ status, context }) => {
+        workflowEvents.push({ type: 'workflow:update', status, context });
       }),
-      on('workflow:complete', ({ status, context: state }) => {
-        workflowEvents.push({ type: 'workflow:complete', status, state: state as SimpleState });
+      on('workflow:complete', ({ status, context }) => {
+        workflowEvents.push({ type: 'workflow:complete', status, context });
       })
     );
 
-    const { context: state, status } = await simpleWorkflow.run({ value: 0 });
+    const { context, status } = await simpleWorkflow.run({ value: 0 });
 
-    // Verify final state
-    expect(state.value).toBe(1);
+    // Verify final context
+    expect(context.value).toBe(1);
     expect(status).toBe('complete');
 
     // Verify workflow events
@@ -62,17 +62,17 @@ describe('workflow level event listeners', () => {
     expect(workflowEvents[0]).toEqual({
       type: 'workflow:start',
       status: 'pending',
-      state: { value: 0 }
+      context: { value: 0 }
     });
     expect(workflowEvents[1]).toEqual({
       type: 'workflow:update',
       status: 'running',
-      state: { value: 1 }
+      context: { value: 1 }
     });
     expect(workflowEvents[2]).toEqual({
       type: 'workflow:complete',
       status: 'complete',
-      state: { value: 1 }
+      context: { value: 1 }
     });
 
     // Verify step events
@@ -82,55 +82,55 @@ describe('workflow level event listeners', () => {
 
 describe('step level event listeners', () => {
   it('should fire step events only for their respective steps', async () => {
-    interface SimpleState {
+    interface SimpleContext {
       value: number;
     }
 
     const stepEvents: Array<{
       step: string;
       type: string;
-      state: SimpleState;
+      context: SimpleContext;
       result: number;
     }> = [];
 
-    const twoStepWorkflow = workflow<SimpleState>(
+    const twoStepWorkflow = workflow<SimpleContext>(
       'Two Step Workflow',
       step(
         "Double step",
-        action(async (state: SimpleState) => state.value * 2),
-        reduce((newValue: number, state: SimpleState) => ({
+        action(async (context) => context.value * 2),
+        reduce((newValue: number) => ({
           value: newValue
         })),
-        on('step:complete', ({ context: state, result }) => {
+        on('step:complete', ({ context, result }) => {
           stepEvents.push({
             step: 'double',
             type: 'step:complete',
-            state: state as SimpleState,
+            context,
             result
           });
         })
       ),
       step(
         "Add one step",
-        action(async (state: SimpleState) => state.value + 1),
-        reduce((newValue: number, state: SimpleState) => ({
+        action(async (context: SimpleContext) => context.value + 1),
+        reduce((newValue: number) => ({
           value: newValue
         })),
-        on('step:complete', ({ context: state, result }) => {
+        on('step:complete', ({ context, result }) => {
           stepEvents.push({
             step: 'add-one',
             type: 'step:complete',
-            state: state as SimpleState,
+            context,
             result
           });
         })
       )
     );
 
-    const { context: state, status } = await twoStepWorkflow.run({ value: 1 });
+    const { context, status } = await twoStepWorkflow.run({ value: 1 });
 
-    // Verify final state
-    expect(state.value).toBe(3);
+    // Verify final context
+    expect(context.value).toBe(3);
     expect(status).toBe('complete');
 
     // Verify step events
@@ -138,21 +138,21 @@ describe('step level event listeners', () => {
     expect(stepEvents[0]).toEqual({
       step: 'double',
       type: 'step:complete',
-      state: { value: 2 },
+      context: { value: 2 },
       result: 2
     });
     expect(stepEvents[1]).toEqual({
       step: 'add-one',
       type: 'step:complete',
-      state: { value: 3 },
+      context: { value: 3 },
       result: 3
     });
   });
 });
 
 describe('error handling', () => {
-  it('should handle errors in actions and maintain correct status states', async () => {
-    interface SimpleState {
+  it('should handle errors in actions and maintain correct contexts', async () => {
+    interface SimpleContext {
       value: number;
     }
 
@@ -166,12 +166,12 @@ describe('error handling', () => {
       error?: Error;
     }> = [];
 
-    const errorWorkflow = workflow<SimpleState>(
+    const errorWorkflow = workflow<SimpleContext>(
       'Error Workflow',
       // Step 1: Normal step
       step(
         "First step",
-        action(async (state: SimpleState) => state.value + 1),
+        action(async (context) => context.value + 1),
         reduce((newValue: number) => ({
           value: newValue,
         }))
@@ -190,7 +190,7 @@ describe('error handling', () => {
       // Step 3: Should never execute
       step(
         "Never reached",
-        action(async (state: SimpleState) => state.value + 1),
+        action(async (context) => context.value + 1),
         reduce((newValue: number) => ({ value: newValue }))
       ),
       // Workflow-level error handler
@@ -220,13 +220,13 @@ describe('error handling', () => {
 
 describe('step creation', () => {
   it('should create a step without a reducer', () => {
-    interface SimpleState {
+    interface SimpleContext {
       value: number;
     }
 
-    const simpleStep = step<SimpleState, number>(
+    const simpleStep = step<SimpleContext, number>(
       "Simple step",
-      action(async (state) => state.value),
+      action(async (context) => context.value),
       on('step:complete', () => {})
     );
 
@@ -235,14 +235,14 @@ describe('step creation', () => {
   });
 
   it('should create a step with a reducer', () => {
-    interface SimpleState {
+    interface SimpleContext {
       value: number;
     }
 
-    const stepWithReducer = step<SimpleState, number>(
+    const stepWithReducer = step<SimpleContext, number>(
       "Step with reducer",
-      action(async (state) => state.value + 1),
-      reduce((result, state) => ({ value: result })),
+      action(async (context) => context.value + 1),
+      reduce((result) => ({ value: result })),
       on('step:complete', () => {})
     );
 
