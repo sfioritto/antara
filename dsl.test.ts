@@ -37,17 +37,17 @@ describe('workflow level event listeners', () => {
           stepEventLog.push('step:complete');
         })
       ),
-      on('workflow:start', ({ status, state }) => {
+      on('workflow:start', ({ status, context: state }) => {
         workflowEventLog.push('workflow:start');
         expect(status).toBe('pending');
         expect(state?.value).toBe(0);
       }),
-      on('workflow:update', ({ status, state }) => {
+      on('workflow:update', ({ status, context: state }) => {
         workflowEventLog.push('workflow:update');
         expect(status).toBe('running');
         expect(state?.value).toBe(1);
       }),
-      on('workflow:complete', ({ state }) => {
+      on('workflow:complete', ({ context: state }) => {
         workflowEventLog.push('workflow:complete');
         expect(state?.value).toBe(1);
       })
@@ -86,7 +86,7 @@ describe('step level event listeners', () => {
         reduce((newValue: number, state: SimpleState) => ({
           value: newValue
         })),
-        on('step:complete', ({ state, result }) => {
+        on('step:complete', ({ context: state, result }) => {
           stepOneEvents.push('step:complete');
           expect(result).toBe(2); // 1 * 2
           expect(state?.value).toBe(2);
@@ -99,7 +99,7 @@ describe('step level event listeners', () => {
         reduce((newValue: number, state: SimpleState) => ({
           value: newValue
         })),
-        on('step:complete', ({ state, result }) => {
+        on('step:complete', ({ context: state, result }) => {
           stepTwoEvents.push('step:complete');
           expect(result).toBe(3); // 2 + 1
           expect(state?.value).toBe(3);

@@ -78,7 +78,7 @@ const testImprovementWorkflow = workflow<WorkflowState>(
         importPaths
       )
     })),
-    on('step:complete', ({ state }) => {
+    on('step:complete', ({ context: state }) => {
       console.log('Import paths updated successfully');
     })
   ),
@@ -96,7 +96,7 @@ const testImprovementWorkflow = workflow<WorkflowState>(
         current: coverage
       }
     })),
-    on('step:complete', ({ state }) => {
+    on('step:complete', ({ context: state }) => {
       console.log(`Initial coverage: ${state?.coverage?.initial}%`);
     })
   ),
@@ -111,7 +111,7 @@ const testImprovementWorkflow = workflow<WorkflowState>(
       ...state,
       suggestions
     })),
-    on('step:complete', ({ state }) => {
+    on('step:complete', ({ context: state }) => {
       console.log('Generated improvement suggestions:', state?.suggestions);
     })
   ),
@@ -120,7 +120,7 @@ const testImprovementWorkflow = workflow<WorkflowState>(
   on('workflow:start', () => {
     console.log('Starting test improvement workflow');
   }),
-  on('workflow:complete', ({ state }) => {
+  on('workflow:complete', ({ context: state }) => {
     console.log('Workflow completed');
     console.log('Final coverage:', state?.coverage?.current);
     console.log('Suggestions:', state?.suggestions);

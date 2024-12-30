@@ -7,30 +7,30 @@ type SerializedError = {
   stack?: string;
 }
 
-type State<StateShape> = StateShape extends JsonObject ? StateShape : never;
-type Action<StateShape, ResultShape = any> = (state: StateShape) => (Promise<ResultShape> | ResultShape);
-type Reducer<StateShape, ResultShape> = (result: ResultShape, state: StateShape) => StateShape;
+type Context<ContextShape> = ContextShape extends JsonObject ? ContextShape : never;
+type Action<ContextShape, ResultShape = any> = (state: ContextShape) => (Promise<ResultShape> | ResultShape);
+type Reducer<ContextShape, ResultShape> = (result: ResultShape, context: ContextShape) => ContextShape;
 
-interface ActionBlock<StateShape, ResultShape> {
+interface ActionBlock<ContextShape, ResultShape> {
   type: "action";
-  fn: Action<StateShape, ResultShape>;
+  fn: Action<ContextShape, ResultShape>;
 }
 
-interface ReducerBlock<StateShape, ResultShape> {
+interface ReducerBlock<ContextShape, ResultShape> {
   type: "reducer";
-  fn: Reducer<StateShape, ResultShape>;
+  fn: Reducer<ContextShape, ResultShape>;
 }
 
-interface StepEventBlock<StateShape, ResultShape> {
+interface StepEventBlock<ContextShape, ResultShape> {
   type: "event";
   eventType: StepEventTypes;
-  handler: StepEventHandler<StateShape, ResultShape>;
+  handler: StepEventHandler<ContextShape, ResultShape>;
 }
 
-interface WorkflowEventBlock<StateShape> {
+interface WorkflowEventBlock<ContextShape> {
   type: "workflow";
   eventType: WorkflowEventTypes;
-  handler: WorkflowEventHandler<StateShape>;
+  handler: WorkflowEventHandler<ContextShape>;
 }
 
 interface WorkflowMetadata {
@@ -50,29 +50,29 @@ type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 
 type StatusOptions = 'pending' | 'running' | 'complete' | 'error';
 
-type StepEventHandler<StateShape, ResultShape> = (params: {
+type StepEventHandler<ContextShape, ResultShape> = (params: {
   event: StepEventTypes,
-  state: StateShape | null,
+  context: ContextShape | null,
   status: StatusOptions,
   result?: ResultShape,
   error?: SerializedError
 }) => void;
 
-type WorkflowEventHandler<StateShape> = (params: {
+type WorkflowEventHandler<ContextShape> = (params: {
   event: WorkflowEventTypes;
-  state: StateShape | null;
+  context: ContextShape | null;
   status: StatusOptions;
   error?: SerializedError;
 }) => void;
 
 // Function to dispatch events to the appropriate handlers
-async function dispatchEvents<StateShape, ResultShape>(
-  events: Array<StepEventBlock<StateShape, ResultShape> | WorkflowEventBlock<StateShape>>,
+async function dispatchEvents<ContextShape, ResultShape>(
+  events: Array<StepEventBlock<ContextShape, ResultShape> | WorkflowEventBlock<ContextShape>>,
   eventType: AllEventTypes,
   params: {
     id: string,
     title: string,
-    state: StateShape | null,
+    state: ContextShape | null,
     status: StatusOptions,
     error?: SerializedError,
     result?: ResultShape,
@@ -83,14 +83,14 @@ async function dispatchEvents<StateShape, ResultShape>(
       if (event.type === "workflow") {
         await event.handler({
           event: eventType as WorkflowEventTypes,
-          state: params.state,
+          context: params.state,
           status: params.status,
           error: params.error,
         });
       } else {
         await event.handler({
           event: eventType as StepEventTypes,
-          state: params.state,
+          context: params.state,
           status: params.status,
           result: params.result,
           error: params.error,
@@ -101,23 +101,23 @@ async function dispatchEvents<StateShape, ResultShape>(
 }
 
 // Class to manage step block state and logic
-class StepBlock<StateShape, ResultShape = any> {
+class StepBlock<ContextShape, ResultShape = any> {
   public id = uuidv4();
   public status: StatusOptions = 'pending';
-  public state: StateShape | null = null;
+  public state: ContextShape | null = null;
   public result?: ResultShape;
   public error?: SerializedError;
 
   constructor(
     public title: string,
-    public action: ActionBlock<StateShape, ResultShape>,
-    public events: StepEventBlock<StateShape, ResultShape>[],
-    public reducer?: ReducerBlock<StateShape, ResultShape>,
+    public action: ActionBlock<ContextShape, ResultShape>,
+    public events: StepEventBlock<ContextShape, ResultShape>[],
+    public reducer?: ReducerBlock<ContextShape, ResultShape>,
   ) {}
 
-  async run(state: StateShape): Promise<{
+  async run(state: ContextShape): Promise<{
     error?: SerializedError;
-    state: StateShape;
+    state: ContextShape;
   }> {
     try {
       const result = await this.action.fn(state);
@@ -146,20 +146,20 @@ class StepBlock<StateShape, ResultShape = any> {
   }
 }
 
-class WorkflowBlock<StateShape> {
+class WorkflowBlock<ContextShape> {
   public id = uuidv4();
 
   constructor(
     public title: string,
-    public steps: StepBlock<StateShape>[],
-    public events: WorkflowEventBlock<StateShape>[],
+    public steps: StepBlock<ContextShape>[],
+    public events: WorkflowEventBlock<ContextShape>[],
     public description?: string
   ) {}
 
-  async run(initialState: State<StateShape>): Promise<{
+  async run(initialState: Context<ContextShape>): Promise<{
     error?: SerializedError;
-    state: State<StateShape>;
-    steps: Omit<StepBlock<StateShape>, 'run' | 'action' | 'events' | 'reducer'>[];
+    state: Context<ContextShape>;
+    steps: Omit<StepBlock<ContextShape>, 'run' | 'action' | 'events' | 'reducer'>[];
     status: StatusOptions;
   }> {
     let clonedInitialState = structuredClone(initialState);
@@ -171,7 +171,7 @@ class WorkflowBlock<StateShape> {
       status: 'pending',
     });
 
-    let currentState = clonedInitialState as StateShape;
+    let currentState = clonedInitialState as ContextShape;
     for (const step of this.steps) {
       const { state: nextState, error } = await step.run(currentState);
 
@@ -203,14 +203,14 @@ class WorkflowBlock<StateShape> {
     });
 
     return {
-      state: currentState as State<StateShape>,
+      state: currentState as Context<ContextShape>,
       steps: this.steps.map(serializedStepBlock),
       status: 'complete',
     };
   }
 }
 
-const serializedStepBlock = function <StateShape, ResultShape>(step: StepBlock<StateShape, ResultShape>) {
+const serializedStepBlock = function <ContextShape, ResultShape>(step: StepBlock<ContextShape, ResultShape>) {
   return structuredClone({
     id: step.id,
     title: step.title,
@@ -221,64 +221,64 @@ const serializedStepBlock = function <StateShape, ResultShape>(step: StepBlock<S
 }
 
 // Block builders
-function on<StateShape, ResultShape>(
+function on<ContextShape, ResultShape>(
   event: StepEventTypes,
-  handler: StepEventHandler<StateShape, ResultShape>
-): StepEventBlock<StateShape, ResultShape>;
-function on<StateShape>(
+  handler: StepEventHandler<ContextShape, ResultShape>
+): StepEventBlock<ContextShape, ResultShape>;
+function on<ContextShape>(
   event: WorkflowEventTypes,
-  handler: WorkflowEventHandler<StateShape>
-): WorkflowEventBlock<StateShape>;
- function on<StateShape, ResultShape>(
+  handler: WorkflowEventHandler<ContextShape>
+): WorkflowEventBlock<ContextShape>;
+ function on<ContextShape, ResultShape>(
    event: AllEventTypes,
-   handler: StepEventHandler<StateShape, ResultShape> | WorkflowEventHandler<StateShape>
- ): StepEventBlock<StateShape, ResultShape> | WorkflowEventBlock<StateShape>{
+   handler: StepEventHandler<ContextShape, ResultShape> | WorkflowEventHandler<ContextShape>
+ ): StepEventBlock<ContextShape, ResultShape> | WorkflowEventBlock<ContextShape>{
   if (event.startsWith('workflow:')) {
     return {
       type: "workflow",
       eventType: event as WorkflowEventTypes,
-      handler: handler as WorkflowEventHandler<StateShape>,
+      handler: handler as WorkflowEventHandler<ContextShape>,
     };
   }
 
   return {
     type: "event",
     eventType: event as StepEventTypes,
-    handler: handler as StepEventHandler<StateShape, ResultShape>,
+    handler: handler as StepEventHandler<ContextShape, ResultShape>,
   };
 }
 
-const action = <StateShape, ResultShape>(
-  fn: Action<StateShape, ResultShape>
-): ActionBlock<StateShape, ResultShape> => ({
+const action = <ContextShape, ResultShape>(
+  fn: Action<ContextShape, ResultShape>
+): ActionBlock<ContextShape, ResultShape> => ({
   type: "action",
   fn
 });
 
-const reduce = <StateShape, ResultShape>(
-  fn: Reducer<StateShape, ResultShape>
-): ReducerBlock<StateShape, ResultShape> => ({
+const reduce = <ContextShape, ResultShape>(
+  fn: Reducer<ContextShape, ResultShape>
+): ReducerBlock<ContextShape, ResultShape> => ({
   type: "reducer",
   fn,
 });
 
-function step<StateShape, ResultShape>(
+function step<ContextShape, ResultShape>(
   title: string,
-  ...args: | [ActionBlock<StateShape, ResultShape>, ...StepEventBlock<StateShape, ResultShape>[]]
-        | [ActionBlock<StateShape, ResultShape>, ReducerBlock<StateShape, ResultShape>, ...StepEventBlock<StateShape, ResultShape>[]]
-): StepBlock<StateShape, ResultShape> {
+  ...args: | [ActionBlock<ContextShape, ResultShape>, ...StepEventBlock<ContextShape, ResultShape>[]]
+        | [ActionBlock<ContextShape, ResultShape>, ReducerBlock<ContextShape, ResultShape>, ...StepEventBlock<ContextShape, ResultShape>[]]
+): StepBlock<ContextShape, ResultShape> {
   const [action, ...rest] = args;
   const hasReducer = rest[0]?.type === "reducer";
-  const reducer = hasReducer ? rest[0] as ReducerBlock<StateShape, ResultShape> : undefined;
-  const events = (hasReducer ? rest.slice(1) : rest) as StepEventBlock<StateShape, ResultShape>[];
+  const reducer = hasReducer ? rest[0] as ReducerBlock<ContextShape, ResultShape> : undefined;
+  const events = (hasReducer ? rest.slice(1) : rest) as StepEventBlock<ContextShape, ResultShape>[];
 
   return new StepBlock(title, action, events, reducer);
 }
 
-const workflow = <StateShape>(
+const workflow = <ContextShape>(
   metadata: string | WorkflowMetadata,
-  ...args: Array<StepBlock<StateShape> | WorkflowEventBlock<StateShape>>
-): WorkflowBlock<StateShape> => {
+  ...args: Array<StepBlock<ContextShape> | WorkflowEventBlock<ContextShape>>
+): WorkflowBlock<ContextShape> => {
   // Convert string to WorkflowMetadata if needed
   const normalizedMetadata = typeof metadata === 'string'
     ? { title: metadata }
@@ -286,10 +286,10 @@ const workflow = <StateShape>(
 
   const { title, description } = normalizedMetadata;
 
-  const workflowEvents = args.filter((arg): arg is WorkflowEventBlock<StateShape> =>
+  const workflowEvents = args.filter((arg): arg is WorkflowEventBlock<ContextShape> =>
     'type' in arg && arg.type === 'workflow'
   );
-  const steps = args.filter((arg): arg is StepBlock<StateShape> =>
+  const steps = args.filter((arg): arg is StepBlock<ContextShape> =>
     !('type' in arg && arg.type === 'workflow')
   );
 
