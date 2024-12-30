@@ -8,7 +8,7 @@ type SerializedError = {
 }
 
 type Context<ContextShape> = ContextShape extends JsonObject ? ContextShape : never;
-type Action<ContextShape, ResultShape = any> = (state: ContextShape) => (Promise<ResultShape> | ResultShape);
+type Action<ContextShape, ResultShape = any> = (context: ContextShape) => (Promise<ResultShape> | ResultShape);
 type Reducer<ContextShape, ResultShape> = (result: ResultShape, context: ContextShape) => ContextShape;
 
 interface ActionBlock<ContextShape, ResultShape> {
@@ -72,7 +72,7 @@ async function dispatchEvents<ContextShape, ResultShape>(
   params: {
     id: string,
     title: string,
-    state: ContextShape | null,
+    context: ContextShape | null,
     status: StatusOptions,
     error?: SerializedError,
     result?: ResultShape,
@@ -83,14 +83,14 @@ async function dispatchEvents<ContextShape, ResultShape>(
       if (event.type === "workflow") {
         await event.handler({
           event: eventType as WorkflowEventTypes,
-          context: params.state,
+          context: params.context,
           status: params.status,
           error: params.error,
         });
       } else {
         await event.handler({
           event: eventType as StepEventTypes,
-          context: params.state,
+          context: params.context,
           status: params.status,
           result: params.result,
           error: params.error,
@@ -104,7 +104,7 @@ async function dispatchEvents<ContextShape, ResultShape>(
 class StepBlock<ContextShape, ResultShape = any> {
   public id = uuidv4();
   public status: StatusOptions = 'pending';
-  public state: ContextShape | null = null;
+  public context: ContextShape | null = null;
   public result?: ResultShape;
   public error?: SerializedError;
 
@@ -115,19 +115,19 @@ class StepBlock<ContextShape, ResultShape = any> {
     public reducer?: ReducerBlock<ContextShape, ResultShape>,
   ) {}
 
-  async run(state: ContextShape): Promise<{
+  async run(context: ContextShape): Promise<{
     error?: SerializedError;
-    state: ContextShape;
+    context: ContextShape;
   }> {
     try {
-      const result = await this.action.fn(state);
+      const result = await this.action.fn(context);
       this.result = result;
-      const nextState = this.reducer?.fn(result, state) ?? state;
-      this.state = structuredClone(nextState);
+      const nextContext = this.reducer?.fn(result, context) ?? context;
+      this.context = structuredClone(nextContext);
       this.status = 'complete';
       await dispatchEvents(this.events, 'step:complete', this);
       return {
-        state: nextState,
+        context: nextContext,
       };
     } catch (err) {
       const error = err as Error;
@@ -140,7 +140,7 @@ class StepBlock<ContextShape, ResultShape = any> {
       await dispatchEvents(this.events, 'step:error', this);
       return {
         error: this.error,
-        state: state
+        context: context
       };
     }
   }
@@ -156,30 +156,30 @@ class WorkflowBlock<ContextShape> {
     public description?: string
   ) {}
 
-  async run(initialState: Context<ContextShape>): Promise<{
+  async run(initialContext: Context<ContextShape>): Promise<{
     error?: SerializedError;
-    state: Context<ContextShape>;
+    context: Context<ContextShape>;
     steps: Omit<StepBlock<ContextShape>, 'run' | 'action' | 'events' | 'reducer'>[];
     status: StatusOptions;
   }> {
-    let clonedInitialState = structuredClone(initialState);
+    let clonedInitialContext = structuredClone(initialContext);
 
     await dispatchEvents(this.events, 'workflow:start', {
       id: this.id,
       title: this.title,
-      state: clonedInitialState,
+      context: clonedInitialContext,
       status: 'pending',
     });
 
-    let currentState = clonedInitialState as ContextShape;
+    let currentContext = clonedInitialContext as ContextShape;
     for (const step of this.steps) {
-      const { state: nextState, error } = await step.run(currentState);
+      const { context: nextContext, error } = await step.run(currentContext);
 
       if (error) {
         await dispatchEvents(this.events, 'workflow:error', {
           id: this.id,
           title: this.title,
-          state: nextState,
+          context: nextContext,
           status: 'error',
           error: error as SerializedError,
         });
@@ -188,22 +188,22 @@ class WorkflowBlock<ContextShape> {
         await dispatchEvents(this.events, 'workflow:update', {
           id: this.id,
           title: this.title,
-          state: nextState,
+          context: nextContext,
           status: 'running',
         });
-        currentState = nextState;
+        currentContext = nextContext;
       }
     }
 
     await dispatchEvents(this.events, 'workflow:complete', {
       id: this.id,
       title: this.title,
-      state: currentState,
+      context: currentContext,
       status: 'complete',
     });
 
     return {
-      state: currentState as Context<ContextShape>,
+      context: currentContext as Context<ContextShape>,
       steps: this.steps.map(serializedStepBlock),
       status: 'complete',
     };
@@ -215,7 +215,7 @@ const serializedStepBlock = function <ContextShape, ResultShape>(step: StepBlock
     id: step.id,
     title: step.title,
     status: step.status,
-    state: step.state,
+    context: step.context,
     error: step.error,
   });
 }

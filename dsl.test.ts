@@ -53,7 +53,7 @@ describe('workflow level event listeners', () => {
       })
     );
 
-    const { state, status } = await simpleWorkflow.run({ value: 0 });
+    const { context: state, status } = await simpleWorkflow.run({ value: 0 });
 
     expect(state.value).toBe(1);
     expect(status).toBe('complete');
@@ -107,7 +107,7 @@ describe('step level event listeners', () => {
       )
     );
 
-    const { state, status } = await twoStepWorkflow.run({ value: 1 });
+    const { context: state, status } = await twoStepWorkflow.run({ value: 1 });
 
     // Verify final state
     expect(state.value).toBe(3);

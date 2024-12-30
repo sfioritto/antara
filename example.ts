@@ -137,7 +137,7 @@ const initialState: WorkflowState = {
   suggestions: []
 };
 
-testImprovementWorkflow.run(initialState).then(({ state, status }) => {
+testImprovementWorkflow.run(initialState).then(({ context: state, status }) => {
   console.log('Final state:', state);
   console.log('Step statuses:', status);
 });
