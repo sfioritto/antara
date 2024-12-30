@@ -166,7 +166,7 @@ class WorkflowBlock<ContextShape> {
 
   async run(initialContext: Context<ContextShape>): Promise<{
     error?: SerializedError;
-    context: Context<ContextShape>;
+    context: ContextShape;
     stepResults: StepResult<ContextShape>[];
     status: StatusOptions;
   }> {
@@ -212,7 +212,7 @@ class WorkflowBlock<ContextShape> {
     });
 
     return {
-      context: currentContext as Context<ContextShape>,
+      context: currentContext,
       stepResults: results,
       status: 'complete',
     };
