@@ -27,6 +27,19 @@ interface WorkflowEventBlock<StateShape> {
   handler: WorkflowEventHandler<StateShape>;
 }
 
+interface WorkflowMetadata {
+  title: string;
+  description?: string;
+}
+
+interface WorkflowBlock<StateShape> extends WorkflowMetadata {
+  run: (initialState: State<StateShape>) => Promise<{
+    state: State<StateShape>,
+    steps: Step<StateShape>[],
+    status: 'pending' | 'running' | 'complete' | 'error',
+  }>;
+}
+
 type StepEventTypes = 'step:complete' | 'step:error';
 
 type WorkflowEventTypes =
@@ -69,52 +82,7 @@ type WorkflowEventHandler<StateShape> = (params: {
   error?: Error;
 }) => void;
 
-function on<StateShape, ResultShape>(
-  event: StepEventTypes,
-  handler: StepEventHandler<StateShape, ResultShape>
-): StepEventBlock<StateShape, ResultShape>;
-function on<StateShape>(
-  event: WorkflowEventTypes,
-  handler: WorkflowEventHandler<StateShape>
-): WorkflowEventBlock<StateShape>;
- function on<StateShape, ResultShape>(
-   event: AllEventTypes,
-   handler: StepEventHandler<StateShape, ResultShape> | WorkflowEventHandler<StateShape>
- ): StepEventBlock<StateShape, ResultShape> | WorkflowEventBlock<StateShape>{
-  if (event.startsWith('workflow:')) {
-    return {
-      type: "workflow",
-      eventType: event as WorkflowEventTypes,
-      handler: handler as WorkflowEventHandler<StateShape>,
-    };
-  }
-
-  return {
-    type: "event",
-    eventType: event as StepEventTypes,
-    handler: handler as StepEventHandler<StateShape, ResultShape>,
-  };
-}
-
-// Core builders
-const action = <StateShape, ResultShape>(
-  fn: Action<StateShape, ResultShape>
-): ActionBlock<StateShape, ResultShape> => ({
-  type: "action",
-  fn
-});
-
-const reduce = <StateShape, ResultShape>(
-  fn: Reducer<StateShape, ResultShape>
-): ReducerBlock<StateShape, ResultShape> => ({
-  type: "reducer",
-  fn,
-});
-
-type StepArgs<StateShape, ResultShape> =
-  | [ActionBlock<StateShape, ResultShape>, ...StepEventBlock<StateShape, ResultShape>[]]
-  | [ActionBlock<StateShape, ResultShape>, ReducerBlock<StateShape, ResultShape>, ...StepEventBlock<StateShape, ResultShape>[]];
-
+// Function to dispatch events to the appropriate handlers
 async function dispatchEvents<StateShape, ResultShape>(
   events: Array<StepEventBlock<StateShape, ResultShape> | WorkflowEventBlock<StateShape>>,
   eventType: AllEventTypes,
@@ -149,6 +117,7 @@ async function dispatchEvents<StateShape, ResultShape>(
   }
 }
 
+// Class to manage step block state and logic
 class StepClass<StateShape, ResultShape> {
   public id: string;
   public title: string;
@@ -212,9 +181,52 @@ class StepClass<StateShape, ResultShape> {
   }
 }
 
+// Block builders
+function on<StateShape, ResultShape>(
+  event: StepEventTypes,
+  handler: StepEventHandler<StateShape, ResultShape>
+): StepEventBlock<StateShape, ResultShape>;
+function on<StateShape>(
+  event: WorkflowEventTypes,
+  handler: WorkflowEventHandler<StateShape>
+): WorkflowEventBlock<StateShape>;
+ function on<StateShape, ResultShape>(
+   event: AllEventTypes,
+   handler: StepEventHandler<StateShape, ResultShape> | WorkflowEventHandler<StateShape>
+ ): StepEventBlock<StateShape, ResultShape> | WorkflowEventBlock<StateShape>{
+  if (event.startsWith('workflow:')) {
+    return {
+      type: "workflow",
+      eventType: event as WorkflowEventTypes,
+      handler: handler as WorkflowEventHandler<StateShape>,
+    };
+  }
+
+  return {
+    type: "event",
+    eventType: event as StepEventTypes,
+    handler: handler as StepEventHandler<StateShape, ResultShape>,
+  };
+}
+
+const action = <StateShape, ResultShape>(
+  fn: Action<StateShape, ResultShape>
+): ActionBlock<StateShape, ResultShape> => ({
+  type: "action",
+  fn
+});
+
+const reduce = <StateShape, ResultShape>(
+  fn: Reducer<StateShape, ResultShape>
+): ReducerBlock<StateShape, ResultShape> => ({
+  type: "reducer",
+  fn,
+});
+
 function step<StateShape, ResultShape>(
   title: string,
-  ...args: StepArgs<StateShape, ResultShape>
+  ...args: | [ActionBlock<StateShape, ResultShape>, ...StepEventBlock<StateShape, ResultShape>[]]
+        | [ActionBlock<StateShape, ResultShape>, ReducerBlock<StateShape, ResultShape>, ...StepEventBlock<StateShape, ResultShape>[]]
 ): StepClass<StateShape, ResultShape> {
   const [action, ...rest] = args;
   const hasReducer = rest[0]?.type === "reducer";
@@ -224,25 +236,12 @@ function step<StateShape, ResultShape>(
   return new StepClass(title, action, events, reducer);
 }
 
-interface WorkflowMetadata {
-  title: string;
-  description?: string;
-}
-
-interface Workflow<StateShape> extends WorkflowMetadata {
-  run: (initialState: State<StateShape>) => Promise<{
-    state: State<StateShape>,
-    steps: Step<StateShape>[],
-    status: 'pending' | 'running' | 'complete' | 'error',
-  }>;
-}
-
 const workflow = <StateShape>(
   metadata: string | WorkflowMetadata,
   ...args: Array<Step<StateShape> | WorkflowEventBlock<StateShape>>
-): Workflow<StateShape> => {
+): WorkflowBlock<StateShape> => {
   // Convert string to WorkflowMetadata if needed
-  const normalizedMetadata: WorkflowMetadata = typeof metadata === 'string'
+  const normalizedMetadata = typeof metadata === 'string'
     ? { title: metadata }
     : metadata;
 
