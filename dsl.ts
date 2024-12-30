@@ -100,13 +100,17 @@ async function dispatchEvents<ContextShape, ResultShape>(
   }
 }
 
+interface StepResult<ContextShape> {
+  id: string
+  title: string
+  status: StatusOptions
+  context: ContextShape
+  error?: SerializedError
+}
+
 // Class to manage step block state and logic
 class StepBlock<ContextShape, ResultShape = any> {
   public id = uuidv4();
-  public status: StatusOptions = 'pending';
-  public context: ContextShape | null = null;
-  public result?: ResultShape;
-  public error?: SerializedError;
 
   constructor(
     public title: string,
@@ -115,32 +119,46 @@ class StepBlock<ContextShape, ResultShape = any> {
     public reducer?: ReducerBlock<ContextShape, ResultShape>,
   ) {}
 
-  async run(context: ContextShape): Promise<{
-    error?: SerializedError;
-    context: ContextShape;
-  }> {
+  async run(context: ContextShape): Promise<StepResult<ContextShape>> {
     try {
       const result = await this.action.fn(context);
-      this.result = result;
-      const nextContext = this.reducer?.fn(result, context) ?? context;
-      this.context = structuredClone(nextContext);
-      this.status = 'complete';
-      await dispatchEvents(this.events, 'step:complete', this);
-      return {
+      const nextContext = structuredClone(this.reducer?.fn(result, context) ?? context);
+      await dispatchEvents(this.events, 'step:complete', {
+        id: this.id,
+        title: this.title,
         context: nextContext,
+        status: 'complete',
+        result,
+      });
+      return {
+        id: this.id,
+        title: this.title,
+        context: nextContext,
+        status: 'complete',
       };
     } catch (err) {
       const error = err as Error;
-      this.error = {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      };
-      this.status = 'error';
-      await dispatchEvents(this.events, 'step:error', this);
+      await dispatchEvents(this.events, 'step:error', {
+        id: this.id,
+        title: this.title,
+        context,
+        status: 'error',
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        },
+      });
       return {
-        error: this.error,
-        context: context
+        id: this.id,
+        title: this.title,
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        },
+        context,
+        status: 'error',
       };
     }
   }
@@ -159,7 +177,7 @@ class WorkflowBlock<ContextShape> {
   async run(initialContext: Context<ContextShape>): Promise<{
     error?: SerializedError;
     context: Context<ContextShape>;
-    steps: Omit<StepBlock<ContextShape>, 'run' | 'action' | 'events' | 'reducer'>[];
+    stepResults: StepResult<ContextShape>[];
     status: StatusOptions;
   }> {
     let clonedInitialContext = structuredClone(initialContext);
@@ -172,10 +190,15 @@ class WorkflowBlock<ContextShape> {
     });
 
     let currentContext = clonedInitialContext as ContextShape;
+    let results: StepResult<ContextShape>[] = [];
     for (const step of this.steps) {
-      const { context: nextContext, error } = await step.run(currentContext);
+      const result = await step.run(currentContext);
+      results.push(result);
+
+      const { error, context: nextContext } = result;
 
       if (error) {
+        console.error(error);
         await dispatchEvents(this.events, 'workflow:error', {
           id: this.id,
           title: this.title,
@@ -204,20 +227,10 @@ class WorkflowBlock<ContextShape> {
 
     return {
       context: currentContext as Context<ContextShape>,
-      steps: this.steps.map(serializedStepBlock),
+      stepResults: results,
       status: 'complete',
     };
   }
-}
-
-const serializedStepBlock = function <ContextShape, ResultShape>(step: StepBlock<ContextShape, ResultShape>) {
-  return structuredClone({
-    id: step.id,
-    title: step.title,
-    status: step.status,
-    context: step.context,
-    error: step.error,
-  });
 }
 
 // Block builders
