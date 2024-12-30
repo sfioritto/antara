@@ -255,5 +255,46 @@ describe('step creation', () => {
     expect(stepWithReducer.reducer).toBeDefined();
     expect(stepWithReducer.events).toHaveLength(1);
   });
+
+  it('should not modify the original context when action or reducer mutates context', async () => {
+    interface SimpleContext {
+      value: number;
+      nested: { count: number };
+    }
+
+    const originalContext: SimpleContext = {
+      value: 1,
+      nested: { count: 0 }
+    };
+
+    // Step with action that tries to modify context directly
+    const mutatingActionStep = step<SimpleContext, void>(
+      "Mutating action step",
+      action(async (context) => {
+        context.value = 99;
+        context.nested.count = 99;
+      })
+    );
+
+    // Step with reducer that returns modified context
+    const mutatingReducerStep = step<SimpleContext, number>(
+      "Mutating reducer step",
+      action(async () => 42),
+      reduce((_, context) => {
+        context.value = 100;
+        context.nested.count = 100;
+        return context;
+      })
+    );
+
+    await mutatingActionStep.run(originalContext);
+    await mutatingReducerStep.run(originalContext);
+
+    // Verify original context remains unchanged
+    expect(originalContext).toEqual({
+      value: 1,
+      nested: { count: 0 }
+    });
+  });
 });
 

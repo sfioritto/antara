@@ -108,9 +108,10 @@ class StepBlock<ContextShape, ResultShape = any> {
   }
 
   async run(context: ContextShape): Promise<StepResult<ContextShape>> {
+    const clonedContext = structuredClone(context);
     try {
-      const result = await this.action.fn(context);
-      const nextContext = structuredClone(this.reducer?.fn(result, context) ?? context);
+      const result = await this.action.fn(clonedContext);
+      const nextContext = structuredClone(this.reducer?.fn(result, clonedContext) ?? clonedContext);
       await this.dispatchEvents({
         type: 'step:complete',
         context: nextContext,
@@ -127,7 +128,7 @@ class StepBlock<ContextShape, ResultShape = any> {
       const error = err as Error;
       await this.dispatchEvents({
         type: 'step:error',
-        context,
+        context: clonedContext,
         status: 'error',
         error: {
           name: error.name,
@@ -143,7 +144,7 @@ class StepBlock<ContextShape, ResultShape = any> {
           message: error.message,
           stack: error.stack,
         },
-        context,
+        context: clonedContext,
         status: 'error',
       };
     }
