@@ -16,7 +16,7 @@ describe('workflow creation', () => {
 });
 
 describe('workflow level event listeners', () => {
-  it('should fire workflow events in correct order with proper state/status', async () => {
+  it('should fire workflow events in correct order with proper context/status', async () => {
     interface SimpleContext {
       value: number;
     }
@@ -32,22 +32,22 @@ describe('workflow level event listeners', () => {
       'Simple Workflow',
       step(
         "Increment step",
-        action(async (context: SimpleContext) => context.value + 1),
-        reduce((newValue: number) => ({
+        action(async (context) => context.value + 1),
+        reduce((newValue) => ({
           value: newValue,
         })),
-        on('step:complete', () => {
-          stepEvents.push({ type: 'step:complete' });
+        on('step:complete', ({ type }) => {
+          stepEvents.push({ type });
         })
       ),
-      on('workflow:start', ({ status, context }) => {
-        workflowEvents.push({ type: 'workflow:start', status, context });
+      on('workflow:start', ({ type, status, context }) => {
+        workflowEvents.push({ type, status, context });
       }),
-      on('workflow:update', ({ status, context }) => {
-        workflowEvents.push({ type: 'workflow:update', status, context });
+      on('workflow:update', ({ type, status, context }) => {
+        workflowEvents.push({ type, status, context });
       }),
-      on('workflow:complete', ({ status, context }) => {
-        workflowEvents.push({ type: 'workflow:complete', status, context });
+      on('workflow:complete', ({ type, status, context }) => {
+        workflowEvents.push({ type, status, context });
       })
     );
 
@@ -98,13 +98,13 @@ describe('step level event listeners', () => {
       step(
         "Double step",
         action(async (context) => context.value * 2),
-        reduce((newValue: number) => ({
+        reduce((newValue) => ({
           value: newValue
         })),
-        on('step:complete', ({ context, result }) => {
+        on('step:complete', ({ context, result, type }) => {
           stepEvents.push({
             step: 'double',
-            type: 'step:complete',
+            type,
             context,
             result
           });
@@ -112,14 +112,14 @@ describe('step level event listeners', () => {
       ),
       step(
         "Add one step",
-        action(async (context: SimpleContext) => context.value + 1),
-        reduce((newValue: number) => ({
+        action(async (context) => context.value + 1),
+        reduce((newValue) => ({
           value: newValue
         })),
-        on('step:complete', ({ context, result }) => {
+        on('step:complete', ({ context, result, type }) => {
           stepEvents.push({
             step: 'add-one',
-            type: 'step:complete',
+            type,
             context,
             result
           });
@@ -158,7 +158,7 @@ describe('error handling', () => {
 
     const workflowEvents: Array<{
       type: string;
-      stepResults?: Array<{ status: string }>;
+      stepResults: Array<{ status: string }>;
       error?: Error;
     }> = [];
     const stepEvents: Array<{
@@ -172,7 +172,7 @@ describe('error handling', () => {
       step(
         "First step",
         action(async (context) => context.value + 1),
-        reduce((newValue: number) => ({
+        reduce((newValue) => ({
           value: newValue,
         }))
       ),
@@ -182,21 +182,21 @@ describe('error handling', () => {
         action(async () => {
           throw new Error('Test error');
         }),
-        reduce((newValue: number) => ({ value: newValue })),
-        on('step:error', ({ error }) => {
-          stepEvents.push({ type: 'step:error', error });
+        reduce((newValue) => ({ value: newValue })),
+        on('step:error', ({ error, type }) => {
+          stepEvents.push({ type, error });
         })
       ),
       // Step 3: Should never execute
       step(
         "Never reached",
         action(async (context) => context.value + 1),
-        reduce((newValue: number) => ({ value: newValue }))
+        reduce((newValue) => ({ value: newValue }))
       ),
       // Workflow-level error handler
-      on('workflow:error', ({ error, stepResults }) => {
+      on('workflow:error', ({ error, stepResults, type }) => {
         workflowEvents.push({
-          type: 'workflow:error',
+          type,
           stepResults,
           error
         });
@@ -207,14 +207,20 @@ describe('error handling', () => {
 
     // Verify events were captured correctly
     const workflowError = workflowEvents.find(e => e.type === 'workflow:error');
-    expect(workflowError?.stepResults?.[0].status).toBe('complete');
-    expect(workflowError?.stepResults?.[1].status).toBe('error');
-    expect(workflowError?.stepResults?.[2].status).toBe('pending');
-    expect(workflowError?.error?.message).toBe('Test error');
+    if (!workflowError) {
+      throw new Error('Workflow error not found');
+    }
+    expect(workflowError.stepResults[0].status).toBe('complete');
+    expect(workflowError.stepResults[1].status).toBe('error');
+    expect(workflowError.stepResults[2].status).toBe('pending');
+    expect(workflowError.error?.message).toBe('Test error');
 
     // Verify step error was captured
     const stepError = stepEvents.find(e => e.type === 'step:error');
-    expect(stepError?.error?.message).toBe('Test error');
+    if (!stepError) {
+      throw new Error('Step error not found');
+    }
+    expect(stepError.error?.message).toBe('Test error');
   });
 });
 

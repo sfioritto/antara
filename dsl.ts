@@ -59,7 +59,7 @@ type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 type StatusOptions = 'pending' | 'running' | 'complete' | 'error';
 
 type StepEventHandler<ContextShape, ResultShape> = (params: {
-  eventType: StepEventTypes,
+  type: StepEventTypes,
   context: ContextShape,
   status: StatusOptions,
   result?: ResultShape,
@@ -67,7 +67,7 @@ type StepEventHandler<ContextShape, ResultShape> = (params: {
 }) => void;
 
 type WorkflowEventHandler<ContextShape> = (params: {
-  eventType: WorkflowEventTypes;
+  type: WorkflowEventTypes;
   context: ContextShape;
   status: StatusOptions;
   error?: SerializedError;
@@ -94,14 +94,14 @@ class StepBlock<ContextShape, ResultShape = any> {
   ) { }
 
   async dispatchEvents(args: {
-    eventType: StepEventTypes,
+    type: StepEventTypes,
     context: ContextShape,
     status: StatusOptions,
     result?: ResultShape,
     error?: SerializedError,
   }) {
     for (const event of this.events) {
-      if (event.eventType === args.eventType) {
+      if (event.eventType === args.type) {
         await event.handler(args);
       }
     }
@@ -112,7 +112,7 @@ class StepBlock<ContextShape, ResultShape = any> {
       const result = await this.action.fn(context);
       const nextContext = structuredClone(this.reducer?.fn(result, context) ?? context);
       await this.dispatchEvents({
-        eventType: 'step:complete',
+        type: 'step:complete',
         context: nextContext,
         status: 'complete',
         result,
@@ -126,7 +126,7 @@ class StepBlock<ContextShape, ResultShape = any> {
     } catch (err) {
       const error = err as Error;
       await this.dispatchEvents({
-        eventType: 'step:error',
+        type: 'step:error',
         context,
         status: 'error',
         error: {
@@ -182,14 +182,14 @@ class WorkflowBlock<ContextShape> {
   }
 
   async dispatchEvents(args: {
-    eventType: WorkflowEventTypes,
+    type: WorkflowEventTypes,
     stepResults: StepResult<ContextShape>[],
     context: ContextShape,
     status: StatusOptions,
     error?: SerializedError,
   }) {
     for (const event of this.events) {
-      if (event.eventType === args.eventType) {
+      if (event.eventType === args.type) {
         await event.handler(args);
       }
     }
@@ -204,7 +204,7 @@ class WorkflowBlock<ContextShape> {
     let clonedInitialContext = structuredClone(initialContext);
 
     await this.dispatchEvents({
-      eventType: 'workflow:start',
+      type: 'workflow:start',
       context: clonedInitialContext,
       status: 'pending',
       stepResults: this.#stepResults(clonedInitialContext),
@@ -221,7 +221,7 @@ class WorkflowBlock<ContextShape> {
       if (error) {
         console.error(error.message);
         await this.dispatchEvents({
-          eventType: 'workflow:error',
+          type: 'workflow:error',
           context: nextContext,
           status: 'error',
           error,
@@ -230,7 +230,7 @@ class WorkflowBlock<ContextShape> {
         break;
       } else {
         await this.dispatchEvents({
-          eventType: 'workflow:update',
+          type: 'workflow:update',
           context: nextContext,
           status: 'running',
           stepResults: this.#stepResults(nextContext, results),
@@ -240,7 +240,7 @@ class WorkflowBlock<ContextShape> {
     }
 
     await this.dispatchEvents({
-      eventType: 'workflow:complete',
+      type: 'workflow:complete',
       context: currentContext,
       status: 'complete',
       stepResults: this.#stepResults(currentContext, results),
