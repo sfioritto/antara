@@ -102,30 +102,18 @@ async function dispatchEvents<StateShape, ResultShape>(
 
 // Class to manage step block state and logic
 class StepBlock<StateShape, ResultShape = any> {
-  public id: string;
-  public title: string;
-  public action: ActionBlock<StateShape, ResultShape>;
-  public events: StepEventBlock<StateShape, ResultShape>[];
-  public reducer?: ReducerBlock<StateShape, ResultShape>;
-  public status: StatusOptions;
-  public error?: SerializedError;
-  public state: StateShape | null;
+  public id = uuidv4();
+  public status: StatusOptions = 'pending';
+  public state: StateShape | null = null;
   public result?: ResultShape;
+  public error?: SerializedError;
+
   constructor(
-    title: string,
-    action: ActionBlock<StateShape, ResultShape>,
-    events: StepEventBlock<StateShape, ResultShape>[],
-    reducer?: ReducerBlock<StateShape, ResultShape>,
-  ) {
-    this.id = uuidv4();
-    this.title = title;
-    this.action = action;
-    this.events = events;
-    this.reducer = reducer;
-    this.status = 'pending';
-    this.state = null;
-    this.result = undefined;
-  }
+    public title: string,
+    public action: ActionBlock<StateShape, ResultShape>,
+    public events: StepEventBlock<StateShape, ResultShape>[],
+    public reducer?: ReducerBlock<StateShape, ResultShape>,
+  ) {}
 
   async run(state: StateShape): Promise<{
     error?: SerializedError;
@@ -159,19 +147,14 @@ class StepBlock<StateShape, ResultShape = any> {
 }
 
 class WorkflowBlock<StateShape> {
-  public id: string;
-  public title: string;
-  public description?: string;
-  public steps: StepBlock<StateShape>[];
-  public events: WorkflowEventBlock<StateShape>[];
+  public id = uuidv4();
 
-  constructor(title: string, steps: StepBlock<StateShape>[], events: WorkflowEventBlock<StateShape>[], description?: string) {
-    this.id = uuidv4();
-    this.title = title;
-    this.steps = steps;
-    this.events = events;
-    this.description = description;
-  }
+  constructor(
+    public title: string,
+    public steps: StepBlock<StateShape>[],
+    public events: WorkflowEventBlock<StateShape>[],
+    public description?: string
+  ) {}
 
   async run(initialState: State<StateShape>): Promise<{
     error?: SerializedError;
