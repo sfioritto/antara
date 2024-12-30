@@ -1,4 +1,3 @@
-import { JsonObject } from 'type-fest';
 import { workflow, on, step, action, reduce } from './dsl';
 
 describe('workflow creation', () => {
@@ -18,7 +17,7 @@ describe('workflow creation', () => {
 
 describe('workflow level event listeners', () => {
   it('should fire workflow events in correct order with proper state/status', async () => {
-    interface SimpleState extends JsonObject {
+    interface SimpleState {
       value: number;
     }
 
@@ -35,7 +34,7 @@ describe('workflow level event listeners', () => {
         "Increment step",
         action(async (state: SimpleState) => state.value + 1),
         reduce((newValue: number, state: SimpleState) => ({
-          value: newValue
+          value: newValue,
         })),
         on('step:complete', () => {
           stepEvents.push({ type: 'step:complete' });
@@ -83,7 +82,7 @@ describe('workflow level event listeners', () => {
 
 describe('step level event listeners', () => {
   it('should fire step events only for their respective steps', async () => {
-    interface SimpleState extends JsonObject {
+    interface SimpleState {
       value: number;
     }
 
@@ -153,7 +152,7 @@ describe('step level event listeners', () => {
 
 describe('error handling', () => {
   it('should handle errors in actions and maintain correct status states', async () => {
-    interface SimpleState extends JsonObject {
+    interface SimpleState {
       value: number;
     }
 
@@ -221,7 +220,7 @@ describe('error handling', () => {
 
 describe('step creation', () => {
   it('should create a step without a reducer', () => {
-    interface SimpleState extends JsonObject {
+    interface SimpleState {
       value: number;
     }
 
@@ -236,7 +235,7 @@ describe('step creation', () => {
   });
 
   it('should create a step with a reducer', () => {
-    interface SimpleState extends JsonObject {
+    interface SimpleState {
       value: number;
     }
 

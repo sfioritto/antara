@@ -1,5 +1,4 @@
 import { v4 as uuidv4 } from 'uuid';
-import { JsonObject } from 'type-fest';
 
 type SerializedError = {
   name: string;
@@ -7,7 +6,16 @@ type SerializedError = {
   stack?: string;
 }
 
-type Context<ContextShape> = ContextShape extends JsonObject ? ContextShape : never;
+type JsonPrimitive = string | number | boolean | null;
+type JsonArray = JsonValue[];
+type JsonObject = { [Key in string]?: JsonValue };
+type JsonValue = JsonPrimitive | JsonArray | JsonObject;
+
+// Use a mapped type to ensure all properties are JsonValue
+type Context<T> = T extends object
+  ? { [K in keyof T]: T[K] extends JsonValue ? T[K] : never }
+  : never;
+
 type Action<ContextShape, ResultShape> = (context: ContextShape) => (Promise<ResultShape> | ResultShape);
 type Reducer<ContextShape, ResultShape> = (result: ResultShape, context: ContextShape) => ContextShape;
 

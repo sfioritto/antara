@@ -1,4 +1,3 @@
-import { JsonObject } from 'type-fest';
 import { workflow, step, action, reduce, on } from './dsl.js';
 
 interface ImportPath {
@@ -10,7 +9,7 @@ interface ImportPaths {
   imports: ImportPath[];
 }
 
-interface WorkflowState extends JsonObject {
+interface WorkflowState {
   coverage: { initial: number; current: number; };
   originalTest: string;
   testFilePath: string;
