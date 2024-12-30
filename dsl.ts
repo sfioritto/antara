@@ -102,7 +102,7 @@ class StepBlock<ContextShape, ResultShape = any> {
   }) {
     for (const event of this.events) {
       if (event.eventType === args.type) {
-        await event.handler(args);
+        await event.handler(structuredClone(args));
       }
     }
   }
@@ -111,7 +111,7 @@ class StepBlock<ContextShape, ResultShape = any> {
     const clonedContext = structuredClone(context);
     try {
       const result = await this.action.fn(clonedContext);
-      const nextContext = structuredClone(this.reducer?.fn(result, clonedContext) ?? clonedContext);
+      const nextContext = this.reducer?.fn(result, clonedContext) ?? clonedContext;
       await this.dispatchEvents({
         type: 'step:complete',
         context: nextContext,
@@ -168,7 +168,7 @@ class WorkflowBlock<ContextShape> {
     // If a step has an error then all of the steps after it will not create a result
     // But we want to return a result for each step, so we stub one out for each step
     // that comes after the step with an error
-    return structuredClone(this.steps.map((step): StepResult<ContextShape> => {
+    return this.steps.map((step): StepResult<ContextShape> => {
       const result = results.find((result) => result.id === step.id);
       if (!result) {
         return {
@@ -179,7 +179,7 @@ class WorkflowBlock<ContextShape> {
         };
       }
       return result;
-    }));
+    });
   }
 
   async dispatchEvents(args: {
@@ -191,7 +191,7 @@ class WorkflowBlock<ContextShape> {
   }) {
     for (const event of this.events) {
       if (event.eventType === args.type) {
-        await event.handler(args);
+        await event.handler(structuredClone(args));
       }
     }
   }

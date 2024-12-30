@@ -335,5 +335,27 @@ describe('step creation', () => {
       nested: { count: 0 }
     });
   });
+
+  it('should maintain immutable results during step events', async () => {
+    interface SimpleContext {
+      value: number;
+    }
+
+    const stepWithMutatingHandler = step<SimpleContext, { returnedValue: number }>(
+      "Immutable Results Step",
+      action(async (context) => ({ returnedValue: context.value + 1 })),
+      reduce(({ returnedValue }) => ({ value: returnedValue })),
+      on('step:complete', (event) => {
+        event.context.value = 999;
+        event.status = 'pending';
+      })
+    );
+
+    const { status, context } = await stepWithMutatingHandler.run({ value: 1 });
+
+    // Verify that modifications in event handlers didn't persist
+    expect(status).toEqual('complete');
+    expect(context.value).toEqual(2);
+  });
 });
 
