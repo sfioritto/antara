@@ -8,7 +8,7 @@ type SerializedError = {
 }
 
 type Context<ContextShape> = ContextShape extends JsonObject ? ContextShape : never;
-type Action<ContextShape, ResultShape = any> = (context: ContextShape) => (Promise<ResultShape> | ResultShape);
+type Action<ContextShape, ResultShape> = (context: ContextShape) => (Promise<ResultShape> | ResultShape);
 type Reducer<ContextShape, ResultShape> = (result: ResultShape, context: ContextShape) => ContextShape;
 
 interface ActionBlock<ContextShape, ResultShape> {
