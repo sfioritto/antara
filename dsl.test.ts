@@ -172,19 +172,18 @@ describe('error handling', () => {
       })
     );
 
-    const { status } = await errorWorkflow.run({ value: 0 });
+    const { stepResults } = await errorWorkflow.run({ value: 0 });
 
     // Verify events were fired
     expect(workflowEvents).toContain('workflow:error');
     expect(stepEvents).toContain('step:error');
 
     // Verify final status array
-    // TODO: update with serialized steps
-    // expect(status).toHaveLength(3);
-    // expect(status[0].status).toBe('complete');
-    // expect(status[1].status).toBe('error');
-    // expect(status[1].error?.message).toBe('Test error');
-    // expect(status[2].status).toBe('pending');
+    expect(stepResults).toHaveLength(3);
+    expect(stepResults[0].status).toBe('complete');
+    expect(stepResults[1].status).toBe('error');
+    expect(stepResults[1].error?.message).toBe('Test error');
+    expect(stepResults[2].status).toBe('pending');
 
     // Verify error was captured
     expect(capturedError?.message).toBe('Test error');

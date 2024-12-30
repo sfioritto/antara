@@ -211,9 +211,25 @@ class WorkflowBlock<ContextShape> {
       status: 'complete',
     });
 
+    // If a step has an error then all of the steps after it will not create a result
+    // But we want to return a result for each step, so we stub one out for each step
+    // that comes after the step with an error
+    const stepResults = this.steps.map((step): StepResult<ContextShape> => {
+      const result = results.find((result) => result.id === step.id);
+      if (!result) {
+        return {
+          id: step.id,
+          title: step.title,
+          status: 'pending',
+          context: currentContext,
+        };
+      }
+      return result;
+    });
+
     return {
       context: currentContext,
-      stepResults: results,
+      stepResults,
       status: 'complete',
     };
   }
