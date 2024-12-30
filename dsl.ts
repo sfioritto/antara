@@ -15,6 +15,18 @@ interface ReducerBlock<StateShape, ResultShape> {
   fn: Reducer<StateShape, ResultShape>;
 }
 
+interface StepEventBlock<StateShape, ResultShape> {
+  type: "event";
+  eventType: StepEventTypes;
+  handler: StepEventHandler<StateShape, ResultShape>;
+}
+
+interface WorkflowEventBlock<StateShape> {
+  type: "workflow";
+  eventType: WorkflowEventTypes;
+  handler: WorkflowEventHandler<StateShape>;
+}
+
 type StepEventTypes = 'step:complete' | 'step:error';
 
 type WorkflowEventTypes =
@@ -22,6 +34,8 @@ type WorkflowEventTypes =
   | 'workflow:complete'
   | 'workflow:update'
   | 'workflow:error';
+
+type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 
 type StatusOptions = 'pending' | 'running' | 'complete' | 'error';
 
@@ -33,18 +47,12 @@ type StepEventHandler<StateShape, ResultShape> = (params: {
   error?: Error
 }) => void;
 
-interface StepEvent<StateShape, ResultShape> {
-  type: "event";
-  event: StepEventTypes;
-  handler: StepEventHandler<StateShape, ResultShape>;
-}
-
 interface Step<StateShape, ResultShape = any> {
   id: string;
   title: string;
   action: ActionBlock<StateShape, ResultShape>;
   reducer?: ReducerBlock<StateShape, ResultShape>;
-  events: StepEvent<StateShape, ResultShape>[];
+  events: StepEventBlock<StateShape, ResultShape>[];
   status: StatusOptions;
   error?: Error;
   state: StateShape | null;
@@ -61,36 +69,29 @@ type WorkflowEventHandler<StateShape> = (params: {
   error?: Error;
 }) => void;
 
-interface WorkflowEvent<StateShape> {
-  type: "workflow";
-  event: WorkflowEventTypes;
-  handler: WorkflowEventHandler<StateShape>;
-}
-
-type AllEventTypes = StepEventTypes | WorkflowEventTypes;
-
 function on<StateShape, ResultShape>(
   event: StepEventTypes,
   handler: StepEventHandler<StateShape, ResultShape>
-): StepEvent<StateShape, ResultShape>;
+): StepEventBlock<StateShape, ResultShape>;
 function on<StateShape>(
   event: WorkflowEventTypes,
   handler: WorkflowEventHandler<StateShape>
-): WorkflowEvent<StateShape>;
-function on<StateShape, ResultShape>(
-  event: AllEventTypes,
-  handler: StepEventHandler<StateShape, ResultShape> | WorkflowEventHandler<StateShape>
-): StepEvent<StateShape, ResultShape> | WorkflowEvent<StateShape> {
+): WorkflowEventBlock<StateShape>;
+ function on<StateShape, ResultShape>(
+   event: AllEventTypes,
+   handler: StepEventHandler<StateShape, ResultShape> | WorkflowEventHandler<StateShape>
+ ): StepEventBlock<StateShape, ResultShape> | WorkflowEventBlock<StateShape>{
   if (event.startsWith('workflow:')) {
     return {
       type: "workflow",
-      event: event as WorkflowEventTypes,
+      eventType: event as WorkflowEventTypes,
       handler: handler as WorkflowEventHandler<StateShape>,
     };
   }
+
   return {
     type: "event",
-    event: event as StepEventTypes,
+    eventType: event as StepEventTypes,
     handler: handler as StepEventHandler<StateShape, ResultShape>,
   };
 }
@@ -111,11 +112,11 @@ const reduce = <StateShape, ResultShape>(
 });
 
 type StepArgs<StateShape, ResultShape> =
-  | [ActionBlock<StateShape, ResultShape>, ...StepEvent<StateShape, ResultShape>[]]
-  | [ActionBlock<StateShape, ResultShape>, ReducerBlock<StateShape, ResultShape>, ...StepEvent<StateShape, ResultShape>[]];
+  | [ActionBlock<StateShape, ResultShape>, ...StepEventBlock<StateShape, ResultShape>[]]
+  | [ActionBlock<StateShape, ResultShape>, ReducerBlock<StateShape, ResultShape>, ...StepEventBlock<StateShape, ResultShape>[]];
 
 async function dispatchEvents<StateShape, ResultShape>(
-  events: Array<StepEvent<StateShape, ResultShape> | WorkflowEvent<StateShape>>,
+  events: Array<StepEventBlock<StateShape, ResultShape> | WorkflowEventBlock<StateShape>>,
   eventType: AllEventTypes,
   params: {
     id: string,
@@ -127,7 +128,7 @@ async function dispatchEvents<StateShape, ResultShape>(
   }
 ) {
   for (const event of events) {
-    if (event.event === eventType) {
+    if (event.eventType === eventType) {
       if (event.type === "workflow") {
         await event.handler({
           event: eventType as WorkflowEventTypes,
@@ -152,7 +153,7 @@ class StepClass<StateShape, ResultShape> {
   public id: string;
   public title: string;
   public action: ActionBlock<StateShape, ResultShape>;
-  public events: StepEvent<StateShape, ResultShape>[];
+  public events: StepEventBlock<StateShape, ResultShape>[];
   public reducer?: ReducerBlock<StateShape, ResultShape>;
   public status: 'pending' | 'running' | 'complete' | 'error';
   public error?: Error;
@@ -161,7 +162,7 @@ class StepClass<StateShape, ResultShape> {
   constructor(
     title: string,
     action: ActionBlock<StateShape, ResultShape>,
-    events: StepEvent<StateShape, ResultShape>[],
+    events: StepEventBlock<StateShape, ResultShape>[],
     reducer?: ReducerBlock<StateShape, ResultShape>,
   ) {
     this.id = uuidv4();
@@ -218,7 +219,7 @@ function step<StateShape, ResultShape>(
   const [action, ...rest] = args;
   const hasReducer = rest[0]?.type === "reducer";
   const reducer = hasReducer ? rest[0] as ReducerBlock<StateShape, ResultShape> : undefined;
-  const events = (hasReducer ? rest.slice(1) : rest) as StepEvent<StateShape, ResultShape>[];
+  const events = (hasReducer ? rest.slice(1) : rest) as StepEventBlock<StateShape, ResultShape>[];
 
   return new StepClass(title, action, events, reducer);
 }
@@ -238,7 +239,7 @@ interface Workflow<StateShape> extends WorkflowMetadata {
 
 const workflow = <StateShape>(
   metadata: string | WorkflowMetadata,
-  ...args: Array<Step<StateShape> | WorkflowEvent<StateShape>>
+  ...args: Array<Step<StateShape> | WorkflowEventBlock<StateShape>>
 ): Workflow<StateShape> => {
   // Convert string to WorkflowMetadata if needed
   const normalizedMetadata: WorkflowMetadata = typeof metadata === 'string'
@@ -248,7 +249,7 @@ const workflow = <StateShape>(
   const workflowId = uuidv4();
   const { title: workflowTitle } = normalizedMetadata;
 
-  const workflowEvents = args.filter((arg): arg is WorkflowEvent<StateShape> =>
+  const workflowEvents = args.filter((arg): arg is WorkflowEventBlock<StateShape> =>
     'type' in arg && arg.type === 'workflow'
   );
   const steps = args.filter((arg): arg is Step<StateShape> =>
