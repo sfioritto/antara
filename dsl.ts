@@ -168,7 +168,7 @@ class WorkflowBlock<ContextShape> {
     // If a step has an error then all of the steps after it will not create a result
     // But we want to return a result for each step, so we stub one out for each step
     // that comes after the step with an error
-    return this.steps.map((step): StepResult<ContextShape> => {
+    return structuredClone(this.steps.map((step): StepResult<ContextShape> => {
       const result = results.find((result) => result.id === step.id);
       if (!result) {
         return {
@@ -179,7 +179,7 @@ class WorkflowBlock<ContextShape> {
         };
       }
       return result;
-    });
+    }));
   }
 
   async dispatchEvents(args: {

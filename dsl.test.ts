@@ -78,6 +78,45 @@ describe('workflow level event listeners', () => {
     // Verify step events
     expect(stepEvents).toEqual([{ type: 'step:complete' }]);
   });
+
+  it('should maintain immutable stepResults across workflow events', async () => {
+    interface SimpleContext {
+      value: number;
+    }
+
+    const workflowWithMutatingHandlers = workflow<SimpleContext>(
+      'Immutable Steps Workflow',
+      step(
+        "Step 1",
+        action(async (context) => context.value + 1),
+        reduce((newValue) => ({ value: newValue }))
+      ),
+      step(
+        "Step 2",
+        action(async (context) => context.value * 2),
+        reduce((newValue) => ({ value: newValue }))
+      ),
+      on('workflow:update', ({ stepResults }) => {
+        // Try to modify the stepResults
+        stepResults[0].status = 'pending';
+        stepResults[0].context = { value: 999 };
+      })
+    );
+
+    const { stepResults } = await workflowWithMutatingHandlers.run({ value: 1 });
+
+    // Verify that modifications in event handlers didn't persist
+    expect(stepResults).toHaveLength(2);
+
+    // After first step
+    const [firstStepResult, secondStepResult] = stepResults;
+    expect(firstStepResult.status).toEqual('complete');
+    expect(firstStepResult.context.value).toEqual(2);
+
+    // After second step
+    expect(secondStepResult.status).toEqual('complete');
+    expect(secondStepResult.context.value).toEqual(4);
+  });
 });
 
 describe('step level event listeners', () => {
