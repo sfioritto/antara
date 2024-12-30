@@ -1,7 +1,6 @@
 import { JsonObject } from 'type-fest';
 import { workflow, on, step, action, reduce } from './dsl';
 
-
 describe('workflow creation', () => {
   it('should create a workflow with a name when passed a string', () => {
     const wf = workflow('my workflow');

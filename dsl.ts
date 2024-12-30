@@ -38,14 +38,6 @@ interface WorkflowMetadata {
   description?: string;
 }
 
-interface WorkflowBlock<StateShape> extends WorkflowMetadata {
-  run: (initialState: State<StateShape>) => Promise<{
-    state: State<StateShape>,
-    steps: Omit<StepBlock<StateShape>, 'run' | 'action' | 'events' | 'reducer'>[],
-    status: StatusOptions,
-  }>;
-}
-
 type StepEventTypes = 'step:complete' | 'step:error';
 
 type WorkflowEventTypes =
@@ -118,7 +110,7 @@ class StepBlock<StateShape, ResultShape = any> {
   public status: StatusOptions;
   public error?: SerializedError;
   public state: StateShape | null;
-
+  public result?: ResultShape;
   constructor(
     title: string,
     action: ActionBlock<StateShape, ResultShape>,
@@ -132,6 +124,7 @@ class StepBlock<StateShape, ResultShape = any> {
     this.reducer = reducer;
     this.status = 'pending';
     this.state = null;
+    this.result = undefined;
   }
 
   async run(state: StateShape): Promise<{
@@ -140,19 +133,13 @@ class StepBlock<StateShape, ResultShape = any> {
   }> {
     try {
       const result = await this.action.fn(state);
+      this.result = result;
       const nextState = this.reducer?.fn(result, state) ?? state;
       this.state = structuredClone(nextState);
       this.status = 'complete';
-      await dispatchEvents(this.events, 'step:complete', {
-        id: this.id,
-        title: this.title,
-        state: this.state,
-        status: this.status,
-        result,
-        error: this.error,
-      });
+      await dispatchEvents(this.events, 'step:complete', this);
       return {
-        state: nextState
+        state: nextState,
       };
     } catch (err) {
       const error = err as Error;
@@ -162,18 +149,81 @@ class StepBlock<StateShape, ResultShape = any> {
         stack: error.stack,
       };
       this.status = 'error';
-      await dispatchEvents(this.events, 'step:error', {
-        id: this.id,
-        title: this.title,
-        state: this.state,
-        status: this.status,
-        error: this.error,
-      });
+      await dispatchEvents(this.events, 'step:error', this);
       return {
         error: this.error,
         state: state
       };
     }
+  }
+}
+
+class WorkflowBlock<StateShape> {
+  public id: string;
+  public title: string;
+  public description?: string;
+  public steps: StepBlock<StateShape>[];
+  public events: WorkflowEventBlock<StateShape>[];
+
+  constructor(title: string, steps: StepBlock<StateShape>[], events: WorkflowEventBlock<StateShape>[], description?: string) {
+    this.id = uuidv4();
+    this.title = title;
+    this.steps = steps;
+    this.events = events;
+    this.description = description;
+  }
+
+  async run(initialState: State<StateShape>): Promise<{
+    error?: SerializedError;
+    state: State<StateShape>;
+    steps: Omit<StepBlock<StateShape>, 'run' | 'action' | 'events' | 'reducer'>[];
+    status: StatusOptions;
+  }> {
+    let clonedInitialState = structuredClone(initialState);
+
+    await dispatchEvents(this.events, 'workflow:start', {
+      id: this.id,
+      title: this.title,
+      state: clonedInitialState,
+      status: 'pending',
+    });
+
+    let currentState = clonedInitialState as StateShape;
+    for (const step of this.steps) {
+      const { state: nextState, error } = await step.run(currentState);
+
+      if (error) {
+        await dispatchEvents(this.events, 'workflow:error', {
+          id: this.id,
+          title: this.title,
+          state: nextState,
+          status: 'error',
+          error: error as SerializedError,
+        });
+        break;
+      } else {
+        await dispatchEvents(this.events, 'workflow:update', {
+          id: this.id,
+          title: this.title,
+          state: nextState,
+          status: 'running',
+        });
+        currentState = nextState;
+      }
+    }
+
+    await dispatchEvents(this.events, 'workflow:complete', {
+      id: this.id,
+      title: this.title,
+      state: currentState,
+      status: 'complete',
+    });
+
+    return {
+      state: currentState as State<StateShape>,
+      steps: this.steps.map(serializedStepBlock),
+      status: 'complete',
+    };
   }
 }
 
@@ -251,8 +301,7 @@ const workflow = <StateShape>(
     ? { title: metadata }
     : metadata;
 
-  const workflowId = uuidv4();
-  const { title: workflowTitle } = normalizedMetadata;
+  const { title, description } = normalizedMetadata;
 
   const workflowEvents = args.filter((arg): arg is WorkflowEventBlock<StateShape> =>
     'type' in arg && arg.type === 'workflow'
@@ -261,64 +310,7 @@ const workflow = <StateShape>(
     !('type' in arg && arg.type === 'workflow')
   );
 
-  return {
-    ...normalizedMetadata,
-    run: async (initialState) => {
-      let clonedInitialState = structuredClone(initialState);
-
-      await dispatchEvents(
-        workflowEvents,
-        'workflow:start', {
-          id: workflowId,
-          title: workflowTitle,
-          state: clonedInitialState,
-          status: 'pending',
-        }
-      );
-
-      let currentState = clonedInitialState as StateShape;
-      for (const step of steps) {
-        const { state: nextState, error } = await step.run(currentState);
-        if (error) {
-          await dispatchEvents(workflowEvents, 'workflow:error', {
-            id: workflowId,
-            title: workflowTitle,
-            state: nextState,
-            status: 'error',
-            error: error as SerializedError,
-          });
-          break;
-        } else {
-          await dispatchEvents(
-            workflowEvents,
-            'workflow:update', {
-              id: workflowId,
-              title: workflowTitle,
-              state: nextState,
-              status: 'running',
-            }
-          );
-          currentState = nextState;
-        }
-      }
-
-      await dispatchEvents(
-        workflowEvents,
-        'workflow:complete', {
-          id: workflowId,
-          title: workflowTitle,
-          state: currentState,
-          status: 'complete',
-        }
-      );
-
-      return {
-        state: currentState as State<StateShape>,
-        steps: steps.map(serializedStepBlock),
-        status: 'complete',
-      };
-    },
-  }
+  return new WorkflowBlock(title, steps, workflowEvents, description);
 };
 
 export { workflow, step, action, reduce, on };
