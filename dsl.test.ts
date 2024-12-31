@@ -275,8 +275,8 @@ describe('step creation', () => {
       on('step:complete', () => {})
     );
 
-    expect(simpleStep.reducer).toBeUndefined();
-    expect(simpleStep.events).toHaveLength(1);
+    expect(simpleStep.reducerBlock).toBeUndefined();
+    expect(simpleStep.eventBlocks).toHaveLength(1);
   });
 
   it('should create a step with a reducer', () => {
@@ -291,8 +291,8 @@ describe('step creation', () => {
       on('step:complete', () => {})
     );
 
-    expect(stepWithReducer.reducer).toBeDefined();
-    expect(stepWithReducer.events).toHaveLength(1);
+    expect(stepWithReducer.reducerBlock).toBeDefined();
+    expect(stepWithReducer.eventBlocks).toHaveLength(1);
   });
 
   it('should not modify the original context when action or reducer mutates context', async () => {

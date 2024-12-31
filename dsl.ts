@@ -92,9 +92,9 @@ class StepBlock<ContextShape, ResultShape = any> {
 
   constructor(
     public title: string,
-    public action: ActionBlock<ContextShape, ResultShape>,
-    public events: StepEventBlock<ContextShape, ResultShape>[],
-    public reducer?: ReducerBlock<ContextShape, ResultShape>,
+    public actionBlock: ActionBlock<ContextShape, ResultShape>,
+    public eventBlocks: StepEventBlock<ContextShape, ResultShape>[],
+    public reducerBlock?: ReducerBlock<ContextShape, ResultShape>,
   ) { }
 
   async dispatchEvents(args: {
@@ -104,7 +104,7 @@ class StepBlock<ContextShape, ResultShape = any> {
     result?: ResultShape,
     error?: SerializedError,
   }) {
-    for (const event of this.events) {
+    for (const event of this.eventBlocks) {
       if (event.eventType === args.type) {
         await event.handler(structuredClone(args));
       }
@@ -114,8 +114,8 @@ class StepBlock<ContextShape, ResultShape = any> {
   async run(context: ContextShape): Promise<StepResult<ContextShape>> {
     const clonedContext = structuredClone(context);
     try {
-      const result = await this.action.fn(clonedContext);
-      const nextContext = this.reducer?.fn(result, clonedContext) ?? clonedContext;
+      const result = await this.actionBlock.fn(clonedContext);
+      const nextContext = this.reducerBlock?.fn(result, clonedContext) ?? clonedContext;
       await this.dispatchEvents({
         type: 'step:complete',
         context: nextContext,
@@ -160,8 +160,8 @@ class WorkflowBlock<ContextShape> {
 
   constructor(
     public title: string,
-    public steps: StepBlock<ContextShape>[],
-    public events: WorkflowEventBlock<ContextShape>[],
+    public stepBlocks: StepBlock<ContextShape>[],
+    public eventBlocks: WorkflowEventBlock<ContextShape>[],
     public description?: string
   ) { }
 
@@ -172,7 +172,7 @@ class WorkflowBlock<ContextShape> {
     // If a step has an error then all of the steps after it will not create a result
     // But we want to return a result for each step, so we stub one out for each step
     // that comes after the step with an error
-    return this.steps.map((step): StepResult<ContextShape> => {
+    return this.stepBlocks.map((step): StepResult<ContextShape> => {
       const result = results.find((result) => result.id === step.id);
       if (!result) {
         return {
@@ -193,7 +193,7 @@ class WorkflowBlock<ContextShape> {
     status: StatusOptions,
     error?: SerializedError,
   }) {
-    for (const event of this.events) {
+    for (const event of this.eventBlocks) {
       if (event.eventType === args.type) {
         await event.handler(structuredClone(args));
       }
@@ -217,7 +217,7 @@ class WorkflowBlock<ContextShape> {
 
     let currentContext = clonedInitialContext as ContextShape;
     let results: StepResult<ContextShape>[] = [];
-    for (const step of this.steps) {
+    for (const step of this.stepBlocks) {
       const result = await step.run(currentContext);
       results.push(result);
 
