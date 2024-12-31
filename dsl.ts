@@ -1,19 +1,19 @@
 import { v4 as uuidv4 } from 'uuid';
 
+type JsonPrimitive = string | number | boolean | null;
+type JsonArray = JsonValue[];
+type JsonObject = { [Key in string]?: JsonValue };
+type JsonValue = JsonPrimitive | JsonArray | JsonObject;
+
 type SerializedError = {
   name: string;
   message: string;
   stack?: string;
 }
 
-type JsonPrimitive = string | number | boolean | null;
-type JsonArray = JsonValue[];
-type JsonObject = { [Key in string]?: JsonValue };
-type JsonValue = JsonPrimitive | JsonArray | JsonObject;
-
-// Use a mapped type to ensure all properties are JsonValue
-type Context<T> = T extends object
-  ? { [K in keyof T]: T[K] extends JsonValue ? T[K] : never }
+// Use a mapped type to ensure all properties are serializable
+type Context<ContextShape> = ContextShape extends object
+  ? { [K in keyof ContextShape]: ContextShape[K] extends JsonValue ? ContextShape[K] : never }
   : never;
 
 type Action<ContextShape, ResultShape> = (context: ContextShape) => (Promise<ResultShape> | ResultShape);
@@ -58,21 +58,25 @@ type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 
 type StatusOptions = 'pending' | 'running' | 'complete' | 'error';
 
-type StepEventHandler<ContextShape, ResultShape> = (params: {
-  type: StepEventTypes,
+type Event<ContextShape> = {
   context: ContextShape,
   status: StatusOptions,
-  result?: ResultShape,
   error?: SerializedError
-}) => void;
+}
 
-type WorkflowEventHandler<ContextShape> = (params: {
-  type: WorkflowEventTypes;
-  context: ContextShape;
-  status: StatusOptions;
-  error?: SerializedError;
-  stepResults: StepResult<ContextShape>[];
-}) => void;
+type StepEvent<ContextShape, ResultShape> = Event<ContextShape> & {
+  type: StepEventTypes,
+  result?: ResultShape,
+}
+
+type WorkflowEvent<ContextShape> = Event<ContextShape> & {
+  type: WorkflowEventTypes,
+  stepResults: StepResult<ContextShape>[],
+}
+
+type StepEventHandler<ContextShape, ResultShape> = (event: StepEvent<ContextShape, ResultShape>) => void;
+
+type WorkflowEventHandler<ContextShape> = (event: WorkflowEvent<ContextShape>) => void;
 
 interface StepResult<ContextShape> {
   id: string
