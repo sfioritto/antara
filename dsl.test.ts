@@ -79,7 +79,7 @@ describe('workflow level event listeners', () => {
     expect(stepEvents).toEqual([{ type: 'step:complete' }]);
   });
 
-  it('should maintain immutable stepResults across workflow events', async () => {
+  it('should maintain immutable steps across workflow events', async () => {
     interface SimpleContext {
       value: number;
     }
@@ -96,20 +96,20 @@ describe('workflow level event listeners', () => {
         action(async (context) => context.value * 2),
         reduce((newValue) => ({ value: newValue }))
       ),
-      on('workflow:update', ({ stepResults }) => {
-        // Try to modify the stepResults
-        stepResults[0].status = 'pending';
-        stepResults[0].context = { value: 999 };
+      on('workflow:update', ({ steps }) => {
+        // Try to modify the steps
+        steps[0].status = 'pending';
+        steps[0].context = { value: 999 };
       })
     );
 
-    const { stepResults } = await workflowWithMutatingHandlers.run({ value: 1 });
+    const { steps } = await workflowWithMutatingHandlers.run({ value: 1 });
 
     // Verify that modifications in event handlers didn't persist
-    expect(stepResults).toHaveLength(2);
+    expect(steps).toHaveLength(2);
 
     // After first step
-    const [firstStepResult, secondStepResult] = stepResults;
+    const [firstStepResult, secondStepResult] = steps;
     expect(firstStepResult.status).toEqual('complete');
     expect(firstStepResult.context.value).toEqual(2);
 
@@ -197,7 +197,7 @@ describe('error handling', () => {
 
     const workflowEvents: Array<{
       type: string;
-      stepResults: Array<{ status: string }>;
+      steps: Array<{ status: string }>;
       error?: Error;
     }> = [];
     const stepEvents: Array<{
@@ -233,25 +233,25 @@ describe('error handling', () => {
         reduce((newValue) => ({ value: newValue }))
       ),
       // Workflow-level error handler
-      on('workflow:error', ({ error, stepResults, type }) => {
+      on('workflow:error', ({ error, steps, type }) => {
         workflowEvents.push({
           type,
-          stepResults,
+          steps,
           error
         });
       })
     );
 
-    const { stepResults } = await errorWorkflow.run({ value: 0 });
+    const { steps } = await errorWorkflow.run({ value: 0 });
 
     // Verify events were captured correctly
     const workflowError = workflowEvents.find(e => e.type === 'workflow:error');
     if (!workflowError) {
       throw new Error('Workflow error not found');
     }
-    expect(workflowError.stepResults[0].status).toBe('complete');
-    expect(workflowError.stepResults[1].status).toBe('error');
-    expect(workflowError.stepResults[2].status).toBe('pending');
+    expect(workflowError.steps[0].status).toBe('complete');
+    expect(workflowError.steps[1].status).toBe('error');
+    expect(workflowError.steps[2].status).toBe('pending');
     expect(workflowError.error?.message).toBe('Test error');
 
     // Verify step error was captured

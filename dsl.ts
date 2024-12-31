@@ -71,14 +71,14 @@ type StepEvent<ContextShape, ResultShape> = Event<ContextShape> & {
 
 type WorkflowEvent<ContextShape> = Event<ContextShape> & {
   type: WorkflowEventTypes,
-  stepResults: StepResult<ContextShape>[],
+  steps: Step<ContextShape>[],
 }
 
 type StepEventHandler<ContextShape, ResultShape> = (event: StepEvent<ContextShape, ResultShape>) => void;
 
 type WorkflowEventHandler<ContextShape> = (event: WorkflowEvent<ContextShape>) => void;
 
-interface StepResult<ContextShape> {
+interface Step<ContextShape> {
   id: string
   title: string
   status: StatusOptions
@@ -112,7 +112,7 @@ class StepBlock<ContextShape, ResultShape = any> {
     }
   }
 
-  async run(context: ContextShape): Promise<StepResult<ContextShape>> {
+  async run(context: ContextShape): Promise<Step<ContextShape>> {
     const clonedContext = structuredClone(context);
     try {
       const result = await this.actionBlock.handler(clonedContext);
@@ -174,10 +174,10 @@ class WorkflowBlock<ContextShape> {
     return this.blocks.filter((block): block is WorkflowEventBlock<ContextShape> => block.type === 'workflow');
   }
 
-  #stepResults(
+  #steps(
     currentContext: ContextShape,
-    results: StepResult<ContextShape>[] = [],
-  ): StepResult<ContextShape>[] {
+    results: Step<ContextShape>[] = [],
+  ): Step<ContextShape>[] {
     // If a step has an error then all of the steps after it will not create a result
     // But we want to return a result for each step, so we stub one out for each step
     // that comes after the step with an error
@@ -198,7 +198,7 @@ class WorkflowBlock<ContextShape> {
 
   async dispatchEvents(args: {
     type: WorkflowEventTypes,
-    stepResults: StepResult<ContextShape>[],
+    steps: Step<ContextShape>[],
     context: ContextShape,
     status: StatusOptions,
     error?: SerializedError,
@@ -213,7 +213,7 @@ class WorkflowBlock<ContextShape> {
   async run(initialContext: Context<ContextShape>): Promise<{
     error?: SerializedError;
     context: ContextShape;
-    stepResults: StepResult<ContextShape>[];
+    steps: Step<ContextShape>[];
     status: StatusOptions;
   }> {
     let clonedInitialContext = structuredClone(initialContext);
@@ -222,11 +222,11 @@ class WorkflowBlock<ContextShape> {
       type: 'workflow:start',
       context: clonedInitialContext,
       status: 'pending',
-      stepResults: this.#stepResults(clonedInitialContext),
+      steps: this.#steps(clonedInitialContext),
     });
 
     let currentContext = clonedInitialContext as ContextShape;
-    let results: StepResult<ContextShape>[] = [];
+    let results: Step<ContextShape>[] = [];
     for (const step of this.#stepBlocks) {
       const result = await step.run(currentContext);
       results.push(result);
@@ -240,7 +240,7 @@ class WorkflowBlock<ContextShape> {
           context: nextContext,
           status: 'error',
           error,
-          stepResults: this.#stepResults(nextContext, results),
+          steps: this.#steps(nextContext, results),
         });
         break;
       } else {
@@ -248,7 +248,7 @@ class WorkflowBlock<ContextShape> {
           type: 'workflow:update',
           context: nextContext,
           status: 'running',
-          stepResults: this.#stepResults(nextContext, results),
+          steps: this.#steps(nextContext, results),
         });
         currentContext = nextContext;
       }
@@ -258,12 +258,12 @@ class WorkflowBlock<ContextShape> {
       type: 'workflow:complete',
       context: currentContext,
       status: 'complete',
-      stepResults: this.#stepResults(currentContext, results),
+      steps: this.#steps(currentContext, results),
     });
 
     return {
       context: currentContext,
-      stepResults: this.#stepResults(currentContext, results),
+      steps: this.#steps(currentContext, results),
       status: 'complete',
     };
   }
