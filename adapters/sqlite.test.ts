@@ -13,9 +13,6 @@ describe("SqliteAdapter", () => {
     db = new Database(":memory:", (err) => {
       if (err) throw err;
 
-      // Enable statement tracing
-      db.on('profile', () => {}); // This enables tracing
-
       // Read and execute init.sql file
       const initSql = readFileSync(join(__dirname, "../init.sql"), "utf8");
       db.exec(initSql, done);
@@ -76,5 +73,91 @@ describe("SqliteAdapter", () => {
 
     // Run workflow
     testWorkflow.run({ count: 0 }).catch(done);
+  });
+
+  it("should track multiple workflow executions correctly", (done) => {
+    interface CounterContext {
+      count: number;
+    }
+
+    interface NameContext {
+      name: string;
+    }
+
+    const counterWorkflow = workflow<CounterContext>(
+      "Counter Workflow",
+      step(
+        "Increment",
+        action(async (context) => context.count + 1),
+        reduce((result) => ({ count: result }))
+      )
+    );
+
+    const nameWorkflow = workflow<NameContext>(
+      "Name Workflow",
+      step(
+        "Uppercase",
+        action(async (context) => context.name.toUpperCase()),
+        reduce((result) => ({ name: result }))
+      )
+    );
+
+    // Attach adapter to both workflows
+    adapter.attach(counterWorkflow);
+    adapter.attach(nameWorkflow);
+
+    let insertCount = 0;
+
+    // Set up database change listener
+    db.on('trace', (sql) => {
+      if (sql.includes('INSERT INTO workflow_runs')) {
+        insertCount++;
+
+        // Only verify after both inserts are complete
+        if (insertCount === 2) {
+          // Query the database to verify both workflows
+          db.all(
+            "SELECT * FROM workflow_runs ORDER BY created_at DESC LIMIT 2",
+            [],
+            (err, rows: any[]) => {
+              if (err) {
+                done(err);
+                return;
+              }
+
+              try {
+                expect(rows.length).toBe(2);
+
+                // Verify Name Workflow
+                const nameRow = rows.find(r => r.workflow_title === "Name Workflow");
+                expect(nameRow).toBeTruthy();
+                expect(JSON.parse(nameRow.initial_context)).toEqual({ name: "test" });
+                expect(JSON.parse(nameRow.current_context)).toEqual({ name: "TEST" });
+                expect(nameRow.status).toBe("running");
+                expect(nameRow.error).toBe("null");
+
+                // Verify Counter Workflow
+                const counterRow = rows.find(r => r.workflow_title === "Counter Workflow");
+                expect(counterRow).toBeTruthy();
+                expect(JSON.parse(counterRow.initial_context)).toEqual({ count: 0 });
+                expect(JSON.parse(counterRow.current_context)).toEqual({ count: 1 });
+                expect(counterRow.status).toBe("running");
+                expect(counterRow.error).toBe("null");
+
+                done();
+              } catch (error) {
+                done(error);
+              }
+            }
+          );
+        }
+      }
+    });
+
+    // Run both workflows
+    Promise.all([
+      counterWorkflow.run({ count: 0 }),
+      nameWorkflow.run({ name: "test" })
+    ]).catch(done);
   });
 });
