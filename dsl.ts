@@ -90,13 +90,27 @@ interface Step<ContextShape> {
 class StepBlock<ContextShape, ResultShape = any> {
   public id = uuidv4();
   public type = 'step';
+  #actionBlock: ActionBlock<ContextShape, ResultShape>;
+  #eventBlocks: StepEventBlock<ContextShape, ResultShape>[];
+  #reducerBlock?: ReducerBlock<ContextShape, ResultShape>;
 
   constructor(
     public title: string,
-    public actionBlock: ActionBlock<ContextShape, ResultShape>,
-    public eventBlocks: StepEventBlock<ContextShape, ResultShape>[],
-    public reducerBlock?: ReducerBlock<ContextShape, ResultShape>,
-  ) { }
+    actionBlock: ActionBlock<ContextShape, ResultShape>,
+    eventBlocks: StepEventBlock<ContextShape, ResultShape>[],
+    reducerBlock?: ReducerBlock<ContextShape, ResultShape>,
+  ) {
+    this.#actionBlock = actionBlock;
+    this.#eventBlocks = eventBlocks;
+    this.#reducerBlock = reducerBlock;
+  }
+
+  get blocks() {
+    if (this.#reducerBlock) {
+      return [this.#actionBlock, this.#reducerBlock, ...this.#eventBlocks];
+    }
+    return [this.#actionBlock, ...this.#eventBlocks];
+  }
 
   async dispatchEvents(args: {
     type: StepEventTypes,
@@ -105,7 +119,7 @@ class StepBlock<ContextShape, ResultShape = any> {
     result?: ResultShape,
     error?: SerializedError,
   }) {
-    for (const event of this.eventBlocks) {
+    for (const event of this.#eventBlocks) {
       if (event.eventType === args.type) {
         await event.handler(structuredClone(args));
       }
@@ -115,8 +129,8 @@ class StepBlock<ContextShape, ResultShape = any> {
   async run(context: ContextShape): Promise<Step<ContextShape>> {
     const clonedContext = structuredClone(context);
     try {
-      const result = await this.actionBlock.handler(clonedContext);
-      const nextContext = this.reducerBlock?.handler(result, clonedContext) ?? clonedContext;
+      const result = await this.#actionBlock.handler(clonedContext);
+      const nextContext = this.#reducerBlock?.handler(result, clonedContext) ?? clonedContext;
       await this.dispatchEvents({
         type: 'step:complete',
         context: nextContext,
