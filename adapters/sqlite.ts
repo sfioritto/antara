@@ -41,10 +41,10 @@ class SqliteAdapter {
 
   attach(workflow: Workflow<any>) {
     workflow.on('workflow:start', async (event) => {
-      console.log('workflow start', event.context);
+      this.#workflowStarted(event);
     })
     workflow.on('workflow:update', async (event) => {
-      console.log('workflow update', event.context);
+      this.#workflowUpdated(event);
     })
   }
 }

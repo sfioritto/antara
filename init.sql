@@ -1,25 +1,48 @@
 -- Workflow Runs
 CREATE TABLE workflow_runs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     workflow_title TEXT NOT NULL,
-    initial_context JSONB NOT NULL,
-    current_context JSONB NOT NULL,
-    status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'error')),
-    error JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMPTZ
+    initial_context TEXT NOT NULL,  -- JSON
+    current_context TEXT NOT NULL,  -- JSON
+    status TEXT NOT NULL,
+    error TEXT,  -- JSON
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    -- Add JSON validation checks
+    CONSTRAINT valid_initial_context CHECK (json_valid(initial_context)),
+    CONSTRAINT valid_current_context CHECK (json_valid(current_context)),
+    CONSTRAINT valid_error CHECK (error IS NULL OR json_valid(error))
 );
 
+CREATE TRIGGER workflow_runs_status_check
+AFTER INSERT ON workflow_runs
+WHEN NEW.status NOT IN ('pending', 'running', 'complete', 'error')
+BEGIN
+    SELECT RAISE(ROLLBACK, 'Invalid status value');
+END;
+
 CREATE TABLE workflow_steps (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    workflow_run_id UUID NOT NULL REFERENCES workflow_runs(id),
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workflow_run_id INTEGER NOT NULL REFERENCES workflow_runs(id),
     title TEXT NOT NULL,
-    initial_context JSONB NOT NULL,
-    current_context JSONB NOT NULL,
-    status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'error')),
-    error JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMPTZ
+    initial_context TEXT NOT NULL,  -- JSON
+    current_context TEXT NOT NULL,  -- JSON
+    status TEXT NOT NULL,
+    error TEXT,  -- JSON
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    -- Add JSON validation checks
+    CONSTRAINT valid_initial_context CHECK (json_valid(initial_context)),
+    CONSTRAINT valid_current_context CHECK (json_valid(current_context)),
+    CONSTRAINT valid_error CHECK (error IS NULL OR json_valid(error))
 );
+
+-- Add check constraint separately for better compatibility
+CREATE TRIGGER workflow_steps_status_check
+AFTER INSERT ON workflow_steps
+WHEN NEW.status NOT IN ('pending', 'running', 'complete', 'error')
+BEGIN
+    SELECT RAISE(ROLLBACK, 'Invalid status value');
+END;
 
 CREATE INDEX workflow_steps_workflow_run_id_idx ON workflow_steps(workflow_run_id);
