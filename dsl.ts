@@ -163,8 +163,9 @@ class StepBlock<ContextShape, ResultShape = any> {
   }
 }
 
+const workflowTitles = new Map<string, string>();
+
 class WorkflowBlock<ContextShape> {
-  public id = uuidv4();
   public type = 'workflow';
   #privateEventBlocks: WorkflowEventBlock<ContextShape>[] = [];
 
@@ -172,7 +173,12 @@ class WorkflowBlock<ContextShape> {
     public title: string,
     public blocks: (StepBlock<ContextShape> | WorkflowEventBlock<ContextShape>)[],
     public description?: string
-  ) { }
+  ) {
+    if (workflowTitles.has(title)) {
+      throw new Error(`Workflow title "${title}" already exists. Titles must be unique.`);
+    }
+    workflowTitles.set(title, title);
+  }
 
   get stepBlocks(): StepBlock<ContextShape>[] {
     return this.blocks.filter((block): block is StepBlock<ContextShape> => block.type === 'step');
@@ -355,3 +361,4 @@ const workflow = <ContextShape>(
 };
 
 export { workflow, step, action, reduce, on };
+export type { WorkflowBlock };
