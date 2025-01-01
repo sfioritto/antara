@@ -166,6 +166,7 @@ class StepBlock<ContextShape, ResultShape = any> {
 class WorkflowBlock<ContextShape> {
   public id = uuidv4();
   public type = 'workflow';
+  #privateEventBlocks: WorkflowEventBlock<ContextShape>[] = [];
 
   constructor(
     public title: string,
@@ -210,11 +211,19 @@ class WorkflowBlock<ContextShape> {
     status: StatusOptions,
     error?: SerializedError,
   }) {
-    for (const event of this.eventBlocks) {
+    for (const event of [...this.eventBlocks, ...this.#privateEventBlocks]) {
       if (event.eventType === args.type) {
         await event.handler(structuredClone(args));
       }
     }
+  }
+
+  on(event: WorkflowEventTypes, handler: WorkflowEventHandler<ContextShape>) {
+    this.#privateEventBlocks.push({
+      type: 'workflow',
+      eventType: event,
+      handler,
+    });
   }
 
   async run(initialContext: Context<ContextShape>): Promise<{
