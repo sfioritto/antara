@@ -70,6 +70,10 @@ type StepEvent<ContextShape, ResultShape> = Event<ContextShape> & {
 }
 
 type WorkflowEvent<ContextShape> = Event<ContextShape> & {
+  title: string,
+  initialContext: ContextShape,
+  context?: ContextShape,
+  error?: SerializedError,
   type: WorkflowEventTypes,
   steps: Step<ContextShape>[],
 }
@@ -210,13 +214,7 @@ class WorkflowBlock<ContextShape> {
       });
   }
 
-  async #dispatchEvents(args: {
-    type: WorkflowEventTypes,
-    steps: Step<ContextShape>[],
-    context: ContextShape,
-    status: StatusOptions,
-    error?: SerializedError,
-  }) {
+  async #dispatchEvents(args: WorkflowEvent<ContextShape>) {
     for (const event of [...this.eventBlocks, ...this.#privateEventBlocks]) {
       if (event.eventType === args.type) {
         await event.handler(structuredClone(args));
@@ -241,6 +239,8 @@ class WorkflowBlock<ContextShape> {
     let clonedInitialContext = structuredClone(initialContext);
 
     await this.#dispatchEvents({
+      title: this.title,
+      initialContext: clonedInitialContext,
       type: 'workflow:start',
       context: clonedInitialContext,
       status: 'pending',
@@ -258,6 +258,8 @@ class WorkflowBlock<ContextShape> {
       if (error) {
         console.error(error.message);
         await this.#dispatchEvents({
+          title: this.title,
+          initialContext: clonedInitialContext,
           type: 'workflow:error',
           context: nextContext,
           status: 'error',
@@ -267,6 +269,8 @@ class WorkflowBlock<ContextShape> {
         break;
       } else {
         await this.#dispatchEvents({
+          title: this.title,
+          initialContext: clonedInitialContext,
           type: 'workflow:update',
           context: nextContext,
           status: 'running',
@@ -277,6 +281,8 @@ class WorkflowBlock<ContextShape> {
     }
 
     await this.#dispatchEvents({
+      title: this.title,
+      initialContext: clonedInitialContext,
       type: 'workflow:complete',
       context: currentContext,
       status: 'complete',
@@ -361,4 +367,4 @@ const workflow = <ContextShape>(
 };
 
 export { workflow, step, action, reduce, on };
-export type { WorkflowBlock };
+export type { WorkflowEvent, WorkflowBlock as Workflow };
