@@ -136,7 +136,6 @@ const initialState: WorkflowState = {
   suggestions: []
 };
 
-testImprovementWorkflow.run(initialState).then(({ context: state, status }) => {
-  console.log('Final state:', state);
-  console.log('Step statuses:', status);
-});
+for await (const event of testImprovementWorkflow.run(initialState)) {
+  console.log(event);
+}

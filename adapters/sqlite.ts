@@ -22,7 +22,7 @@ class SqliteAdapter extends Adapter {
           JSON.stringify(workflow.initialContext),
           JSON.stringify(workflow.context),
           workflow.status,
-          JSON.stringify(workflow.error ?? null)
+          workflow.error ? JSON.stringify(workflow.error) : null
         ],
         (err) => {
           if (err) reject(err);
@@ -43,7 +43,28 @@ class SqliteAdapter extends Adapter {
         [
           JSON.stringify(workflow.context),
           workflow.status,
-          JSON.stringify(workflow.error ?? null),
+          workflow.error ? JSON.stringify(workflow.error) : null,
+          workflow.title
+        ],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async completed(workflow: WorkflowEvent<any>) {
+    return new Promise<void>((resolve, reject) => {
+      this.db.run(
+        `UPDATE workflow_runs SET
+          current_context = ?,
+          status = 'complete',
+          error = ?
+        WHERE workflow_title = ?`,
+        [
+          JSON.stringify(workflow.context),
+          workflow.error ? JSON.stringify(workflow.error) : null,
           workflow.title
         ],
         (err) => {
