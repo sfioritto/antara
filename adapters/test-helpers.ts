@@ -1,4 +1,5 @@
-import type { Workflow } from "../dsl";
+import type { Workflow, WorkflowEvent, StepEvent } from "../dsl";
+import { WORKFLOW_EVENTS } from "../dsl";
 import type { Adapter } from "./adapter";
 
 export async function runWorkflow(
@@ -22,7 +23,13 @@ export async function collectWorkflowEvents<T>(workflow: AsyncGenerator<T>): Pro
   return events;
 }
 
-export async function finalWorkflowEvent<T>(workflow: AsyncGenerator<T>): Promise<T> {
+export async function finalWorkflowEvent<T>(
+  workflow: AsyncGenerator<WorkflowEvent<T> | StepEvent<T, any>>
+): Promise<WorkflowEvent<T>> {
   const events = await collectWorkflowEvents(workflow);
-  return events[events.length - 1];
+  const lastEvent = events[events.length - 1];
+  if (lastEvent.type !== WORKFLOW_EVENTS.COMPLETE) {
+    throw new Error('Workflow did not complete');
+  }
+  return lastEvent;
 }

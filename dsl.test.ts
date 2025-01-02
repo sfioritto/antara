@@ -1,5 +1,6 @@
 import { workflow, on, step, action, reduce } from './dsl';
 import { finalWorkflowEvent } from './adapters/test-helpers';
+import type { WorkflowEvent } from './dsl';
 
 describe('workflow creation', () => {
   it('should create a workflow with a name when passed a string', () => {
@@ -104,7 +105,9 @@ describe('workflow level event listeners', () => {
       })
     );
 
-    const { steps } = await finalWorkflowEvent(workflowWithMutatingHandlers.run({ value: 1 }));
+    const { steps } = await finalWorkflowEvent(
+      workflowWithMutatingHandlers.run({ value: 1 })
+    ) as WorkflowEvent<SimpleContext>;
 
     // Verify that modifications in event handlers didn't persist
     expect(steps).toHaveLength(2);

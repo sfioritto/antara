@@ -233,7 +233,9 @@ class WorkflowBlock<ContextShape> {
     }
   }
 
-  async *run(initialContext: Context<ContextShape>): AsyncGenerator<WorkflowEvent<ContextShape>> {
+  async *run(initialContext: Context<ContextShape>): AsyncGenerator<
+    WorkflowEvent<ContextShape> | StepEvent<ContextShape, any>
+  > {
     let clonedInitialContext = structuredClone(initialContext);
 
     const startEvent = {
@@ -261,26 +263,44 @@ class WorkflowBlock<ContextShape> {
         const errorEvent = {
           title: this.title,
           initialContext: clonedInitialContext,
-          type: WORKFLOW_EVENTS.ERROR,
           context: nextContext,
           status: STATUS.ERROR,
           error,
           steps: this.#steps(nextContext, results),
         };
-        await this.#dispatchEvents(errorEvent);
-        yield errorEvent;
+        await this.#dispatchEvents({
+          ...errorEvent,
+          type: WORKFLOW_EVENTS.ERROR,
+        });
+        yield {
+          ...errorEvent,
+          type: STEP_EVENTS.ERROR,
+        }
+        yield {
+          ...errorEvent,
+          type: WORKFLOW_EVENTS.ERROR,
+        };
         break;
       } else {
         const updateEvent = {
           title: this.title,
           initialContext: clonedInitialContext,
-          type: WORKFLOW_EVENTS.UPDATE,
           context: nextContext,
           status: STATUS.RUNNING,
           steps: this.#steps(nextContext, results),
         };
-        await this.#dispatchEvents(updateEvent);
-        yield updateEvent;
+        await this.#dispatchEvents({
+          ...updateEvent,
+          type: WORKFLOW_EVENTS.UPDATE,
+        });
+        yield {
+          ...updateEvent,
+          type: STEP_EVENTS.COMPLETE,
+        };
+        yield {
+          ...updateEvent,
+          type: WORKFLOW_EVENTS.UPDATE,
+        };
         currentContext = nextContext;
       }
     }
@@ -368,4 +388,4 @@ const workflow = <ContextShape>(
 };
 
 export { workflow, step, action, reduce, on, WORKFLOW_EVENTS };
-export type { WorkflowEvent, WorkflowBlock as Workflow };
+export type { Event, StepEvent, WorkflowEvent, WorkflowBlock as Workflow };
