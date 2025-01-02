@@ -1,19 +1,6 @@
 import { Database } from "sqlite3";
-import { WORKFLOW_EVENTS } from "../dsl";
+import { Adapter } from "./adapter";
 import type { WorkflowEvent } from "../dsl";
-
-abstract class Adapter {
-  async started?(event: WorkflowEvent<any>): Promise<void>;
-  async updated?(event: WorkflowEvent<any>): Promise<void>;
-
-  async dispatch(event: WorkflowEvent<any>) {
-    if (event.type === WORKFLOW_EVENTS.START && this.started) {
-      await this.started(event);
-    } else if (event.type === WORKFLOW_EVENTS.UPDATE && this.updated) {
-      await this.updated(event);
-    }
-  }
-}
 
 class SqliteAdapter extends Adapter {
   constructor(private db: Database) {
