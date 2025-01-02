@@ -1,4 +1,5 @@
 import { workflow, on, step, action, reduce } from './dsl';
+import { finalWorkflowEvent } from './adapters/test-helpers';
 
 describe('workflow creation', () => {
   it('should create a workflow with a name when passed a string', () => {
@@ -51,7 +52,7 @@ describe('workflow level event listeners', () => {
       })
     );
 
-    const { context, status } = await simpleWorkflow.run({ value: 0 });
+    const { context, status } = await finalWorkflowEvent(simpleWorkflow.run({ value: 0 }));
 
     // Verify final context
     expect(context.value).toBe(1);
@@ -103,7 +104,7 @@ describe('workflow level event listeners', () => {
       })
     );
 
-    const { steps } = await workflowWithMutatingHandlers.run({ value: 1 });
+    const { steps } = await finalWorkflowEvent(workflowWithMutatingHandlers.run({ value: 1 }));
 
     // Verify that modifications in event handlers didn't persist
     expect(steps).toHaveLength(2);
@@ -166,7 +167,7 @@ describe('step level event listeners', () => {
       )
     );
 
-    const { context, status } = await twoStepWorkflow.run({ value: 1 });
+    const { context, status } = await finalWorkflowEvent(twoStepWorkflow.run({ value: 1 }));
 
     // Verify final context
     expect(context.value).toBe(3);
@@ -242,7 +243,7 @@ describe('error handling', () => {
       })
     );
 
-    const { steps } = await errorWorkflow.run({ value: 0 });
+    const { steps } = await finalWorkflowEvent(errorWorkflow.run({ value: 0 }));
 
     // Verify events were captured correctly
     const workflowError = workflowEvents.find(e => e.type === 'workflow:error');

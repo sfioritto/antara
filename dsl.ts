@@ -46,17 +46,31 @@ interface WorkflowMetadata {
   description?: string;
 }
 
-type StepEventTypes = 'step:complete' | 'step:error';
+const STEP_EVENTS = {
+  COMPLETE: 'step:complete',
+  ERROR: 'step:error',
+} as const;
 
-type WorkflowEventTypes =
-  | 'workflow:start'
-  | 'workflow:complete'
-  | 'workflow:update'
-  | 'workflow:error';
+type StepEventTypes = typeof STEP_EVENTS[keyof typeof STEP_EVENTS];
+
+const WORKFLOW_EVENTS = {
+  START: 'workflow:start',
+  UPDATE: 'workflow:update',
+  ERROR: 'workflow:error',
+  COMPLETE: 'workflow:complete',
+} as const;
+
+const STATUS = {
+  PENDING: 'pending',
+  RUNNING: 'running',
+  COMPLETE: 'complete',
+  ERROR: 'error',
+} as const;
+
+type WorkflowEventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
+type StatusOptions = typeof STATUS[keyof typeof STATUS];
 
 type AllEventTypes = StepEventTypes | WorkflowEventTypes;
-
-type StatusOptions = 'pending' | 'running' | 'complete' | 'error';
 
 type Event<ContextShape> = {
   context: ContextShape,
@@ -72,8 +86,6 @@ type StepEvent<ContextShape, ResultShape> = Event<ContextShape> & {
 type WorkflowEvent<ContextShape> = Event<ContextShape> & {
   title: string,
   initialContext: ContextShape,
-  context?: ContextShape,
-  error?: SerializedError,
   type: WorkflowEventTypes,
   steps: Step<ContextShape>[],
 }
@@ -171,7 +183,6 @@ const workflowTitles = new Map<string, string>();
 
 class WorkflowBlock<ContextShape> {
   public type = 'workflow';
-  #privateEventBlocks: WorkflowEventBlock<ContextShape>[] = [];
 
   constructor(
     public title: string,
@@ -215,40 +226,30 @@ class WorkflowBlock<ContextShape> {
   }
 
   async #dispatchEvents(args: WorkflowEvent<ContextShape>) {
-    for (const event of [...this.eventBlocks, ...this.#privateEventBlocks]) {
+    for (const event of this.eventBlocks) {
       if (event.eventType === args.type) {
         await event.handler(structuredClone(args));
       }
     }
   }
 
-  on(event: WorkflowEventTypes, handler: WorkflowEventHandler<ContextShape>) {
-    this.#privateEventBlocks.push({
-      type: 'workflow',
-      eventType: event,
-      handler,
-    });
-  }
-
-  async run(initialContext: Context<ContextShape>): Promise<{
-    error?: SerializedError;
-    context: ContextShape;
-    steps: Step<ContextShape>[];
-    status: StatusOptions;
-  }> {
+  async *run(initialContext: Context<ContextShape>): AsyncGenerator<WorkflowEvent<ContextShape>> {
     let clonedInitialContext = structuredClone(initialContext);
 
-    await this.#dispatchEvents({
+    const startEvent = {
       title: this.title,
       initialContext: clonedInitialContext,
-      type: 'workflow:start',
+      type: WORKFLOW_EVENTS.START,
       context: clonedInitialContext,
-      status: 'pending',
+      status: STATUS.PENDING,
       steps: this.#steps(clonedInitialContext),
-    });
+    };
+    await this.#dispatchEvents(startEvent);
+    yield startEvent;
 
     let currentContext = clonedInitialContext as ContextShape;
     let results: Step<ContextShape>[] = [];
+
     for (const step of this.stepBlocks) {
       const result = await step.run(currentContext);
       results.push(result);
@@ -257,43 +258,43 @@ class WorkflowBlock<ContextShape> {
 
       if (error) {
         console.error(error.message);
-        await this.#dispatchEvents({
+        const errorEvent = {
           title: this.title,
           initialContext: clonedInitialContext,
-          type: 'workflow:error',
+          type: WORKFLOW_EVENTS.ERROR,
           context: nextContext,
-          status: 'error',
+          status: STATUS.ERROR,
           error,
           steps: this.#steps(nextContext, results),
-        });
+        };
+        await this.#dispatchEvents(errorEvent);
+        yield errorEvent;
         break;
       } else {
-        await this.#dispatchEvents({
+        const updateEvent = {
           title: this.title,
           initialContext: clonedInitialContext,
-          type: 'workflow:update',
+          type: WORKFLOW_EVENTS.UPDATE,
           context: nextContext,
-          status: 'running',
+          status: STATUS.RUNNING,
           steps: this.#steps(nextContext, results),
-        });
+        };
+        await this.#dispatchEvents(updateEvent);
+        yield updateEvent;
         currentContext = nextContext;
       }
     }
 
-    await this.#dispatchEvents({
+    const completeEvent = {
       title: this.title,
       initialContext: clonedInitialContext,
-      type: 'workflow:complete',
+      type: WORKFLOW_EVENTS.COMPLETE,
       context: currentContext,
-      status: 'complete',
+      status: STATUS.COMPLETE,
       steps: this.#steps(currentContext, results),
-    });
-
-    return {
-      context: currentContext,
-      steps: this.#steps(currentContext, results),
-      status: 'complete',
     };
+    await this.#dispatchEvents(completeEvent);
+    yield completeEvent;
   }
 }
 
@@ -366,5 +367,5 @@ const workflow = <ContextShape>(
   return new WorkflowBlock(title, blocks, description);
 };
 
-export { workflow, step, action, reduce, on };
+export { workflow, step, action, reduce, on, WORKFLOW_EVENTS };
 export type { WorkflowEvent, WorkflowBlock as Workflow };
