@@ -237,15 +237,10 @@ class WorkflowBlock<ContextShape> {
 
   async *run(
     initialContext: Context<ContextShape>,
-    lastStepContext?: Context<ContextShape>,
-    numberOfCompletedSteps: number = 0,
+    completedSteps: Step<ContextShape>[] = [],
   ): AsyncGenerator<
     WorkflowEvent<ContextShape> | StepEvent<ContextShape, any>
-    > {
-    if (numberOfCompletedSteps > this.stepBlocks.length) {
-      throw new Error('Number of completed steps is greater than the number of steps in the workflow');
-    }
-
+  > {
     let clonedInitialContext = structuredClone(initialContext);
 
     const startEvent = {
@@ -259,10 +254,12 @@ class WorkflowBlock<ContextShape> {
     await this.#dispatchEvents(startEvent);
     yield startEvent;
 
-    let currentContext = (lastStepContext ?? clonedInitialContext) as ContextShape;
-    let results: Step<ContextShape>[] = [];
+    let currentContext = completedSteps.length > 0
+      ? completedSteps[completedSteps.length - 1].context
+      : clonedInitialContext;
+    let results = [...completedSteps];
 
-    for (const step of this.stepBlocks.slice(numberOfCompletedSteps)) {
+    for (const step of this.stepBlocks.slice(completedSteps.length)) {
       const result = await step.run(currentContext);
       results.push(result);
 

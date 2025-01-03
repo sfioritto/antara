@@ -406,10 +406,9 @@ describe('workflow resumption', () => {
     // Clear step results for next run
     stepResults.length = 0;
 
-    // Resume from step 2 (index 1) using the context after step 1
-    const step1Context = fullRun.steps[0].context;
+    // Resume from step 2 by passing the completed first step
     const resumedRun = await finalWorkflowEvent(
-      threeStepWorkflow.run(initialContext, step1Context, 1)
+      threeStepWorkflow.run(initialContext, [fullRun.steps[0]])
     );
 
     // Verify the full run executed correctly
