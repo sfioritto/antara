@@ -332,4 +332,28 @@ describe("SqliteAdapter", () => {
     expect(finalRun.status).toBe("complete");
     expect(JSON.parse(finalRun.context)).toEqual({ value: "TEST", count: 1 });
   });
+
+  it("should throw error when starting workflow with existing run ID", async () => {
+    interface TestContext {
+      value: string;
+    }
+
+    const testWorkflow = workflow<TestContext>(
+      "Test Workflow",
+      step(
+        "Test Step",
+        action(async (context) => context.value)
+      )
+    );
+
+    const adapter = new SqliteAdapter(db);
+
+    // Manually set the workflowRunId
+    (adapter as any).workflowRunId = 123;
+
+    // Attempt to run workflow should throw
+    await expect(
+      runWorkflow(testWorkflow, { value: "test" }, [adapter])
+    ).rejects.toThrow("Workflow run ID is already set");
+  });
 });
