@@ -1,6 +1,6 @@
 import { Database } from "sqlite3";
 import { Adapter } from "./adapter";
-import type { WorkflowEvent, StepEvent } from "../dsl";
+import type { Event, WorkflowEvent } from "../dsl";
 
 class SqliteAdapter extends Adapter {
   constructor(
@@ -10,7 +10,7 @@ class SqliteAdapter extends Adapter {
     super();
   }
 
-  async stepComplete(step: StepEvent<any, any>) {
+  async stepComplete(step: Event<any>) {
     return new Promise<void>((resolve, reject) => {
       this.db.run(
         `INSERT INTO workflow_steps (
@@ -37,7 +37,7 @@ class SqliteAdapter extends Adapter {
     });
   }
 
-  async stepError(step: StepEvent<any, any>) {
+  async stepError(step: Event<any>) {
     return new Promise<void>((resolve, reject) => {
       this.db.run(
         `INSERT INTO workflow_steps (
@@ -93,7 +93,8 @@ class SqliteAdapter extends Adapter {
         }
       );
     });
-    createWorkflowRun.then((workflowRunId) => {
+
+    return createWorkflowRun.then((workflowRunId) => {
       this.workflowRunId = workflowRunId;
     });
   }
@@ -105,12 +106,12 @@ class SqliteAdapter extends Adapter {
           context = ?,
           status = ?,
           error = ?
-        WHERE workflow_title = ?`,
+        WHERE id = ?`,
         [
           JSON.stringify(workflow.context),
           workflow.status,
           workflow.error ? JSON.stringify(workflow.error) : null,
-          workflow.title
+          this.workflowRunId
         ],
         (err) => {
           if (err) reject(err);
@@ -127,11 +128,11 @@ class SqliteAdapter extends Adapter {
           context = ?,
           status = 'complete',
           error = ?
-        WHERE workflow_title = ?`,
+        WHERE id = ?`,
         [
           JSON.stringify(workflow.context),
           workflow.error ? JSON.stringify(workflow.error) : null,
-          workflow.title
+          this.workflowRunId
         ],
         (err) => {
           if (err) reject(err);

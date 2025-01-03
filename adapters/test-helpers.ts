@@ -24,10 +24,10 @@ export async function collectWorkflowEvents<T>(workflow: AsyncGenerator<T>): Pro
 }
 
 export async function finalWorkflowEvent<T>(
-  workflow: AsyncGenerator<WorkflowEvent<T> | StepEvent<T, any>>
+  workflow: AsyncGenerator<StepEvent<T, any> | WorkflowEvent<T>>
 ): Promise<WorkflowEvent<T>> {
   const events = await collectWorkflowEvents(workflow);
-  const lastEvent = events[events.length - 1];
+  const lastEvent = events[events.length - 1] as WorkflowEvent<T>;
   if (lastEvent.type !== WORKFLOW_EVENTS.COMPLETE) {
     throw new Error('Workflow did not complete');
   }

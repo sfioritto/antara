@@ -58,6 +58,25 @@ describe("SqliteAdapter", () => {
     expect(JSON.parse(workflowRun.context)).toEqual({ count: 1 });
     expect(workflowRun.status).toBe("complete");
     expect(workflowRun.error).toBe(null);
+
+    // Add verification of workflow steps
+    const steps = await new Promise<any[]>((resolve, reject) => {
+      db.all(
+        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY created_at ASC",
+        [workflowRun.id],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+
+    expect(steps).toHaveLength(1);
+    expect(steps[0].title).toBe("Increment");
+    expect(JSON.parse(steps[0].initial_context)).toEqual({ count: 0 });
+    expect(JSON.parse(steps[0].context)).toEqual({ count: 1 });
+    expect(steps[0].status).toBe("complete");
+    expect(steps[0].error).toBe(null);
   });
 
   it("should track multiple workflow executions correctly", async () => {
@@ -115,5 +134,89 @@ describe("SqliteAdapter", () => {
     expect(JSON.parse(workflowRuns[1].context)).toEqual({ name: "TEST" });
     expect(workflowRuns[1].status).toBe("complete");
     expect(workflowRuns[1].error).toBe(null);
+
+    // Add verification of workflow steps for both workflows
+    const allSteps = await new Promise<any[]>((resolve, reject) => {
+      db.all(
+        `SELECT s.*
+         FROM workflow_steps s
+         JOIN workflow_runs r ON s.workflow_run_id = r.id
+         ORDER BY r.created_at ASC, s.created_at ASC`,
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+
+    expect(allSteps).toHaveLength(2);
+
+    // Verify Counter Workflow Step
+    expect(allSteps[0].title).toBe("Increment");
+    expect(JSON.parse(allSteps[0].initial_context)).toEqual({ count: 0 });
+    expect(JSON.parse(allSteps[0].context)).toEqual({ count: 1 });
+    expect(allSteps[0].status).toBe("complete");
+    expect(allSteps[0].error).toBe(null);
+
+    // Verify Name Workflow Step
+    expect(allSteps[1].title).toBe("Uppercase");
+    expect(JSON.parse(allSteps[1].initial_context)).toEqual({ name: "test" });
+    expect(JSON.parse(allSteps[1].context)).toEqual({ name: "TEST" });
+    expect(allSteps[1].status).toBe("complete");
+    expect(allSteps[1].error).toBe(null);
+  });
+
+  it("should track workflow step errors correctly", async () => {
+    interface ErrorContext {
+      shouldError: boolean;
+    }
+
+    const errorWorkflow = workflow<ErrorContext>(
+      "Error Workflow",
+      step(
+        "Maybe Error",
+        action(async (context) => {
+          if (context.shouldError) {
+            throw new Error("Test error");
+          }
+          return context;
+        })
+      )
+    );
+
+    // Run workflow that will error
+    await runWorkflow(errorWorkflow, { shouldError: true }, [new SqliteAdapter(db)]);
+
+    // Query workflow run and its steps
+    const workflowRun = await new Promise<any>((resolve, reject) => {
+      db.get(
+        "SELECT * FROM workflow_runs WHERE workflow_title = ?",
+        ["Error Workflow"],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    const steps = await new Promise<any[]>((resolve, reject) => {
+      db.all(
+        "SELECT * FROM workflow_steps WHERE workflow_run_id = ?",
+        [workflowRun.id],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+
+    expect(steps).toHaveLength(1);
+    expect(steps[0].title).toBe("Maybe Error");
+    expect(JSON.parse(steps[0].initial_context)).toEqual({ shouldError: true });
+    expect(steps[0].status).toBe("error");
+    expect(JSON.parse(steps[0].error)).toMatchObject({
+      name: "Error",
+      message: "Test error"
+    });
   });
 });

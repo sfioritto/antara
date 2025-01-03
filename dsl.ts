@@ -72,22 +72,20 @@ type StatusOptions = typeof STATUS[keyof typeof STATUS];
 
 type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 
-interface StepEvent<ContextShape, ResultShape> {
+interface Event<ContextShape> {
   title: string,
   initialContext: ContextShape,
   context: ContextShape,
   error?: SerializedError,
-  type: StepEventTypes,
+  type: StepEventTypes | WorkflowEventTypes,
+}
+
+interface StepEvent<ContextShape, ResultShape> extends Event<ContextShape> {
   result?: ResultShape,
 }
 
-interface WorkflowEvent<ContextShape> {
-  title: string,
-  initialContext: ContextShape,
-  context: ContextShape,
-  error?: SerializedError,
+interface WorkflowEvent<ContextShape> extends Event<ContextShape> {
   status: StatusOptions,
-  type: WorkflowEventTypes,
   steps: Step<ContextShape>[],
 }
 
@@ -278,6 +276,7 @@ class WorkflowBlock<ContextShape> {
         });
         yield {
           ...errorEvent,
+          title: step.title,
           type: STEP_EVENTS.ERROR,
         }
         yield {
@@ -299,6 +298,7 @@ class WorkflowBlock<ContextShape> {
         });
         yield {
           ...updateEvent,
+          title: step.title,
           type: STEP_EVENTS.COMPLETE,
         };
         yield {
@@ -392,4 +392,4 @@ const workflow = <ContextShape>(
 };
 
 export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS };
-export type { StepEvent, WorkflowEvent, WorkflowBlock as Workflow };
+export type { Event, WorkflowEvent, StepEvent, WorkflowBlock as Workflow };
