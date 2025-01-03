@@ -235,9 +235,17 @@ class WorkflowBlock<ContextShape> {
     }
   }
 
-  async *run(initialContext: Context<ContextShape>): AsyncGenerator<
+  async *run(
+    initialContext: Context<ContextShape>,
+    lastStepContext?: Context<ContextShape>,
+    numberOfCompletedSteps: number = 0,
+  ): AsyncGenerator<
     WorkflowEvent<ContextShape> | StepEvent<ContextShape, any>
-  > {
+    > {
+    if (numberOfCompletedSteps > this.stepBlocks.length) {
+      throw new Error('Number of completed steps is greater than the number of steps in the workflow');
+    }
+
     let clonedInitialContext = structuredClone(initialContext);
 
     const startEvent = {
@@ -251,10 +259,10 @@ class WorkflowBlock<ContextShape> {
     await this.#dispatchEvents(startEvent);
     yield startEvent;
 
-    let currentContext = clonedInitialContext as ContextShape;
+    let currentContext = (lastStepContext ?? clonedInitialContext) as ContextShape;
     let results: Step<ContextShape>[] = [];
 
-    for (const step of this.stepBlocks) {
+    for (const step of this.stepBlocks.slice(numberOfCompletedSteps)) {
       const result = await step.run(currentContext);
       results.push(result);
 
@@ -263,7 +271,6 @@ class WorkflowBlock<ContextShape> {
       if (error) {
         console.error(error.message);
         const errorEvent = {
-          title: this.title,
           initialContext: clonedInitialContext,
           context: nextContext,
           status: STATUS.ERROR,
@@ -272,6 +279,7 @@ class WorkflowBlock<ContextShape> {
         };
         await this.#dispatchEvents({
           ...errorEvent,
+          title: this.title,
           type: WORKFLOW_EVENTS.ERROR,
         });
         yield {
@@ -281,12 +289,12 @@ class WorkflowBlock<ContextShape> {
         }
         yield {
           ...errorEvent,
+          title: this.title,
           type: WORKFLOW_EVENTS.ERROR,
         };
         return;
       } else {
         const updateEvent = {
-          title: this.title,
           initialContext: currentContext,
           context: nextContext,
           status: STATUS.RUNNING,
@@ -294,6 +302,7 @@ class WorkflowBlock<ContextShape> {
         };
         await this.#dispatchEvents({
           ...updateEvent,
+          title: this.title,
           type: WORKFLOW_EVENTS.UPDATE,
         });
         yield {
@@ -303,6 +312,7 @@ class WorkflowBlock<ContextShape> {
         };
         yield {
           ...updateEvent,
+          title: this.title,
           type: WORKFLOW_EVENTS.UPDATE,
         };
         currentContext = nextContext;

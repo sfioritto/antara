@@ -362,3 +362,67 @@ describe('step creation', () => {
   });
 });
 
+describe('workflow resumption', () => {
+  it('should resume workflow from a specific step with correct context chain', async () => {
+    interface SimpleContext {
+      value: number;
+    }
+
+    const stepResults: Array<{ step: string; value: number }> = [];
+
+    const threeStepWorkflow = workflow<SimpleContext>(
+      'Three Step Workflow',
+      step(
+        "Step 1: Double",
+        action((context) => context.value * 2),
+        reduce((newValue) => ({ value: newValue })),
+        on('step:complete', ({ context }) => {
+          stepResults.push({ step: 'double', value: context.value });
+        })
+      ),
+      step(
+        "Step 2: Add 10",
+        action(async (context) => context.value + 10),
+        reduce((newValue) => ({ value: newValue })),
+        on('step:complete', ({ context }) => {
+          stepResults.push({ step: 'add-10', value: context.value });
+        })
+      ),
+      step(
+        "Step 3: Multiply by 3",
+        action(async (context) => context.value * 3),
+        reduce((newValue) => ({ value: newValue })),
+        on('step:complete', ({ context }) => {
+          stepResults.push({ step: 'multiply-3', value: context.value });
+        })
+      )
+    );
+
+    const initialContext = { value: 2 };
+
+    // First run the workflow normally
+    const fullRun = await finalWorkflowEvent(threeStepWorkflow.run(initialContext));
+
+    // Clear step results for next run
+    stepResults.length = 0;
+
+    // Resume from step 2 (index 1) using the context after step 1
+    const step1Context = fullRun.steps[0].context;
+    const resumedRun = await finalWorkflowEvent(
+      threeStepWorkflow.run(initialContext, step1Context, 1)
+    );
+
+    // Verify the full run executed correctly
+    expect(fullRun.context.value).toBe(42); // ((2 * 2) + 10) * 3 = 42
+    expect(fullRun.steps.map(s => s.context.value)).toEqual([4, 14, 42]);
+
+    // Verify the resumed run started from step 2 with correct context
+    expect(resumedRun.context.value).toBe(42);
+    expect(stepResults).toHaveLength(2); // Only steps 2 and 3 should have run
+    expect(stepResults).toEqual([
+      { step: 'add-10', value: 14 },
+      { step: 'multiply-3', value: 42 }
+    ]);
+  });
+});
+
