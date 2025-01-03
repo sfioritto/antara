@@ -141,6 +141,27 @@ class SqliteAdapter extends Adapter {
       );
     });
   }
+
+  async error(workflow: WorkflowEvent<any>) {
+    return new Promise<void>((resolve, reject) => {
+      this.db.run(
+        `UPDATE workflow_runs SET
+          context = ?,
+          status = 'error',
+          error = ?
+        WHERE id = ?`,
+        [
+          JSON.stringify(workflow.context),
+          workflow.error ? JSON.stringify(workflow.error) : null,
+          this.workflowRunId
+        ],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
 }
 
 export { SqliteAdapter };

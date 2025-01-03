@@ -28,7 +28,7 @@ export async function finalWorkflowEvent<T>(
 ): Promise<WorkflowEvent<T>> {
   const events = await collectWorkflowEvents(workflow);
   const lastEvent = events[events.length - 1] as WorkflowEvent<T>;
-  if (lastEvent.type !== WORKFLOW_EVENTS.COMPLETE) {
+  if (lastEvent.type !== WORKFLOW_EVENTS.COMPLETE && lastEvent.type !== WORKFLOW_EVENTS.ERROR) {
     throw new Error('Workflow did not complete');
   }
   return lastEvent;

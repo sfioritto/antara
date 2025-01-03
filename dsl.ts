@@ -283,7 +283,7 @@ class WorkflowBlock<ContextShape> {
           ...errorEvent,
           type: WORKFLOW_EVENTS.ERROR,
         };
-        break;
+        return;
       } else {
         const updateEvent = {
           title: this.title,

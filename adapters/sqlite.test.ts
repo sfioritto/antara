@@ -199,6 +199,13 @@ describe("SqliteAdapter", () => {
       );
     });
 
+    // Add assertions for workflow run
+    expect(workflowRun.status).toBe("error");
+    expect(JSON.parse(workflowRun.error)).toMatchObject({
+      name: "Error",
+      message: "Test error"
+    });
+
     const steps = await new Promise<any[]>((resolve, reject) => {
       db.all(
         "SELECT * FROM workflow_steps WHERE workflow_run_id = ?",
