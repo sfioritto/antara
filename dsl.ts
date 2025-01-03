@@ -72,21 +72,20 @@ type StatusOptions = typeof STATUS[keyof typeof STATUS];
 
 type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 
-type Event<ContextShape> = {
-  context: ContextShape,
-  error?: SerializedError
-}
-
-type StepEvent<ContextShape, ResultShape> = Event<ContextShape> & {
+interface StepEvent<ContextShape, ResultShape> {
   title: string,
   initialContext: ContextShape,
+  context: ContextShape,
+  error?: SerializedError,
   type: StepEventTypes,
   result?: ResultShape,
 }
 
-type WorkflowEvent<ContextShape> = Event<ContextShape> & {
+interface WorkflowEvent<ContextShape> {
   title: string,
   initialContext: ContextShape,
+  context: ContextShape,
+  error?: SerializedError,
   status: StatusOptions,
   type: WorkflowEventTypes,
   steps: Step<ContextShape>[],
@@ -144,17 +143,17 @@ class StepBlock<ContextShape, ResultShape = any> {
     const clonedContext = structuredClone(context);
     try {
       const result = await this.actionBlock.handler(clonedContext);
-      const nextContext = this.reducerBlock?.handler(result, clonedContext) ?? clonedContext;
+      const context = this.reducerBlock?.handler(result, clonedContext) ?? clonedContext;
       await this.#dispatchEvents({
         type: 'step:complete',
         initialContext: clonedContext,
-        context: nextContext,
+        context,
         result,
       });
       return {
         id: this.id,
         title: this.title,
-        context: nextContext,
+        context,
         status: 'complete',
       };
     } catch (err) {
@@ -246,8 +245,8 @@ class WorkflowBlock<ContextShape> {
     const startEvent = {
       title: this.title,
       initialContext: clonedInitialContext,
-      type: WORKFLOW_EVENTS.START,
       context: clonedInitialContext,
+      type: WORKFLOW_EVENTS.START,
       status: STATUS.PENDING,
       steps: this.#steps(clonedInitialContext),
     };
@@ -313,8 +312,8 @@ class WorkflowBlock<ContextShape> {
     const completeEvent = {
       title: this.title,
       initialContext: clonedInitialContext,
-      type: WORKFLOW_EVENTS.COMPLETE,
       context: currentContext,
+      type: WORKFLOW_EVENTS.COMPLETE,
       status: STATUS.COMPLETE,
       steps: this.#steps(currentContext, results),
     };
@@ -393,4 +392,4 @@ const workflow = <ContextShape>(
 };
 
 export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS };
-export type { Event, StepEvent, WorkflowEvent, WorkflowBlock as Workflow };
+export type { StepEvent, WorkflowEvent, WorkflowBlock as Workflow };

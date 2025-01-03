@@ -55,7 +55,7 @@ describe("SqliteAdapter", () => {
     expect(workflowRun).toBeTruthy();
     expect(workflowRun.workflow_title).toBe("Test Counter");
     expect(JSON.parse(workflowRun.initial_context)).toEqual({ count: 0 });
-    expect(JSON.parse(workflowRun.current_context)).toEqual({ count: 1 });
+    expect(JSON.parse(workflowRun.context)).toEqual({ count: 1 });
     expect(workflowRun.status).toBe("complete");
     expect(workflowRun.error).toBe(null);
   });
@@ -105,14 +105,14 @@ describe("SqliteAdapter", () => {
     // Verify Counter Workflow
     expect(workflowRuns[0].workflow_title).toBe("Counter Workflow");
     expect(JSON.parse(workflowRuns[0].initial_context)).toEqual({ count: 0 });
-    expect(JSON.parse(workflowRuns[0].current_context)).toEqual({ count: 1 });
+    expect(JSON.parse(workflowRuns[0].context)).toEqual({ count: 1 });
     expect(workflowRuns[0].status).toBe("complete");
     expect(workflowRuns[0].error).toBe(null);
 
     // Verify Name Workflow
     expect(workflowRuns[1].workflow_title).toBe("Name Workflow");
     expect(JSON.parse(workflowRuns[1].initial_context)).toEqual({ name: "test" });
-    expect(JSON.parse(workflowRuns[1].current_context)).toEqual({ name: "TEST" });
+    expect(JSON.parse(workflowRuns[1].context)).toEqual({ name: "TEST" });
     expect(workflowRuns[1].status).toBe("complete");
     expect(workflowRuns[1].error).toBe(null);
   });

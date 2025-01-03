@@ -42,21 +42,21 @@ describe('workflow level event listeners', () => {
           stepEvents.push({ type });
         })
       ),
-      on('workflow:start', ({ type, status, context }) => {
-        workflowEvents.push({ type, status, context });
+      on('workflow:start', ({ type, status, context: finalContext }) => {
+        workflowEvents.push({ type, status, context: finalContext });
       }),
-      on('workflow:update', ({ type, status, context }) => {
-        workflowEvents.push({ type, status, context });
+      on('workflow:update', ({ type, status, context: finalContext }) => {
+        workflowEvents.push({ type, status, context: finalContext });
       }),
-      on('workflow:complete', ({ type, status, context }) => {
-        workflowEvents.push({ type, status, context });
+      on('workflow:complete', ({ type, status, context: finalContext }) => {
+        workflowEvents.push({ type, status, context: finalContext });
       })
     );
 
-    const { context, status } = await finalWorkflowEvent(simpleWorkflow.run({ value: 0 }));
+    const { context: finalContext, status } = await finalWorkflowEvent(simpleWorkflow.run({ value: 0 }));
 
     // Verify final context
-    expect(context.value).toBe(1);
+    expect(finalContext.value).toBe(1);
     expect(status).toBe('complete');
 
     // Verify workflow events
@@ -144,11 +144,11 @@ describe('step level event listeners', () => {
         reduce((newValue) => ({
           value: newValue
         })),
-        on('step:complete', ({ context, result, type }) => {
+        on('step:complete', ({ context: finalContext, result, type }) => {
           stepEvents.push({
             step: 'double',
             type,
-            context,
+            context: finalContext,
             result
           });
         })
@@ -159,21 +159,21 @@ describe('step level event listeners', () => {
         reduce((newValue) => ({
           value: newValue
         })),
-        on('step:complete', ({ context, result, type }) => {
+        on('step:complete', ({ context: finalContext, result, type }) => {
           stepEvents.push({
             step: 'add-one',
             type,
-            context,
+            context: finalContext,
             result
           });
         })
       )
     );
 
-    const { context, status } = await finalWorkflowEvent(twoStepWorkflow.run({ value: 1 }));
+    const { context: finalContext, status } = await finalWorkflowEvent(twoStepWorkflow.run({ value: 1 }));
 
     // Verify final context
-    expect(context.value).toBe(3);
+    expect(finalContext.value).toBe(3);
     expect(status).toBe('complete');
 
     // Verify step events

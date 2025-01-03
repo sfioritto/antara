@@ -17,7 +17,7 @@ class SqliteAdapter extends Adapter {
           workflow_run_id,
           title,
           initial_context,
-          final_context,
+          context,
           status,
           error
         ) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -44,7 +44,7 @@ class SqliteAdapter extends Adapter {
           workflow_run_id,
           title,
           initial_context,
-          current_context,
+          context,
           status,
           error
         ) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -74,7 +74,7 @@ class SqliteAdapter extends Adapter {
         `INSERT INTO workflow_runs (
           workflow_title,
           initial_context,
-          current_context,
+          context,
           status,
           error
         ) VALUES (?, ?, ?, ?, ?)`,
@@ -102,7 +102,7 @@ class SqliteAdapter extends Adapter {
     return new Promise<void>((resolve, reject) => {
       this.db.run(
         `UPDATE workflow_runs SET
-          current_context = ?,
+          context = ?,
           status = ?,
           error = ?
         WHERE workflow_title = ?`,
@@ -124,7 +124,7 @@ class SqliteAdapter extends Adapter {
     return new Promise<void>((resolve, reject) => {
       this.db.run(
         `UPDATE workflow_runs SET
-          current_context = ?,
+          context = ?,
           status = 'complete',
           error = ?
         WHERE workflow_title = ?`,
