@@ -26,14 +26,14 @@ CREATE TABLE workflow_steps (
     workflow_run_id INTEGER NOT NULL REFERENCES workflow_runs(id),
     title TEXT NOT NULL,
     initial_context TEXT NOT NULL,  -- JSON
-    current_context TEXT NOT NULL,  -- JSON
+    final_context TEXT NOT NULL,  -- JSON
     status TEXT NOT NULL,
     error TEXT,  -- JSON
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at DATETIME,
     -- Add JSON validation checks
     CONSTRAINT valid_initial_context CHECK (json_valid(initial_context)),
-    CONSTRAINT valid_current_context CHECK (json_valid(current_context)),
+    CONSTRAINT valid_final_context CHECK (json_valid(final_context)),
     CONSTRAINT valid_error CHECK (error IS NULL OR json_valid(error))
 );
 

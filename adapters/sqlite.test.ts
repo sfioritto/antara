@@ -7,7 +7,6 @@ import { runWorkflow } from "./test-helpers";
 
 describe("SqliteAdapter", () => {
   let db: Database;
-  let adapter: SqliteAdapter;
 
   beforeEach((done) => {
     // Use in-memory SQLite database for testing
@@ -18,8 +17,6 @@ describe("SqliteAdapter", () => {
       const initSql = readFileSync(join(__dirname, "../init.sql"), "utf8");
       db.exec(initSql, done);
     });
-
-    adapter = new SqliteAdapter(db);
   });
 
   afterEach((done) => {
@@ -41,7 +38,7 @@ describe("SqliteAdapter", () => {
     );
 
     // Run workflow
-    await runWorkflow(testWorkflow, { count: 0 }, [adapter]);
+    await runWorkflow(testWorkflow, { count: 0 }, [new SqliteAdapter(db)]);
 
     // Query and verify workflow run
     const workflowRun = await new Promise<any>((resolve, reject) => {
@@ -91,8 +88,8 @@ describe("SqliteAdapter", () => {
     );
 
     // Run both workflows
-    await runWorkflow(counterWorkflow, { count: 0 }, [adapter]);
-    await runWorkflow(nameWorkflow, { name: "test" }, [adapter]);
+    await runWorkflow(counterWorkflow, { count: 0 }, [new SqliteAdapter(db)]);
+    await runWorkflow(nameWorkflow, { name: "test" }, [new SqliteAdapter(db)]);
 
     // Query and verify workflow runs
     const workflowRuns = await new Promise<any[]>((resolve, reject) => {

@@ -351,7 +351,6 @@ describe('step creation', () => {
       reduce(({ returnedValue }) => ({ value: returnedValue })),
       on('step:complete', (event) => {
         event.context.value = 999;
-        event.status = 'pending';
       })
     );
 

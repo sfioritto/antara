@@ -74,11 +74,12 @@ type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 
 type Event<ContextShape> = {
   context: ContextShape,
-  status: StatusOptions,
   error?: SerializedError
 }
 
 type StepEvent<ContextShape, ResultShape> = Event<ContextShape> & {
+  title: string,
+  initialContext: ContextShape,
   type: StepEventTypes,
   result?: ResultShape,
 }
@@ -86,6 +87,7 @@ type StepEvent<ContextShape, ResultShape> = Event<ContextShape> & {
 type WorkflowEvent<ContextShape> = Event<ContextShape> & {
   title: string,
   initialContext: ContextShape,
+  status: StatusOptions,
   type: WorkflowEventTypes,
   steps: Step<ContextShape>[],
 }
@@ -123,14 +125,17 @@ class StepBlock<ContextShape, ResultShape = any> {
 
   async #dispatchEvents(args: {
     type: StepEventTypes,
+    initialContext: ContextShape,
     context: ContextShape,
-    status: StatusOptions,
     result?: ResultShape,
     error?: SerializedError,
   }) {
     for (const event of this.eventBlocks) {
       if (event.eventType === args.type) {
-        await event.handler(structuredClone(args));
+        await event.handler(structuredClone({
+          ...args,
+          title: this.title,
+        }));
       }
     }
   }
@@ -142,8 +147,8 @@ class StepBlock<ContextShape, ResultShape = any> {
       const nextContext = this.reducerBlock?.handler(result, clonedContext) ?? clonedContext;
       await this.#dispatchEvents({
         type: 'step:complete',
+        initialContext: clonedContext,
         context: nextContext,
-        status: 'complete',
         result,
       });
       return {
@@ -156,8 +161,8 @@ class StepBlock<ContextShape, ResultShape = any> {
       const error = err as Error;
       await this.#dispatchEvents({
         type: 'step:error',
+        initialContext: clonedContext,
         context: clonedContext,
-        status: 'error',
         error: {
           name: error.name,
           message: error.message,
@@ -387,5 +392,5 @@ const workflow = <ContextShape>(
   return new WorkflowBlock(title, blocks, description);
 };
 
-export { workflow, step, action, reduce, on, WORKFLOW_EVENTS };
+export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS };
 export type { Event, StepEvent, WorkflowEvent, WorkflowBlock as Workflow };
