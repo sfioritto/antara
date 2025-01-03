@@ -287,7 +287,7 @@ class WorkflowBlock<ContextShape> {
       } else {
         const updateEvent = {
           title: this.title,
-          initialContext: clonedInitialContext,
+          initialContext: currentContext,
           context: nextContext,
           status: STATUS.RUNNING,
           steps: this.#steps(nextContext, results),

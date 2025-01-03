@@ -33,3 +33,14 @@ export async function finalWorkflowEvent<T>(
   }
   return lastEvent;
 }
+
+export async function* runWorkflowStepByStep(
+  workflow: Workflow<any>,
+  initialContext: any,
+  adapters: Adapter[] = []
+): AsyncGenerator<WorkflowEvent<any> | StepEvent<any, any>> {
+  for await (const event of workflow.run(initialContext)) {
+    await Promise.all(adapters.map((adapter) => adapter.dispatch(event)));
+    yield event;
+  }
+}

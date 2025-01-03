@@ -3,7 +3,7 @@ import { SqliteAdapter } from "./sqlite";
 import { workflow, step, action, reduce } from "../dsl";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { runWorkflow } from "./test-helpers";
+import { runWorkflow, runWorkflowStepByStep } from "./test-helpers";
 
 describe("SqliteAdapter", () => {
   let db: Database;
@@ -225,5 +225,111 @@ describe("SqliteAdapter", () => {
       name: "Error",
       message: "Test error"
     });
+  });
+
+  it("should track multi-step workflow execution step by step", async () => {
+    interface MultiStepContext {
+      value: string;
+      count: number;
+    }
+
+    const multiStepWorkflow = workflow<MultiStepContext>(
+      "Multi Step Workflow",
+      step(
+        "Uppercase String",
+        action(async (context) => context.value.toUpperCase()),
+        reduce((result, context) => ({ ...context, value: result }))
+      ),
+      step(
+        "Increment Counter",
+        action(async (context) => context.count + 1),
+        reduce((result, context) => ({ ...context, count: result }))
+      )
+    );
+
+    const adapter = new SqliteAdapter(db);
+    const stepIterator = runWorkflowStepByStep(
+      multiStepWorkflow,
+      { value: "test", count: 0 },
+      [adapter]
+    );
+
+    // Run first step
+    await stepIterator.next(); // START event
+    await stepIterator.next(); // STEP COMPLETE event
+    await stepIterator.next(); // UPDATE event
+
+    // Verify workflow state after first step
+    const firstStepRun = await new Promise<any>((resolve, reject) => {
+      db.get(
+        "SELECT * FROM workflow_runs WHERE workflow_title = ?",
+        ["Multi Step Workflow"],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    expect(firstStepRun.status).toBe("running");
+    expect(JSON.parse(firstStepRun.context)).toEqual({ value: "TEST", count: 0 });
+
+    // Verify first step row
+    const firstStepRows = await new Promise<any[]>((resolve, reject) => {
+      db.all(
+        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY created_at ASC",
+        [firstStepRun.id],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+
+    expect(firstStepRows).toHaveLength(1);
+    expect(firstStepRows[0].title).toBe("Uppercase String");
+    expect(JSON.parse(firstStepRows[0].initial_context)).toEqual({ value: "test", count: 0 });
+    expect(JSON.parse(firstStepRows[0].context)).toEqual({ value: "TEST", count: 0 });
+    expect(firstStepRows[0].status).toBe("complete");
+
+    // Run second step
+    await stepIterator.next(); // STEP COMPLETE event
+    await stepIterator.next(); // UPDATE event
+
+    // Verify steps after second step completes
+    const secondStepRows = await new Promise<any[]>((resolve, reject) => {
+      db.all(
+        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY created_at ASC",
+        [firstStepRun.id],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+
+    expect(secondStepRows).toHaveLength(2);
+    expect(secondStepRows[1].title).toBe("Increment Counter");
+    expect(JSON.parse(secondStepRows[1].initial_context)).toEqual({ value: "TEST", count: 0 });
+    expect(JSON.parse(secondStepRows[1].context)).toEqual({ value: "TEST", count: 1 });
+    expect(secondStepRows[1].status).toBe("complete");
+
+    // Complete workflow
+    await stepIterator.next(); // COMPLETE event
+
+    // Verify final state
+    const finalRun = await new Promise<any>((resolve, reject) => {
+      db.get(
+        "SELECT * FROM workflow_runs WHERE workflow_title = ?",
+        ["Multi Step Workflow"],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    expect(finalRun.status).toBe("complete");
+    expect(JSON.parse(finalRun.context)).toEqual({ value: "TEST", count: 1 });
   });
 });
