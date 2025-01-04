@@ -74,6 +74,7 @@ type StatusOptions = typeof STATUS[keyof typeof STATUS];
 type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 
 interface Event<ContextShape, Options = any> {
+  workflowName?: string,
   previousContext: ContextShape,
   newContext: ContextShape,
   error?: SerializedError,
@@ -94,7 +95,6 @@ interface Step<ContextShape> {
   error?: SerializedError
 }
 
-// Class to manage step block state and logic
 class StepBlock<ContextShape, ResultShape = any> {
   public id = uuidv4();
   public type = 'step';
@@ -220,7 +220,10 @@ class WorkflowBlock<ContextShape> {
   async #dispatchEvents(event: Event<ContextShape>) {
     for (const eventBlock of this.eventBlocks) {
       if (eventBlock.eventType === event.type) {
-        await eventBlock.handler(structuredClone(event));
+        await eventBlock.handler(structuredClone({
+          ...event,
+          workflowName: this.name,
+        }));
       }
     }
   }
@@ -237,7 +240,6 @@ class WorkflowBlock<ContextShape> {
     } = structuredClone(args);
 
     const startEvent = {
-      workflowTitle: this.name,
       previousContext: initialContext,
       newContext: initialContext,
       type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
@@ -262,46 +264,33 @@ class WorkflowBlock<ContextShape> {
       if (error) {
         console.error(error.message);
         const errorEvent = {
-          workflowTitle: this.name,
           previousContext: currentContext,
           newContext: nextContext,
           status: STATUS.ERROR,
           error,
           steps: this.#steps(nextContext, completedSteps),
           options,
-        };
-        await this.#dispatchEvents({
-          ...errorEvent,
-          type: WORKFLOW_EVENTS.ERROR,
-        });
-        yield {
-          ...errorEvent,
           type: WORKFLOW_EVENTS.ERROR,
         };
+        await this.#dispatchEvents(errorEvent);
+        yield errorEvent;
         return;
       } else {
         const updateEvent = {
-          workflowTitle: this.name,
           previousContext: currentContext,
           newContext: nextContext,
           status: STATUS.RUNNING,
           steps: this.#steps(nextContext, completedSteps),
           options,
-        };
-        await this.#dispatchEvents({
-          ...updateEvent,
-          type: WORKFLOW_EVENTS.UPDATE,
-        });
-        yield {
-          ...updateEvent,
           type: WORKFLOW_EVENTS.UPDATE,
         };
+        await this.#dispatchEvents(updateEvent);
+        yield updateEvent;
         currentContext = nextContext;
       }
     }
 
     const completeEvent = {
-      workflowTitle: this.name,
       previousContext: currentContext,
       newContext: currentContext,
       type: WORKFLOW_EVENTS.COMPLETE,

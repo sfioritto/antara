@@ -1,7 +1,6 @@
 import { workflow, on, step, action, reduce } from './dsl';
 import { finalWorkflowEvent } from './adapters/test-helpers';
-import type { WorkflowEvent } from './dsl';
-
+import type { Event } from './dsl';
 describe('workflow creation', () => {
   it('should create a workflow with a name when passed a string', () => {
     const wf = workflow('my workflow');
@@ -11,7 +10,7 @@ describe('workflow creation', () => {
   });
 
   it('should create a workflow with a name and description when passed an object', () => {
-    const wf = workflow({ title: 'my named workflow', description: 'some description' });
+    const wf = workflow({ name: 'my named workflow', description: 'some description' });
     expect(wf.name).toBe('my named workflow');
     expect(wf.description).toBe('some description');
   });
@@ -42,21 +41,21 @@ describe('workflow level event listeners', () => {
           stepEvents.push({ type });
         })
       ),
-      on('workflow:start', ({ type, status, context: finalContext }) => {
-        workflowEvents.push({ type, status, context: finalContext });
+      on('workflow:start', ({ type, status, newContext }) => {
+        workflowEvents.push({ type, status, context: newContext });
       }),
-      on('workflow:update', ({ type, status, context: finalContext }) => {
-        workflowEvents.push({ type, status, context: finalContext });
+      on('workflow:update', ({ type, status, newContext }) => {
+        workflowEvents.push({ type, status, context: newContext });
       }),
-      on('workflow:complete', ({ type, status, context: finalContext }) => {
-        workflowEvents.push({ type, status, context: finalContext });
+      on('workflow:complete', ({ type, status, newContext }) => {
+        workflowEvents.push({ type, status, context: newContext });
       })
     );
 
-    const { context: finalContext, status } = await finalWorkflowEvent(simpleWorkflow.run({ value: 0 }));
+    const { newContext, status } = await finalWorkflowEvent(simpleWorkflow.run({ initialContext: { value: 0 } }));
 
     // Verify final context
-    expect(finalContext.value).toBe(1);
+    expect(newContext.value).toBe(1);
     expect(status).toBe('complete');
 
     // Verify workflow events
@@ -100,17 +99,23 @@ describe('workflow level event listeners', () => {
       ),
       on('workflow:update', ({ steps }) => {
         // Try to modify the steps
-        steps[0].status = 'pending';
-        steps[0].context = { value: 999 };
+        if (steps) {
+          steps[0].status = 'pending';
+          steps[0].context = { value: 999 };
+        }
       })
     );
 
     const { steps } = await finalWorkflowEvent(
-      workflowWithMutatingHandlers.run({ value: 1 })
-    ) as WorkflowEvent<SimpleContext>;
+      workflowWithMutatingHandlers.run({ initialContext: { value: 1 } })
+    ) as Event<SimpleContext>;
 
     // Verify that modifications in event handlers didn't persist
     expect(steps).toHaveLength(2);
+
+    if (!steps) {
+      throw new Error('Steps not found');
+    }
 
     // After first step
     const [firstStepResult, secondStepResult] = steps;
@@ -133,7 +138,6 @@ describe('step level event listeners', () => {
       step: string;
       type: string;
       context: SimpleContext;
-      result: number;
     }> = [];
 
     const twoStepWorkflow = workflow<SimpleContext>(
@@ -144,12 +148,11 @@ describe('step level event listeners', () => {
         reduce((newValue) => ({
           value: newValue
         })),
-        on('step:complete', ({ context: finalContext, result, type }) => {
+        on('step:complete', ({ newContext, type }) => {
           stepEvents.push({
             step: 'double',
             type,
-            context: finalContext,
-            result
+            context: newContext,
           });
         })
       ),
@@ -159,21 +162,20 @@ describe('step level event listeners', () => {
         reduce((newValue) => ({
           value: newValue
         })),
-        on('step:complete', ({ context: finalContext, result, type }) => {
+        on('step:complete', ({ newContext, type }) => {
           stepEvents.push({
             step: 'add-one',
             type,
-            context: finalContext,
-            result
+            context: newContext,
           });
         })
       )
     );
 
-    const { context: finalContext, status } = await finalWorkflowEvent(twoStepWorkflow.run({ value: 1 }));
+    const { newContext, status } = await finalWorkflowEvent(twoStepWorkflow.run({ initialContext: { value: 1 } }));
 
     // Verify final context
-    expect(finalContext.value).toBe(3);
+    expect(newContext.value).toBe(3);
     expect(status).toBe('complete');
 
     // Verify step events
@@ -238,15 +240,17 @@ describe('error handling', () => {
       ),
       // Workflow-level error handler
       on('workflow:error', ({ error, steps, type }) => {
-        workflowEvents.push({
-          type,
-          steps,
-          error
-        });
+        if (steps) {
+          workflowEvents.push({
+            type,
+            steps,
+            error
+          });
+        }
       })
     );
 
-    const { steps } = await finalWorkflowEvent(errorWorkflow.run({ value: 0 }));
+    await finalWorkflowEvent(errorWorkflow.run({ initialContext: { value: 0 } }));
 
     // Verify events were captured correctly
     const workflowError = workflowEvents.find(e => e.type === 'workflow:error');
@@ -350,7 +354,7 @@ describe('step creation', () => {
       action(async (context) => ({ returnedValue: context.value + 1 })),
       reduce(({ returnedValue }) => ({ value: returnedValue })),
       on('step:complete', (event) => {
-        event.context.value = 999;
+        event.newContext.value = 999;
       })
     );
 
@@ -376,24 +380,24 @@ describe('workflow resumption', () => {
         "Step 1: Double",
         action((context) => context.value * 2),
         reduce((newValue) => ({ value: newValue })),
-        on('step:complete', ({ context }) => {
-          stepResults.push({ step: 'double', value: context.value });
+        on('step:complete', ({ newContext }) => {
+          stepResults.push({ step: 'double', value: newContext.value });
         })
       ),
       step(
         "Step 2: Add 10",
         action(async (context) => context.value + 10),
         reduce((newValue) => ({ value: newValue })),
-        on('step:complete', ({ context }) => {
-          stepResults.push({ step: 'add-10', value: context.value });
+        on('step:complete', ({ newContext }) => {
+          stepResults.push({ step: 'add-10', value: newContext.value });
         })
       ),
       step(
         "Step 3: Multiply by 3",
         action(async (context) => context.value * 3),
         reduce((newValue) => ({ value: newValue })),
-        on('step:complete', ({ context }) => {
-          stepResults.push({ step: 'multiply-3', value: context.value });
+        on('step:complete', ({ newContext }) => {
+          stepResults.push({ step: 'multiply-3', value: newContext.value });
         })
       )
     );
@@ -401,22 +405,26 @@ describe('workflow resumption', () => {
     const initialContext = { value: 2 };
 
     // First run the workflow normally
-    const fullRun = await finalWorkflowEvent(threeStepWorkflow.run(initialContext));
+    const fullRun = await finalWorkflowEvent(threeStepWorkflow.run({ initialContext }));
 
     // Clear step results for next run
     stepResults.length = 0;
 
+    if (!fullRun.steps) {
+      throw new Error('Steps not found');
+    }
+
     // Resume from step 2 by passing the completed first step
     const resumedRun = await finalWorkflowEvent(
-      threeStepWorkflow.run(initialContext, [fullRun.steps[0]])
+      threeStepWorkflow.run({ initialContext, initialCompletedSteps: [fullRun.steps[0]] })
     );
 
     // Verify the full run executed correctly
-    expect(fullRun.context.value).toBe(42); // ((2 * 2) + 10) * 3 = 42
+    expect(fullRun.newContext.value).toBe(42); // ((2 * 2) + 10) * 3 = 42
     expect(fullRun.steps.map(s => s.context.value)).toEqual([4, 14, 42]);
 
     // Verify the resumed run started from step 2 with correct context
-    expect(resumedRun.context.value).toBe(42);
+    expect(resumedRun.newContext.value).toBe(42);
     expect(stepResults).toHaveLength(2); // Only steps 2 and 3 should have run
     expect(stepResults).toEqual([
       { step: 'add-10', value: 14 },

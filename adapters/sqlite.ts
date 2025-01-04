@@ -5,33 +5,29 @@ import { step, type Event } from "../dsl";
 class SqliteAdapter extends Adapter {
   constructor(
     private db: Database,
-    public workflowRunId?: number,
+    private workflowRunId?: number
   ) {
     super();
   }
 
   async stepComplete(stepEvent: Event<any, { workflowRunId: number }>) {
+    if (!this.workflowRunId) {
+      throw new Error('Workflow run ID is required for this event handler in the SQLite adapter');
+    }
+
     return new Promise<void>((resolve, reject) => {
-      if (!stepEvent.options) {
-        throw new Error('Workflow run ID is required on the options of the step event');
-      }
-
-      const { options: { workflowRunId } } = stepEvent;
-
       this.db.run(
         `INSERT INTO workflow_steps (
           workflow_run_id,
-          title,
-          initial_context,
-          context,
+          previous_context,
+          new_context,
           status,
           error
-        ) VALUES (?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?)`,
         [
-          workflowRunId,
-          stepEvent.completedStep?.title,
-          JSON.stringify(stepEvent.completedStep?.initialContext),
-          JSON.stringify(stepEvent.completedStep?.context),
+          this.workflowRunId,
+          JSON.stringify(stepEvent.previousContext),
+          JSON.stringify(stepEvent.newContext),
           'complete',
           stepEvent.error ? JSON.stringify(stepEvent.error) : null
         ],
@@ -43,24 +39,26 @@ class SqliteAdapter extends Adapter {
     });
   }
 
-  async stepError(step: Event<any>) {
+  async stepError(stepEvent: Event<any>) {
+    if (!this.workflowRunId) {
+      throw new Error('Workflow run ID is required for this event handler in the SQLite adapter');
+    }
+
     return new Promise<void>((resolve, reject) => {
       this.db.run(
         `INSERT INTO workflow_steps (
           workflow_run_id,
-          title,
-          initial_context,
-          context,
+          previous_context,
+          new_context,
           status,
           error
         ) VALUES (?, ?, ?, ?, ?, ?)`,
         [
           this.workflowRunId,
-          step.title,
-          JSON.stringify(step.initialContext),
-          JSON.stringify(step.context),
+          JSON.stringify(stepEvent.previousContext),
+          JSON.stringify(stepEvent.newContext),
           'error',
-          JSON.stringify(step.error)
+          JSON.stringify(stepEvent.error)
         ],
         (err) => {
           if (err) reject(err);
@@ -70,26 +68,21 @@ class SqliteAdapter extends Adapter {
     });
   }
 
-  async started(workflow: WorkflowEvent<any>) {
-    if (this.workflowRunId) {
-      throw new Error('Workflow run ID is already set');
-    }
-
+  async started(workflow: Event<any, any>) {
     const createWorkflowRun = new Promise<number>((resolve, reject) => {
+      const { workflowName, previousContext, status, error } = workflow;
       this.db.run(
         `INSERT INTO workflow_runs (
-          workflow_title,
+          workflow_name,
           initial_context,
-          context,
           status,
           error
-        ) VALUES (?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?)`,
         [
-          workflow.title,
-          JSON.stringify(workflow.initialContext),
-          JSON.stringify(workflow.context),
-          workflow.status,
-          workflow.error ? JSON.stringify(workflow.error) : null
+          workflowName,
+          JSON.stringify(previousContext),
+          status,
+          error ? JSON.stringify(error) : null
         ],
         function(err) {
           if (err) reject(err);
@@ -105,16 +98,18 @@ class SqliteAdapter extends Adapter {
     });
   }
 
-  async updated(workflow: WorkflowEvent<any>) {
+  async updated(workflow: Event<any, any>) {
+    if (!this.workflowRunId) {
+      throw new Error('Workflow run ID is required for this event handler in the SQLite adapter');
+    }
+
     return new Promise<void>((resolve, reject) => {
       this.db.run(
         `UPDATE workflow_runs SET
-          context = ?,
           status = ?,
           error = ?
         WHERE id = ?`,
         [
-          JSON.stringify(workflow.context),
           workflow.status,
           workflow.error ? JSON.stringify(workflow.error) : null,
           this.workflowRunId
@@ -127,16 +122,18 @@ class SqliteAdapter extends Adapter {
     });
   }
 
-  async completed(workflow: WorkflowEvent<any>) {
+  async completed(workflow: Event<any, any>) {
+    if (!this.workflowRunId) {
+      throw new Error('Workflow run ID is required for this event handler in the SQLite adapter');
+    }
+
     return new Promise<void>((resolve, reject) => {
       this.db.run(
         `UPDATE workflow_runs SET
-          context = ?,
           status = 'complete',
           error = ?
         WHERE id = ?`,
         [
-          JSON.stringify(workflow.context),
           workflow.error ? JSON.stringify(workflow.error) : null,
           this.workflowRunId
         ],
@@ -148,16 +145,18 @@ class SqliteAdapter extends Adapter {
     });
   }
 
-  async error(workflow: WorkflowEvent<any>) {
+  async error(workflow: Event<any, any>) {
+    if (!this.workflowRunId) {
+      throw new Error('Workflow run ID is required for this event handler in the SQLite adapter');
+    }
+
     return new Promise<void>((resolve, reject) => {
       this.db.run(
         `UPDATE workflow_runs SET
-          context = ?,
           status = 'error',
           error = ?
         WHERE id = ?`,
         [
-          JSON.stringify(workflow.context),
           workflow.error ? JSON.stringify(workflow.error) : null,
           this.workflowRunId
         ],
