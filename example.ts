@@ -59,7 +59,7 @@ const updateImports = (
 
 const testImprovementWorkflow = workflow<WorkflowState>(
   {
-    title: "Test Coverage Improvement",
+    name: "Test Coverage Improvement",
     description: "Workflow to analyze and improve test coverage"
   },
 
@@ -95,7 +95,7 @@ const testImprovementWorkflow = workflow<WorkflowState>(
         current: coverage
       }
     })),
-    on('step:complete', ({ context: finalContext }) => {
+    on('step:complete', ({ newContext: finalContext }) => {
       console.log(`Initial coverage: ${finalContext?.coverage?.initial}%`);
     })
   ),
@@ -110,7 +110,7 @@ const testImprovementWorkflow = workflow<WorkflowState>(
       ...state,
       suggestions
     })),
-    on('step:complete', ({ context: finalContext }) => {
+    on('step:complete', ({ newContext: finalContext }) => {
       console.log('Generated improvement suggestions:', finalContext?.suggestions);
     })
   ),
@@ -119,7 +119,7 @@ const testImprovementWorkflow = workflow<WorkflowState>(
   on('workflow:start', () => {
     console.log('Starting test improvement workflow');
   }),
-  on('workflow:complete', ({ context: finalContext }) => {
+  on('workflow:complete', ({ newContext: finalContext }) => {
     console.log('Workflow completed');
     console.log('Final coverage:', finalContext?.coverage?.current);
     console.log('Suggestions:', finalContext?.suggestions);
@@ -136,6 +136,6 @@ const initialState: WorkflowState = {
   suggestions: []
 };
 
-for await (const event of testImprovementWorkflow.run(initialState)) {
+for await (const event of testImprovementWorkflow.run({ initialContext: initialState })) {
   console.log(event);
 }

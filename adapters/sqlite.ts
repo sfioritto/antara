@@ -1,6 +1,6 @@
 import { Database } from "sqlite3";
 import { Adapter } from "./adapter";
-import type { Event, WorkflowEvent } from "../dsl";
+import { step, type Event } from "../dsl";
 
 class SqliteAdapter extends Adapter {
   constructor(
@@ -10,8 +10,14 @@ class SqliteAdapter extends Adapter {
     super();
   }
 
-  async stepComplete(step: Event<any>) {
+  async stepComplete(stepEvent: Event<any, { workflowRunId: number }>) {
     return new Promise<void>((resolve, reject) => {
+      if (!stepEvent.options) {
+        throw new Error('Workflow run ID is required on the options of the step event');
+      }
+
+      const { options: { workflowRunId } } = stepEvent;
+
       this.db.run(
         `INSERT INTO workflow_steps (
           workflow_run_id,
@@ -22,12 +28,12 @@ class SqliteAdapter extends Adapter {
           error
         ) VALUES (?, ?, ?, ?, ?, ?)`,
         [
-          this.workflowRunId,
-          step.title,
-          JSON.stringify(step.initialContext),
-          JSON.stringify(step.context),
+          workflowRunId,
+          stepEvent.completedStep?.title,
+          JSON.stringify(stepEvent.completedStep?.initialContext),
+          JSON.stringify(stepEvent.completedStep?.context),
           'complete',
-          step.error ? JSON.stringify(step.error) : null
+          stepEvent.error ? JSON.stringify(stepEvent.error) : null
         ],
         (err) => {
           if (err) reject(err);

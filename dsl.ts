@@ -29,20 +29,20 @@ interface ReducerBlock<ContextShape, ResultShape> {
   handler: Reducer<ContextShape, ResultShape>;
 }
 
-interface StepEventBlock<ContextShape, ResultShape> {
+interface StepEventBlock<ContextShape> {
   type: "event";
   eventType: StepEventTypes;
-  handler: StepEventHandler<ContextShape, ResultShape>;
+  handler: EventHandler<ContextShape>;
 }
 
 interface WorkflowEventBlock<ContextShape> {
   type: "workflow";
   eventType: WorkflowEventTypes;
-  handler: WorkflowEventHandler<ContextShape>;
+  handler: EventHandler<ContextShape>;
 }
 
 interface WorkflowMetadata {
-  title: string;
+  name: string;
   description?: string;
 }
 
@@ -55,6 +55,7 @@ type StepEventTypes = typeof STEP_EVENTS[keyof typeof STEP_EVENTS];
 
 const WORKFLOW_EVENTS = {
   START: 'workflow:start',
+  RESTART: 'workflow:restart',
   UPDATE: 'workflow:update',
   ERROR: 'workflow:error',
   COMPLETE: 'workflow:complete',
@@ -72,26 +73,18 @@ type StatusOptions = typeof STATUS[keyof typeof STATUS];
 
 type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 
-interface Event<ContextShape> {
-  title: string,
-  initialContext: ContextShape,
-  context: ContextShape,
+interface Event<ContextShape, Options = any> {
+  previousContext: ContextShape,
+  newContext: ContextShape,
   error?: SerializedError,
-  type: StepEventTypes | WorkflowEventTypes,
-}
-
-interface StepEvent<ContextShape, ResultShape> extends Event<ContextShape> {
-  result?: ResultShape,
-}
-
-interface WorkflowEvent<ContextShape> extends Event<ContextShape> {
+  type: AllEventTypes,
   status: StatusOptions,
-  steps: Step<ContextShape>[],
+  completedStep?: Step<ContextShape>,
+  steps?: Step<ContextShape>[],
+  options?: Options,
 }
 
-type StepEventHandler<ContextShape, ResultShape> = (event: StepEvent<ContextShape, ResultShape>) => void;
-
-type WorkflowEventHandler<ContextShape> = (event: WorkflowEvent<ContextShape>) => void;
+type EventHandler<ContextShape> = (event: Event<ContextShape>) => void;
 
 interface Step<ContextShape> {
   id: string
@@ -109,7 +102,7 @@ class StepBlock<ContextShape, ResultShape = any> {
   constructor(
     public title: string,
     public actionBlock: ActionBlock<ContextShape, ResultShape>,
-    public eventBlocks: StepEventBlock<ContextShape, ResultShape>[],
+    public eventBlocks: StepEventBlock<ContextShape>[],
     public reducerBlock?: ReducerBlock<ContextShape, ResultShape>,
   ) { }
 
@@ -120,51 +113,48 @@ class StepBlock<ContextShape, ResultShape = any> {
     return [this.actionBlock, ...this.eventBlocks];
   }
 
-  async #dispatchEvents(args: {
-    type: StepEventTypes,
-    initialContext: ContextShape,
-    context: ContextShape,
-    result?: ResultShape,
-    error?: SerializedError,
-  }) {
-    for (const event of this.eventBlocks) {
-      if (event.eventType === args.type) {
-        await event.handler(structuredClone({
-          ...args,
-          title: this.title,
-        }));
+  async #dispatchEvents(event: Event<ContextShape>) {
+    for (const eventBlock of this.eventBlocks) {
+      if (eventBlock.eventType === event.type) {
+        await eventBlock.handler(structuredClone(event));
       }
     }
   }
 
-  async run(context: ContextShape): Promise<Step<ContextShape>> {
+  async run<Options = any>(context: ContextShape, options?: Options): Promise<Step<ContextShape>> {
     const clonedContext = structuredClone(context);
     try {
       const result = await this.actionBlock.handler(clonedContext);
       const context = this.reducerBlock?.handler(result, clonedContext) ?? clonedContext;
-      await this.#dispatchEvents({
-        type: 'step:complete',
-        initialContext: clonedContext,
-        context,
-        result,
-      });
-      return {
+      const completedStep = {
         id: this.id,
         title: this.title,
         context,
-        status: 'complete',
+        status: STATUS.COMPLETE,
+        options,
       };
+      await this.#dispatchEvents({
+        type: STEP_EVENTS.COMPLETE,
+        previousContext: clonedContext,
+        newContext: context,
+        completedStep,
+        status: STATUS.COMPLETE,
+        options,
+      });
+      return completedStep;
     } catch (err) {
       const error = err as Error;
       await this.#dispatchEvents({
-        type: 'step:error',
-        initialContext: clonedContext,
-        context: clonedContext,
+        type: STEP_EVENTS.ERROR,
+        previousContext: clonedContext,
+        newContext: clonedContext,
         error: {
           name: error.name,
           message: error.message,
           stack: error.stack,
         },
+        status: STATUS.ERROR,
+        options,
       });
       return {
         id: this.id,
@@ -175,26 +165,26 @@ class StepBlock<ContextShape, ResultShape = any> {
           stack: error.stack,
         },
         context: clonedContext,
-        status: 'error',
+        status: STATUS.ERROR,
       };
     }
   }
 }
 
-const workflowTitles = new Map<string, string>();
+const workflowNames = new Map<string, string>();
 
 class WorkflowBlock<ContextShape> {
   public type = 'workflow';
 
   constructor(
-    public title: string,
+    public name: string,
     public blocks: (StepBlock<ContextShape> | WorkflowEventBlock<ContextShape>)[],
     public description?: string
   ) {
-    if (workflowTitles.has(title)) {
-      throw new Error(`Workflow title "${title}" already exists. Titles must be unique.`);
+    if (workflowNames.has(name)) {
+      throw new Error(`Workflow name "${name}" already exists. Names must be unique.`);
     }
-    workflowTitles.set(title, title);
+    workflowNames.set(name, name);
   }
 
   get stepBlocks(): StepBlock<ContextShape>[] {
@@ -207,15 +197,15 @@ class WorkflowBlock<ContextShape> {
 
   #steps(
     currentContext: ContextShape,
-    results: Step<ContextShape>[] = [],
+    completedSteps: Step<ContextShape>[] = [],
   ): Step<ContextShape>[] {
     // If a step has an error then all of the steps after it will not create a result
     // But we want to return a result for each step, so we stub one out for each step
     // that comes after the step with an error
     return this.stepBlocks
       .map((stepBlock) => {
-        const result = results.find((result) => result.id === stepBlock.id);
-        if (!result) {
+        const completedStep = completedSteps.find((result) => result.id === stepBlock.id);
+        if (!completedStep) {
           return {
             id: stepBlock.id,
             title: stepBlock.title,
@@ -223,93 +213,87 @@ class WorkflowBlock<ContextShape> {
             context: currentContext,
           };
         }
-        return result;
+        return completedStep;
       });
   }
 
-  async #dispatchEvents(args: WorkflowEvent<ContextShape>) {
-    for (const event of this.eventBlocks) {
-      if (event.eventType === args.type) {
-        await event.handler(structuredClone(args));
+  async #dispatchEvents(event: Event<ContextShape>) {
+    for (const eventBlock of this.eventBlocks) {
+      if (eventBlock.eventType === event.type) {
+        await eventBlock.handler(structuredClone(event));
       }
     }
   }
 
-  async *run(
+  async *run<Options = any>(args: {
     initialContext: Context<ContextShape>,
-    completedSteps: Step<ContextShape>[] = [],
-  ): AsyncGenerator<
-    WorkflowEvent<ContextShape> | StepEvent<ContextShape, any>
-  > {
-    let clonedInitialContext = structuredClone(initialContext);
+    initialCompletedSteps?: Step<ContextShape>[],
+    options?: Options,
+  }): AsyncGenerator<Event<ContextShape>> {
+    const {
+      initialContext,
+      options,
+      initialCompletedSteps = [],
+    } = structuredClone(args);
 
     const startEvent = {
-      title: this.title,
-      initialContext: clonedInitialContext,
-      context: clonedInitialContext,
-      type: WORKFLOW_EVENTS.START,
+      workflowTitle: this.name,
+      previousContext: initialContext,
+      newContext: initialContext,
+      type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
       status: STATUS.PENDING,
-      steps: this.#steps(clonedInitialContext),
+      steps: this.#steps(initialContext, initialCompletedSteps),
+      options,
     };
     await this.#dispatchEvents(startEvent);
     yield startEvent;
 
-    let currentContext = completedSteps.length > 0
-      ? completedSteps[completedSteps.length - 1].context
-      : clonedInitialContext;
-    let results = [...completedSteps];
+    let currentContext = initialCompletedSteps.length > 0
+      ? initialCompletedSteps[initialCompletedSteps.length - 1].context
+      : initialContext;
+    let completedSteps = [...initialCompletedSteps];
 
-    for (const step of this.stepBlocks.slice(completedSteps.length)) {
-      const result = await step.run(currentContext);
-      results.push(result);
+    for (const stepBlock of this.stepBlocks.slice(initialCompletedSteps.length)) {
+      const completedStep = await stepBlock.run(currentContext, options);
+      completedSteps.push(completedStep);
 
-      const { error, context: nextContext } = result;
+      const { error, context: nextContext } = completedStep;
 
       if (error) {
         console.error(error.message);
         const errorEvent = {
-          initialContext: clonedInitialContext,
-          context: nextContext,
+          workflowTitle: this.name,
+          previousContext: currentContext,
+          newContext: nextContext,
           status: STATUS.ERROR,
           error,
-          steps: this.#steps(nextContext, results),
+          steps: this.#steps(nextContext, completedSteps),
+          options,
         };
         await this.#dispatchEvents({
           ...errorEvent,
-          title: this.title,
           type: WORKFLOW_EVENTS.ERROR,
         });
         yield {
           ...errorEvent,
-          title: step.title,
-          type: STEP_EVENTS.ERROR,
-        }
-        yield {
-          ...errorEvent,
-          title: this.title,
           type: WORKFLOW_EVENTS.ERROR,
         };
         return;
       } else {
         const updateEvent = {
-          initialContext: currentContext,
-          context: nextContext,
+          workflowTitle: this.name,
+          previousContext: currentContext,
+          newContext: nextContext,
           status: STATUS.RUNNING,
-          steps: this.#steps(nextContext, results),
+          steps: this.#steps(nextContext, completedSteps),
+          options,
         };
         await this.#dispatchEvents({
           ...updateEvent,
-          title: this.title,
           type: WORKFLOW_EVENTS.UPDATE,
         });
         yield {
           ...updateEvent,
-          title: step.title,
-          type: STEP_EVENTS.COMPLETE,
-        };
-        yield {
-          ...updateEvent,
-          title: this.title,
           type: WORKFLOW_EVENTS.UPDATE,
         };
         currentContext = nextContext;
@@ -317,12 +301,13 @@ class WorkflowBlock<ContextShape> {
     }
 
     const completeEvent = {
-      title: this.title,
-      initialContext: clonedInitialContext,
-      context: currentContext,
+      workflowTitle: this.name,
+      previousContext: currentContext,
+      newContext: currentContext,
       type: WORKFLOW_EVENTS.COMPLETE,
       status: STATUS.COMPLETE,
-      steps: this.#steps(currentContext, results),
+      steps: this.#steps(currentContext, completedSteps),
+      options,
     };
     await this.#dispatchEvents(completeEvent);
     yield completeEvent;
@@ -330,30 +315,30 @@ class WorkflowBlock<ContextShape> {
 }
 
 // Block builders
-function on<ContextShape, ResultShape>(
+function on<ContextShape>(
   event: StepEventTypes,
-  handler: StepEventHandler<ContextShape, ResultShape>
-): StepEventBlock<ContextShape, ResultShape>;
+  handler: EventHandler<ContextShape>
+): StepEventBlock<ContextShape>;
 function on<ContextShape>(
   event: WorkflowEventTypes,
-  handler: WorkflowEventHandler<ContextShape>
+  handler: EventHandler<ContextShape>
 ): WorkflowEventBlock<ContextShape>;
- function on<ContextShape, ResultShape>(
+ function on<ContextShape>(
    event: AllEventTypes,
-   handler: StepEventHandler<ContextShape, ResultShape> | WorkflowEventHandler<ContextShape>
- ): StepEventBlock<ContextShape, ResultShape> | WorkflowEventBlock<ContextShape>{
+   handler: EventHandler<ContextShape>
+ ): StepEventBlock<ContextShape> | WorkflowEventBlock<ContextShape>{
   if (event.startsWith('workflow:')) {
     return {
       type: "workflow",
       eventType: event as WorkflowEventTypes,
-      handler: handler as WorkflowEventHandler<ContextShape>,
+      handler: handler as EventHandler<ContextShape>,
     };
   }
 
   return {
     type: "event",
     eventType: event as StepEventTypes,
-    handler: handler as StepEventHandler<ContextShape, ResultShape>,
+    handler: handler as EventHandler<ContextShape>,
   };
 }
 
@@ -373,30 +358,28 @@ const reduce = <ContextShape, ResultShape>(
 
 function step<ContextShape, ResultShape>(
   title: string,
-  ...args: | [ActionBlock<ContextShape, ResultShape>, ...StepEventBlock<ContextShape, ResultShape>[]]
-        | [ActionBlock<ContextShape, ResultShape>, ReducerBlock<ContextShape, ResultShape>, ...StepEventBlock<ContextShape, ResultShape>[]]
+  ...args: | [ActionBlock<ContextShape, ResultShape>, ...StepEventBlock<ContextShape>[]]
+        | [ActionBlock<ContextShape, ResultShape>, ReducerBlock<ContextShape, ResultShape>, ...StepEventBlock<ContextShape>[]]
 ): StepBlock<ContextShape, ResultShape> {
   const [action, ...rest] = args;
   const hasReducer = rest[0]?.type === "reducer";
   const reducer = hasReducer ? rest[0] as ReducerBlock<ContextShape, ResultShape> : undefined;
-  const events = (hasReducer ? rest.slice(1) : rest) as StepEventBlock<ContextShape, ResultShape>[];
+  const events = (hasReducer ? rest.slice(1) : rest) as StepEventBlock<ContextShape>[];
 
   return new StepBlock(title, action, events, reducer);
 }
 
 const workflow = <ContextShape>(
-  metadata: string | WorkflowMetadata,
+  metadata: WorkflowMetadata | string,
   ...blocks: Array<StepBlock<ContextShape> | WorkflowEventBlock<ContextShape>>
 ): WorkflowBlock<ContextShape> => {
-  // Convert string to WorkflowMetadata if needed
-  const normalizedMetadata = typeof metadata === 'string'
-    ? { title: metadata }
+  const normalizedMetadata = typeof metadata === "string"
+    ? { name: metadata }
     : metadata;
 
-  const { title, description } = normalizedMetadata;
-
-  return new WorkflowBlock(title, blocks, description);
+  const { name, description } = normalizedMetadata;
+  return new WorkflowBlock(name, blocks, description);
 };
 
 export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS };
-export type { Event, WorkflowEvent, StepEvent, WorkflowBlock as Workflow };
+export type { Event, WorkflowBlock as Workflow };
