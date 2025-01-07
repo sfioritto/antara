@@ -1,5 +1,5 @@
 {
-  "name": "antara",
+  "name": "positronic",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
