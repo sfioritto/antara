@@ -1,6 +1,6 @@
 import { Database } from "sqlite3";
 import { SqliteAdapter } from "./sqlite";
-import { workflow, step, action, reduce } from "../dsl";
+import { workflow, step, action, reduce, STATUS } from "../dsl";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { runWorkflow, runWorkflowStepByStep } from "./test-helpers";
@@ -351,5 +351,125 @@ describe("SqliteAdapter", () => {
     expect(JSON.parse(finalStep.new_context)).toEqual({ value: "TEST", count: 1 });
 
 
+  });
+
+  it("should correctly restart workflow with completed steps", async () => {
+    interface MultiStepContext {
+      value: number;
+    }
+
+    const threeStepWorkflow = workflow<MultiStepContext>(
+      "Three Step Workflow",
+      step(
+        "Double",
+        action(async (context) => context.value * 2),
+        reduce((result) => ({ value: result }))
+      ),
+      step(
+        "Add Ten",
+        action(async (context) => context.value + 10),
+        reduce((result) => ({ value: result }))
+      ),
+      step(
+        "Multiply By Three",
+        action(async (context) => context.value * 3),
+        reduce((result) => ({ value: result }))
+      )
+    );
+
+    // First, run the workflow completely
+    const adapter = new SqliteAdapter(db);
+    await runWorkflow(threeStepWorkflow, { value: 2 }, [adapter]);
+
+    // Get the workflow run ID and first two completed steps
+    const initialRun = await new Promise<any>((resolve, reject) => {
+      db.get(
+        "SELECT * FROM workflow_runs WHERE workflow_name = ?",
+        ["Three Step Workflow"],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    const completedSteps = await new Promise<any[]>((resolve, reject) => {
+      db.all(
+        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY id ASC LIMIT 2",
+        [initialRun.id],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+
+    // Now restart the workflow with the first two steps
+    const restartAdapter = new SqliteAdapter(db);
+    const stepIterator = runWorkflowStepByStep(
+      threeStepWorkflow,
+      { value: 2 },
+      [restartAdapter],
+      completedSteps.map(step => ({
+        title: step.title,
+        context: JSON.parse(step.new_context),
+        status: STATUS.COMPLETE,
+      })),
+      { workflowRunId: initialRun.id }
+    );
+
+    // Run first step (should be a restart)
+    await stepIterator.next(); // RESTART event
+
+    // Verify that only two steps exist in database
+    const afterRestartSteps = await new Promise<any[]>((resolve, reject) => {
+      db.all(
+        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY id ASC",
+        [initialRun.id],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+
+    expect(afterRestartSteps).toHaveLength(2);
+    expect(JSON.parse(afterRestartSteps[0].new_context)).toEqual({ value: 4 }); // 2 * 2
+    expect(JSON.parse(afterRestartSteps[1].new_context)).toEqual({ value: 14 }); // 4 + 10
+
+    // Complete the workflow
+    await stepIterator.next(); // Final step
+    await stepIterator.next(); // COMPLETE event
+
+    // Verify final state
+    const finalSteps = await new Promise<any[]>((resolve, reject) => {
+      db.all(
+        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY id ASC",
+        [initialRun.id],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+
+    expect(finalSteps).toHaveLength(3);
+    expect(JSON.parse(finalSteps[0].new_context)).toEqual({ value: 4 }); // 2 * 2
+    expect(JSON.parse(finalSteps[1].new_context)).toEqual({ value: 14 }); // 4 + 10
+    expect(JSON.parse(finalSteps[2].new_context)).toEqual({ value: 42 }); // 14 * 3
+
+    const finalRun = await new Promise<any>((resolve, reject) => {
+      db.get(
+        "SELECT * FROM workflow_runs WHERE id = ?",
+        [initialRun.id],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    expect(finalRun.status).toBe("complete");
+    expect(finalRun.error).toBe(null);
   });
 });

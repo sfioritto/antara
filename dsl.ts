@@ -363,5 +363,5 @@ const workflow = <ContextShape>(
   return new WorkflowBlock(name, blocks, description);
 };
 
-export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS };
-export type { Event, WorkflowBlock as Workflow };
+export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS, STATUS };
+export type { Step, Event, WorkflowBlock as Workflow };

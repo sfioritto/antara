@@ -1,4 +1,4 @@
-import type { Workflow, Event } from "../dsl";
+import type { Workflow, Event, Step } from "../dsl";
 import { WORKFLOW_EVENTS } from "../dsl";
 import type { Adapter } from "./adapter";
 
@@ -37,9 +37,11 @@ export async function finalWorkflowEvent<T>(
 export async function* runWorkflowStepByStep(
   workflow: Workflow<any>,
   initialContext: any,
-  adapters: Adapter[] = []
+  adapters: Adapter[] = [],
+  initialCompletedSteps: Step<any>[] = [],
+  options: { workflowRunId?: number } = {}
 ): AsyncGenerator<Event<any, any>> {
-  for await (const event of workflow.run({ initialContext })) {
+  for await (const event of workflow.run({ initialContext, initialCompletedSteps, options })) {
     await Promise.all(adapters.map((adapter) => adapter.dispatch(event)));
     yield event;
   }

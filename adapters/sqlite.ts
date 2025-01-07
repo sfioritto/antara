@@ -1,8 +1,13 @@
 import { Database } from "sqlite3";
 import { Adapter } from "./adapter";
-import { step, type Event } from "../dsl";
+import { STATUS } from "../dsl";
+import type { Event } from "../dsl";
 
-class SqliteAdapter extends Adapter {
+interface SqliteOptions {
+  workflowRunId?: number;
+}
+
+class SqliteAdapter extends Adapter<SqliteOptions> {
   constructor(
     private db: Database,
     private workflowRunId?: number
@@ -10,8 +15,51 @@ class SqliteAdapter extends Adapter {
     super();
   }
 
-  async restarted(workflow: Event<any, any>) {
-    this.workflowRunId = undefined;
+  async restarted(event: Event<any, SqliteOptions>) {
+    this.workflowRunId = event.options?.workflowRunId;
+    const { steps = [] } = event;
+
+    if (!this.workflowRunId) {
+      await this.started(event);
+    } else {
+      const completedSteps = steps.filter((step) => step.status === STATUS.COMPLETE);
+
+      await Promise.all([
+        // Update workflow run status to running
+        new Promise<void>((resolve, reject) => {
+          this.db.run(
+            `UPDATE workflow_runs SET
+              status = 'running',
+              error = NULL
+            WHERE id = ?`,
+            [this.workflowRunId],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        }),
+
+        // Delete all steps after keeping the first N completed ones
+        new Promise<void>((resolve, reject) => {
+          this.db.run(
+            `DELETE FROM workflow_steps
+             WHERE workflow_run_id = ?
+             AND id NOT IN (
+               SELECT id FROM workflow_steps
+               WHERE workflow_run_id = ?
+               ORDER BY id ASC
+               LIMIT ?
+             )`,
+            [this.workflowRunId, this.workflowRunId, completedSteps.length],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        })
+      ]);
+    }
   }
 
   async started(workflow: Event<any, any>) {
