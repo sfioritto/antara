@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
-
 type JsonPrimitive = string | number | boolean | null;
 type JsonArray = JsonValue[];
 type JsonObject = { [Key in string]?: JsonValue };
@@ -88,7 +86,6 @@ interface Event<ContextShape, Options = any> {
 type EventHandler<ContextShape> = (event: Event<ContextShape>) => void;
 
 interface Step<ContextShape> {
-  id: string
   title: string
   status: StatusOptions
   context: ContextShape
@@ -96,7 +93,6 @@ interface Step<ContextShape> {
 }
 
 class StepBlock<ContextShape, ResultShape = any> {
-  public id = uuidv4();
   public type = 'step';
 
   constructor(
@@ -127,7 +123,6 @@ class StepBlock<ContextShape, ResultShape = any> {
       const result = await this.actionBlock.handler(clonedContext);
       const context = this.reducerBlock?.handler(result, clonedContext) ?? clonedContext;
       const completedStep = {
-        id: this.id,
         title: this.title,
         context,
         status: STATUS.COMPLETE,
@@ -157,7 +152,6 @@ class StepBlock<ContextShape, ResultShape = any> {
         options,
       });
       return {
-        id: this.id,
         title: this.title,
         error: {
           name: error.name,
@@ -202,19 +196,17 @@ class WorkflowBlock<ContextShape> {
     // If a step has an error then all of the steps after it will not create a result
     // But we want to return a result for each step, so we stub one out for each step
     // that comes after the step with an error
-    return this.stepBlocks
-      .map((stepBlock) => {
-        const completedStep = completedSteps.find((result) => result.id === stepBlock.id);
-        if (!completedStep) {
-          return {
-            id: stepBlock.id,
-            title: stepBlock.title,
-            status: 'pending',
-            context: currentContext,
-          };
-        }
-        return completedStep;
-      });
+    return this.stepBlocks.map((stepBlock, index) => {
+      const completedStep = completedSteps[index];
+      if (!completedStep) {
+        return {
+          title: stepBlock.title,
+          status: STATUS.PENDING,
+          context: currentContext,
+        };
+      }
+      return completedStep;
+    });
   }
 
   async #dispatchEvents(event: Event<ContextShape>) {

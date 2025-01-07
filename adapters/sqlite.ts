@@ -10,6 +10,10 @@ class SqliteAdapter extends Adapter {
     super();
   }
 
+  async restarted(workflow: Event<any, any>) {
+    this.workflowRunId = undefined;
+  }
+
   async started(workflow: Event<any, any>) {
     const createWorkflowRun = new Promise<number>((resolve, reject) => {
       const { workflowName, previousContext, status, error } = workflow;
