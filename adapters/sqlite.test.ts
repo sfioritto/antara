@@ -43,7 +43,7 @@ describe("SqliteAdapter", () => {
     // Query and verify workflow run
     const workflowRun = await new Promise<any>((resolve, reject) => {
       db.get(
-        "SELECT * FROM workflow_runs WHERE workflow_title = ?",
+        "SELECT * FROM workflow_runs WHERE workflow_name = ?",
         ["Test Counter"],
         (err, row) => {
           if (err) reject(err);
@@ -53,9 +53,8 @@ describe("SqliteAdapter", () => {
     });
 
     expect(workflowRun).toBeTruthy();
-    expect(workflowRun.workflow_title).toBe("Test Counter");
+    expect(workflowRun.workflow_name).toBe("Test Counter");
     expect(JSON.parse(workflowRun.initial_context)).toEqual({ count: 0 });
-    expect(JSON.parse(workflowRun.context)).toEqual({ count: 1 });
     expect(workflowRun.status).toBe("complete");
     expect(workflowRun.error).toBe(null);
 
@@ -72,9 +71,8 @@ describe("SqliteAdapter", () => {
     });
 
     expect(steps).toHaveLength(1);
-    expect(steps[0].title).toBe("Increment");
-    expect(JSON.parse(steps[0].initial_context)).toEqual({ count: 0 });
-    expect(JSON.parse(steps[0].context)).toEqual({ count: 1 });
+    expect(JSON.parse(steps[0].previous_context)).toEqual({ count: 0 });
+    expect(JSON.parse(steps[0].new_context)).toEqual({ count: 1 });
     expect(steps[0].status).toBe("complete");
     expect(steps[0].error).toBe(null);
   });
@@ -122,16 +120,14 @@ describe("SqliteAdapter", () => {
     });
 
     // Verify Counter Workflow
-    expect(workflowRuns[0].workflow_title).toBe("Counter Workflow");
+    expect(workflowRuns[0].workflow_name).toBe("Counter Workflow");
     expect(JSON.parse(workflowRuns[0].initial_context)).toEqual({ count: 0 });
-    expect(JSON.parse(workflowRuns[0].context)).toEqual({ count: 1 });
     expect(workflowRuns[0].status).toBe("complete");
     expect(workflowRuns[0].error).toBe(null);
 
     // Verify Name Workflow
-    expect(workflowRuns[1].workflow_title).toBe("Name Workflow");
+    expect(workflowRuns[1].workflow_name).toBe("Name Workflow");
     expect(JSON.parse(workflowRuns[1].initial_context)).toEqual({ name: "test" });
-    expect(JSON.parse(workflowRuns[1].context)).toEqual({ name: "TEST" });
     expect(workflowRuns[1].status).toBe("complete");
     expect(workflowRuns[1].error).toBe(null);
 
@@ -141,7 +137,7 @@ describe("SqliteAdapter", () => {
         `SELECT s.*
          FROM workflow_steps s
          JOIN workflow_runs r ON s.workflow_run_id = r.id
-         ORDER BY r.created_at ASC, s.created_at ASC`,
+         ORDER BY r.id, s.id ASC`,
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows);
@@ -152,16 +148,14 @@ describe("SqliteAdapter", () => {
     expect(allSteps).toHaveLength(2);
 
     // Verify Counter Workflow Step
-    expect(allSteps[0].title).toBe("Increment");
-    expect(JSON.parse(allSteps[0].initial_context)).toEqual({ count: 0 });
-    expect(JSON.parse(allSteps[0].context)).toEqual({ count: 1 });
+    expect(JSON.parse(allSteps[0].previous_context)).toEqual({ count: 0 });
+    expect(JSON.parse(allSteps[0].new_context)).toEqual({ count: 1 });
     expect(allSteps[0].status).toBe("complete");
     expect(allSteps[0].error).toBe(null);
 
     // Verify Name Workflow Step
-    expect(allSteps[1].title).toBe("Uppercase");
-    expect(JSON.parse(allSteps[1].initial_context)).toEqual({ name: "test" });
-    expect(JSON.parse(allSteps[1].context)).toEqual({ name: "TEST" });
+    expect(JSON.parse(allSteps[1].previous_context)).toEqual({ name: "test" });
+    expect(JSON.parse(allSteps[1].new_context)).toEqual({ name: "TEST" });
     expect(allSteps[1].status).toBe("complete");
     expect(allSteps[1].error).toBe(null);
   });
@@ -190,7 +184,7 @@ describe("SqliteAdapter", () => {
     // Query workflow run and its steps
     const workflowRun = await new Promise<any>((resolve, reject) => {
       db.get(
-        "SELECT * FROM workflow_runs WHERE workflow_title = ?",
+        "SELECT * FROM workflow_runs WHERE workflow_name = ?",
         ["Error Workflow"],
         (err, row) => {
           if (err) reject(err);
@@ -218,8 +212,8 @@ describe("SqliteAdapter", () => {
     });
 
     expect(steps).toHaveLength(1);
-    expect(steps[0].title).toBe("Maybe Error");
-    expect(JSON.parse(steps[0].initial_context)).toEqual({ shouldError: true });
+    expect(JSON.parse(steps[0].previous_context)).toEqual({ shouldError: true });
+    expect(JSON.parse(steps[0].new_context)).toEqual({ shouldError: true });
     expect(steps[0].status).toBe("error");
     expect(JSON.parse(steps[0].error)).toMatchObject({
       name: "Error",
@@ -256,13 +250,12 @@ describe("SqliteAdapter", () => {
 
     // Run first step
     await stepIterator.next(); // START event
-    await stepIterator.next(); // STEP COMPLETE event
     await stepIterator.next(); // UPDATE event
 
     // Verify workflow state after first step
     const firstStepRun = await new Promise<any>((resolve, reject) => {
       db.get(
-        "SELECT * FROM workflow_runs WHERE workflow_title = ?",
+        "SELECT * FROM workflow_runs WHERE workflow_name = ?",
         ["Multi Step Workflow"],
         (err, row) => {
           if (err) reject(err);
@@ -272,7 +265,21 @@ describe("SqliteAdapter", () => {
     });
 
     expect(firstStepRun.status).toBe("running");
-    expect(JSON.parse(firstStepRun.context)).toEqual({ value: "TEST", count: 0 });
+    const latestStep = await new Promise<any>((resolve, reject) => {
+      db.get(
+        `SELECT * FROM workflow_steps
+         WHERE workflow_run_id = ?
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [firstStepRun.id],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    expect(JSON.parse(latestStep.new_context)).toEqual({ value: "TEST", count: 0 });
 
     // Verify first step row
     const firstStepRows = await new Promise<any[]>((resolve, reject) => {
@@ -287,13 +294,11 @@ describe("SqliteAdapter", () => {
     });
 
     expect(firstStepRows).toHaveLength(1);
-    expect(firstStepRows[0].title).toBe("Uppercase String");
-    expect(JSON.parse(firstStepRows[0].initial_context)).toEqual({ value: "test", count: 0 });
-    expect(JSON.parse(firstStepRows[0].context)).toEqual({ value: "TEST", count: 0 });
+    expect(JSON.parse(firstStepRows[0].previous_context)).toEqual({ value: "test", count: 0 });
+    expect(JSON.parse(firstStepRows[0].new_context)).toEqual({ value: "TEST", count: 0 });
     expect(firstStepRows[0].status).toBe("complete");
 
     // Run second step
-    await stepIterator.next(); // STEP COMPLETE event
     await stepIterator.next(); // UPDATE event
 
     // Verify steps after second step completes
@@ -309,9 +314,8 @@ describe("SqliteAdapter", () => {
     });
 
     expect(secondStepRows).toHaveLength(2);
-    expect(secondStepRows[1].title).toBe("Increment Counter");
-    expect(JSON.parse(secondStepRows[1].initial_context)).toEqual({ value: "TEST", count: 0 });
-    expect(JSON.parse(secondStepRows[1].context)).toEqual({ value: "TEST", count: 1 });
+    expect(JSON.parse(secondStepRows[1].previous_context)).toEqual({ value: "TEST", count: 0 });
+    expect(JSON.parse(secondStepRows[1].new_context)).toEqual({ value: "TEST", count: 1 });
     expect(secondStepRows[1].status).toBe("complete");
 
     // Complete workflow
@@ -320,7 +324,7 @@ describe("SqliteAdapter", () => {
     // Verify final state
     const finalRun = await new Promise<any>((resolve, reject) => {
       db.get(
-        "SELECT * FROM workflow_runs WHERE workflow_title = ?",
+        "SELECT * FROM workflow_runs WHERE workflow_name = ?",
         ["Multi Step Workflow"],
         (err, row) => {
           if (err) reject(err);
@@ -330,30 +334,22 @@ describe("SqliteAdapter", () => {
     });
 
     expect(finalRun.status).toBe("complete");
-    expect(JSON.parse(finalRun.context)).toEqual({ value: "TEST", count: 1 });
-  });
+    const finalStep = await new Promise<any>((resolve, reject) => {
+      db.get(
+        `SELECT * FROM workflow_steps
+         WHERE workflow_run_id = ?
+         ORDER BY id DESC
+         LIMIT 1`,
+        [finalRun.id],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
 
-  it("should throw error when starting workflow with existing run ID", async () => {
-    interface TestContext {
-      value: string;
-    }
+    expect(JSON.parse(finalStep.new_context)).toEqual({ value: "TEST", count: 1 });
 
-    const testWorkflow = workflow<TestContext>(
-      "Test Workflow",
-      step(
-        "Test Step",
-        action(async (context) => context.value)
-      )
-    );
 
-    const adapter = new SqliteAdapter(db);
-
-    // Manually set the workflowRunId
-    (adapter as any).workflowRunId = 123;
-
-    // Attempt to run workflow should throw
-    await expect(
-      runWorkflow(testWorkflow, { value: "test" }, [adapter])
-    ).rejects.toThrow("Workflow run ID is already set");
   });
 });

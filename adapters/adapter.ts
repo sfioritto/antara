@@ -6,8 +6,6 @@ export abstract class Adapter {
   async updated?(event: Event<any>): Promise<void>;
   async completed?(event: Event<any>): Promise<void>;
   async error?(event: Event<any>): Promise<void>;
-  async stepComplete?(event: Event<any>): Promise<void>;
-  async stepError?(event: Event<any>): Promise<void>;
 
   async dispatch(event: Event<any>) {
     if (event.type === WORKFLOW_EVENTS.START && this.started) {
@@ -18,10 +16,6 @@ export abstract class Adapter {
       await this.completed(event);
     } else if (event.type === WORKFLOW_EVENTS.ERROR && this.error) {
       await this.error(event);
-    } else if (event.type === STEP_EVENTS.COMPLETE && this.stepComplete) {
-      await this.stepComplete(event);
-    } else if (event.type === STEP_EVENTS.ERROR && this.stepError) {
-      await this.stepError(event);
     }
   }
 }

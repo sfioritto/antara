@@ -184,13 +184,11 @@ describe('step level event listeners', () => {
       step: 'double',
       type: 'step:complete',
       context: { value: 2 },
-      result: 2
     });
     expect(stepEvents[1]).toEqual({
       step: 'add-one',
       type: 'step:complete',
       context: { value: 3 },
-      result: 3
     });
   });
 });

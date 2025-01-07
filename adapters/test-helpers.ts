@@ -8,7 +8,7 @@ export async function runWorkflow(
   adapters: Adapter[] = []
 ) {
   const events = [];
-  for await (const event of workflow.run(initialContext)) {
+  for await (const event of workflow.run({ initialContext })) {
     events.push(event);
     await Promise.all(adapters.map((adapter) => adapter.dispatch(event)));
   }
@@ -39,7 +39,7 @@ export async function* runWorkflowStepByStep(
   initialContext: any,
   adapters: Adapter[] = []
 ): AsyncGenerator<Event<any, any>> {
-  for await (const event of workflow.run(initialContext)) {
+  for await (const event of workflow.run({ initialContext })) {
     await Promise.all(adapters.map((adapter) => adapter.dispatch(event)));
     yield event;
   }

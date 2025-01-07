@@ -220,10 +220,7 @@ class WorkflowBlock<ContextShape> {
   async #dispatchEvents(event: Event<ContextShape>) {
     for (const eventBlock of this.eventBlocks) {
       if (eventBlock.eventType === event.type) {
-        await eventBlock.handler(structuredClone({
-          ...event,
-          workflowName: this.name,
-        }));
+        await eventBlock.handler(structuredClone(event));
       }
     }
   }
@@ -240,6 +237,7 @@ class WorkflowBlock<ContextShape> {
     } = structuredClone(args);
 
     const startEvent = {
+      workflowName: this.name,
       previousContext: initialContext,
       newContext: initialContext,
       type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
@@ -264,6 +262,7 @@ class WorkflowBlock<ContextShape> {
       if (error) {
         console.error(error.message);
         const errorEvent = {
+          workflowName: this.name,
           previousContext: currentContext,
           newContext: nextContext,
           status: STATUS.ERROR,
@@ -277,6 +276,7 @@ class WorkflowBlock<ContextShape> {
         return;
       } else {
         const updateEvent = {
+          workflowName: this.name,
           previousContext: currentContext,
           newContext: nextContext,
           status: STATUS.RUNNING,
@@ -291,6 +291,7 @@ class WorkflowBlock<ContextShape> {
     }
 
     const completeEvent = {
+      workflowName: this.name,
       previousContext: currentContext,
       newContext: currentContext,
       type: WORKFLOW_EVENTS.COMPLETE,
