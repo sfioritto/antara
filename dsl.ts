@@ -364,4 +364,27 @@ const workflow = <ContextShape>(
 };
 
 export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS, STATUS };
-export type { Step, Event, WorkflowBlock as Workflow };
+export type {
+  JsonValue,
+  JsonObject,
+  JsonArray,
+  JsonPrimitive,
+  Context,
+  Action,
+  Reducer,
+  ActionBlock,
+  ReducerBlock,
+  StepEventBlock,
+  WorkflowEventBlock,
+  WorkflowMetadata,
+  StepEventTypes,
+  WorkflowEventTypes,
+  StatusOptions,
+  AllEventTypes,
+  EventHandler,
+  SerializedError,
+  Step,
+  Event,
+  StepBlock,
+  WorkflowBlock,
+};

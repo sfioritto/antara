@@ -1,9 +1,9 @@
-import type { Workflow, Event, Step } from "../dsl";
+import type { WorkflowBlock, Event, Step } from "../dsl";
 import { WORKFLOW_EVENTS } from "../dsl";
 import type { Adapter } from "./adapter";
 
 export async function runWorkflow(
-  workflow: Workflow<any>,
+  workflow: WorkflowBlock<any>,
   initialContext: any,
   adapters: Adapter[] = []
 ) {
@@ -35,7 +35,7 @@ export async function finalWorkflowEvent<T>(
 }
 
 export async function* runWorkflowStepByStep(
-  workflow: Workflow<any>,
+  workflow: WorkflowBlock<any>,
   initialContext: any,
   adapters: Adapter[] = [],
   initialCompletedSteps: Step<any>[] = [],
