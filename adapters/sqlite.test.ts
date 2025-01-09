@@ -1,4 +1,4 @@
-import { Database } from "sqlite3";
+import Database, { Database as DatabaseType } from "better-sqlite3";
 import { SQLiteAdapter } from "./sqlite";
 import { workflow, step, action, reduce, STATUS } from "../dsl";
 import { readFileSync } from "fs";
@@ -6,21 +6,19 @@ import { join } from "path";
 import { runWorkflow, runWorkflowStepByStep } from "./test-helpers";
 
 describe("SQLiteAdapter", () => {
-  let db: Database;
+  let db: DatabaseType;
 
-  beforeEach((done) => {
+  beforeEach(() => {
     // Use in-memory SQLite database for testing
-    db = new Database(":memory:", (err) => {
-      if (err) throw err;
+    db = new Database(":memory:");
 
-      // Read and execute init.sql file
-      const initSql = readFileSync(join(__dirname, "../init.sql"), "utf8");
-      db.exec(initSql, done);
-    });
+    // Read and execute init.sql file
+    const initSql = readFileSync(join(__dirname, "../init.sql"), "utf8");
+    db.exec(initSql);
   });
 
-  afterEach((done) => {
-    db.close(done);
+  afterEach(() => {
+    db.close();
   });
 
   it("should track workflow execution in database", async () => {
@@ -41,16 +39,9 @@ describe("SQLiteAdapter", () => {
     await runWorkflow(testWorkflow, { count: 0 }, [new SQLiteAdapter(db)]);
 
     // Query and verify workflow run
-    const workflowRun = await new Promise<any>((resolve, reject) => {
-      db.get(
-        "SELECT * FROM workflow_runs WHERE workflow_name = ?",
-        ["Test Counter"],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+    const workflowRun = db.prepare(
+      "SELECT * FROM workflow_runs WHERE workflow_name = ?"
+    ).get("Test Counter") as any;
 
     expect(workflowRun).toBeTruthy();
     expect(workflowRun.workflow_name).toBe("Test Counter");
@@ -58,17 +49,10 @@ describe("SQLiteAdapter", () => {
     expect(workflowRun.status).toBe("complete");
     expect(workflowRun.error).toBe(null);
 
-    // Add verification of workflow steps
-    const steps = await new Promise<any[]>((resolve, reject) => {
-      db.all(
-        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY created_at ASC",
-        [workflowRun.id],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    // Query workflow steps
+    const steps = db.prepare(
+      "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY created_at ASC"
+    ).all(workflowRun.id) as any[];
 
     expect(steps).toHaveLength(1);
     expect(JSON.parse(steps[0].previous_context)).toEqual({ count: 0 });
@@ -109,15 +93,9 @@ describe("SQLiteAdapter", () => {
     await runWorkflow(nameWorkflow, { name: "test" }, [new SQLiteAdapter(db)]);
 
     // Query and verify workflow runs
-    const workflowRuns = await new Promise<any[]>((resolve, reject) => {
-      db.all(
-        "SELECT * FROM workflow_runs ORDER BY created_at ASC",
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const workflowRuns = db.prepare(
+      "SELECT * FROM workflow_runs ORDER BY created_at ASC"
+    ).all() as any[];
 
     // Verify Counter Workflow
     expect(workflowRuns[0].workflow_name).toBe("Counter Workflow");
@@ -131,19 +109,13 @@ describe("SQLiteAdapter", () => {
     expect(workflowRuns[1].status).toBe("complete");
     expect(workflowRuns[1].error).toBe(null);
 
-    // Add verification of workflow steps for both workflows
-    const allSteps = await new Promise<any[]>((resolve, reject) => {
-      db.all(
-        `SELECT s.*
-         FROM workflow_steps s
-         JOIN workflow_runs r ON s.workflow_run_id = r.id
-         ORDER BY r.id, s.id ASC`,
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    // Query workflow steps for both workflows
+    const allSteps = db.prepare(`
+      SELECT s.*
+      FROM workflow_steps s
+      JOIN workflow_runs r ON s.workflow_run_id = r.id
+      ORDER BY r.id, s.id ASC
+    `).all() as any[];
 
     expect(allSteps).toHaveLength(2);
 
@@ -182,16 +154,9 @@ describe("SQLiteAdapter", () => {
     await runWorkflow(errorWorkflow, { shouldError: true }, [new SQLiteAdapter(db)]);
 
     // Query workflow run and its steps
-    const workflowRun = await new Promise<any>((resolve, reject) => {
-      db.get(
-        "SELECT * FROM workflow_runs WHERE workflow_name = ?",
-        ["Error Workflow"],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+    const workflowRun = db.prepare(
+      "SELECT * FROM workflow_runs WHERE workflow_name = ?"
+    ).get("Error Workflow") as any;
 
     // Add assertions for workflow run
     expect(workflowRun.status).toBe("error");
@@ -200,16 +165,9 @@ describe("SQLiteAdapter", () => {
       message: "Test error"
     });
 
-    const steps = await new Promise<any[]>((resolve, reject) => {
-      db.all(
-        "SELECT * FROM workflow_steps WHERE workflow_run_id = ?",
-        [workflowRun.id],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const steps = db.prepare(
+      "SELECT * FROM workflow_steps WHERE workflow_run_id = ?"
+    ).all(workflowRun.id) as any[];
 
     expect(steps).toHaveLength(1);
     expect(JSON.parse(steps[0].previous_context)).toEqual({ shouldError: true });
@@ -253,45 +211,25 @@ describe("SQLiteAdapter", () => {
     await stepIterator.next(); // UPDATE event
 
     // Verify workflow state after first step
-    const firstStepRun = await new Promise<any>((resolve, reject) => {
-      db.get(
-        "SELECT * FROM workflow_runs WHERE workflow_name = ?",
-        ["Multi Step Workflow"],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+    const firstStepRun = db.prepare(
+      "SELECT * FROM workflow_runs WHERE workflow_name = ?"
+    ).get("Multi Step Workflow") as any;
 
     expect(firstStepRun.status).toBe("running");
-    const latestStep = await new Promise<any>((resolve, reject) => {
-      db.get(
-        `SELECT * FROM workflow_steps
-         WHERE workflow_run_id = ?
-         ORDER BY created_at DESC
-         LIMIT 1`,
-        [firstStepRun.id],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+
+    const latestStep = db.prepare(`
+      SELECT * FROM workflow_steps
+      WHERE workflow_run_id = ?
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(firstStepRun.id) as any;
 
     expect(JSON.parse(latestStep.new_context)).toEqual({ value: "TEST", count: 0 });
 
     // Verify first step row
-    const firstStepRows = await new Promise<any[]>((resolve, reject) => {
-      db.all(
-        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY created_at ASC",
-        [firstStepRun.id],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const firstStepRows = db.prepare(
+      "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY created_at ASC"
+    ).all(firstStepRun.id) as any[];
 
     expect(firstStepRows).toHaveLength(1);
     expect(JSON.parse(firstStepRows[0].previous_context)).toEqual({ value: "test", count: 0 });
@@ -302,16 +240,9 @@ describe("SQLiteAdapter", () => {
     await stepIterator.next(); // UPDATE event
 
     // Verify steps after second step completes
-    const secondStepRows = await new Promise<any[]>((resolve, reject) => {
-      db.all(
-        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY created_at ASC",
-        [firstStepRun.id],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const secondStepRows = db.prepare(
+      "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY created_at ASC"
+    ).all(firstStepRun.id) as any[];
 
     expect(secondStepRows).toHaveLength(2);
     expect(JSON.parse(secondStepRows[1].previous_context)).toEqual({ value: "TEST", count: 0 });
@@ -322,35 +253,20 @@ describe("SQLiteAdapter", () => {
     await stepIterator.next(); // COMPLETE event
 
     // Verify final state
-    const finalRun = await new Promise<any>((resolve, reject) => {
-      db.get(
-        "SELECT * FROM workflow_runs WHERE workflow_name = ?",
-        ["Multi Step Workflow"],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+    const finalRun = db.prepare(
+      "SELECT * FROM workflow_runs WHERE workflow_name = ?"
+    ).get("Multi Step Workflow") as any;
 
     expect(finalRun.status).toBe("complete");
-    const finalStep = await new Promise<any>((resolve, reject) => {
-      db.get(
-        `SELECT * FROM workflow_steps
-         WHERE workflow_run_id = ?
-         ORDER BY id DESC
-         LIMIT 1`,
-        [finalRun.id],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+
+    const finalStep = db.prepare(`
+      SELECT * FROM workflow_steps
+      WHERE workflow_run_id = ?
+      ORDER BY id DESC
+      LIMIT 1
+    `).get(finalRun.id) as any;
 
     expect(JSON.parse(finalStep.new_context)).toEqual({ value: "TEST", count: 1 });
-
-
   });
 
   it("should correctly restart workflow with completed steps", async () => {
@@ -382,27 +298,13 @@ describe("SQLiteAdapter", () => {
     await runWorkflow(threeStepWorkflow, { value: 2 }, [adapter]);
 
     // Get the workflow run ID and first two completed steps
-    const initialRun = await new Promise<any>((resolve, reject) => {
-      db.get(
-        "SELECT * FROM workflow_runs WHERE workflow_name = ?",
-        ["Three Step Workflow"],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+    const initialRun = db.prepare(
+      "SELECT * FROM workflow_runs WHERE workflow_name = ?"
+    ).get("Three Step Workflow") as any;
 
-    const completedSteps = await new Promise<any[]>((resolve, reject) => {
-      db.all(
-        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY id ASC LIMIT 2",
-        [initialRun.id],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const completedSteps = db.prepare(
+      "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY id ASC LIMIT 2"
+    ).all(initialRun.id) as any[];
 
     // Now restart the workflow with the first two steps
     const restartAdapter = new SQLiteAdapter(db);
@@ -422,16 +324,9 @@ describe("SQLiteAdapter", () => {
     await stepIterator.next(); // RESTART event
 
     // Verify that only two steps exist in database
-    const afterRestartSteps = await new Promise<any[]>((resolve, reject) => {
-      db.all(
-        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY id ASC",
-        [initialRun.id],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const afterRestartSteps = db.prepare(
+      "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY id ASC"
+    ).all(initialRun.id) as any[];
 
     expect(afterRestartSteps).toHaveLength(2);
     expect(JSON.parse(afterRestartSteps[0].new_context)).toEqual({ value: 4 }); // 2 * 2
@@ -442,32 +337,18 @@ describe("SQLiteAdapter", () => {
     await stepIterator.next(); // COMPLETE event
 
     // Verify final state
-    const finalSteps = await new Promise<any[]>((resolve, reject) => {
-      db.all(
-        "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY id ASC",
-        [initialRun.id],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const finalSteps = db.prepare(
+      "SELECT * FROM workflow_steps WHERE workflow_run_id = ? ORDER BY id ASC"
+    ).all(initialRun.id) as any[];
 
     expect(finalSteps).toHaveLength(3);
     expect(JSON.parse(finalSteps[0].new_context)).toEqual({ value: 4 }); // 2 * 2
     expect(JSON.parse(finalSteps[1].new_context)).toEqual({ value: 14 }); // 4 + 10
     expect(JSON.parse(finalSteps[2].new_context)).toEqual({ value: 42 }); // 14 * 3
 
-    const finalRun = await new Promise<any>((resolve, reject) => {
-      db.get(
-        "SELECT * FROM workflow_runs WHERE id = ?",
-        [initialRun.id],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+    const finalRun = db.prepare(
+      "SELECT * FROM workflow_runs WHERE id = ?"
+    ).get(initialRun.id) as any;
 
     expect(finalRun.status).toBe("complete");
     expect(finalRun.error).toBe(null);

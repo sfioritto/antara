@@ -2,7 +2,7 @@
 
 import path from 'path';
 import fs from 'fs';
-import { Database } from 'sqlite3';
+import Database from 'better-sqlite3';
 import { WorkflowBlock } from './dsl';
 import { SQLiteAdapter } from './adapters/sqlite';
 import { WorkflowRunner } from './workflow-runner';
