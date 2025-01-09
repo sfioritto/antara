@@ -1,11 +1,11 @@
 import { Database } from "sqlite3";
-import { SqliteAdapter } from "./sqlite";
+import { SQLiteAdapter } from "./sqlite";
 import { workflow, step, action, reduce, STATUS } from "../dsl";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { runWorkflow, runWorkflowStepByStep } from "./test-helpers";
 
-describe("SqliteAdapter", () => {
+describe("SQLiteAdapter", () => {
   let db: Database;
 
   beforeEach((done) => {
@@ -38,7 +38,7 @@ describe("SqliteAdapter", () => {
     );
 
     // Run workflow
-    await runWorkflow(testWorkflow, { count: 0 }, [new SqliteAdapter(db)]);
+    await runWorkflow(testWorkflow, { count: 0 }, [new SQLiteAdapter(db)]);
 
     // Query and verify workflow run
     const workflowRun = await new Promise<any>((resolve, reject) => {
@@ -105,8 +105,8 @@ describe("SqliteAdapter", () => {
     );
 
     // Run both workflows
-    await runWorkflow(counterWorkflow, { count: 0 }, [new SqliteAdapter(db)]);
-    await runWorkflow(nameWorkflow, { name: "test" }, [new SqliteAdapter(db)]);
+    await runWorkflow(counterWorkflow, { count: 0 }, [new SQLiteAdapter(db)]);
+    await runWorkflow(nameWorkflow, { name: "test" }, [new SQLiteAdapter(db)]);
 
     // Query and verify workflow runs
     const workflowRuns = await new Promise<any[]>((resolve, reject) => {
@@ -179,7 +179,7 @@ describe("SqliteAdapter", () => {
     );
 
     // Run workflow that will error
-    await runWorkflow(errorWorkflow, { shouldError: true }, [new SqliteAdapter(db)]);
+    await runWorkflow(errorWorkflow, { shouldError: true }, [new SQLiteAdapter(db)]);
 
     // Query workflow run and its steps
     const workflowRun = await new Promise<any>((resolve, reject) => {
@@ -241,7 +241,7 @@ describe("SqliteAdapter", () => {
       )
     );
 
-    const adapter = new SqliteAdapter(db);
+    const adapter = new SQLiteAdapter(db);
     const stepIterator = runWorkflowStepByStep(
       multiStepWorkflow,
       { value: "test", count: 0 },
@@ -378,7 +378,7 @@ describe("SqliteAdapter", () => {
     );
 
     // First, run the workflow completely
-    const adapter = new SqliteAdapter(db);
+    const adapter = new SQLiteAdapter(db);
     await runWorkflow(threeStepWorkflow, { value: 2 }, [adapter]);
 
     // Get the workflow run ID and first two completed steps
@@ -405,7 +405,7 @@ describe("SqliteAdapter", () => {
     });
 
     // Now restart the workflow with the first two steps
-    const restartAdapter = new SqliteAdapter(db);
+    const restartAdapter = new SQLiteAdapter(db);
     const stepIterator = runWorkflowStepByStep(
       threeStepWorkflow,
       { value: 2 },

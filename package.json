@@ -1,8 +1,8 @@
 {
   "name": "positronic",
   "type": "module",
-  "main": "dist/dsl.js",
-  "types": "dist/dsl.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "engines": {
     "node": ">=20.0.0"
   },

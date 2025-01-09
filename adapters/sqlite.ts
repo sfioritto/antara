@@ -3,11 +3,11 @@ import { Adapter } from "./adapter";
 import { STATUS } from "../dsl";
 import type { Event } from "../dsl";
 
-interface SqliteOptions {
+interface SQLiteOptions {
   workflowRunId?: number;
 }
 
-class SqliteAdapter extends Adapter<SqliteOptions> {
+class SQLiteAdapter extends Adapter<SQLiteOptions> {
   constructor(
     private db: Database,
     private workflowRunId?: number
@@ -15,7 +15,7 @@ class SqliteAdapter extends Adapter<SqliteOptions> {
     super();
   }
 
-  async restarted(event: Event<any, SqliteOptions>) {
+  async restarted(event: Event<any, SQLiteOptions>) {
     this.workflowRunId = event.options?.workflowRunId;
     const { steps = [] } = event;
 
@@ -218,4 +218,4 @@ class SqliteAdapter extends Adapter<SqliteOptions> {
   }
 }
 
-export { SqliteAdapter };
+export { SQLiteAdapter };
