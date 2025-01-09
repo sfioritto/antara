@@ -57,18 +57,12 @@ async function main() {
   try {
     const { workflowPath, workflowDir, contextFile } = parseArgs();
 
-    const workflowsDirectory = workflowDir
-      ? path.resolve(process.cwd(), workflowDir)
-      : path.resolve(process.cwd(), 'workflows');
-
-    if (!fs.existsSync(workflowsDirectory)) {
-      throw new Error(`Workflows directory not found: ${workflowsDirectory}`);
-    }
-
-    const fullPath = path.resolve(workflowsDirectory, workflowPath);
+    const fullPath = workflowDir
+      ? path.resolve(process.cwd(), workflowDir, workflowPath)
+      : path.resolve(process.cwd(), workflowPath);
 
     if (!fs.existsSync(fullPath)) {
-      throw new Error(`Workflow file not found: ${workflowPath}`);
+      throw new Error(`Workflow file not found: ${fullPath}. CWD: ${process.cwd()}`);
     }
 
     const workflowModule = await import(fullPath);
