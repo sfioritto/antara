@@ -3,11 +3,14 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "positronic": "./dist/cli.js"
+  },
   "engines": {
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --project tsconfig.json && chmod +x dist/cli.js",
     "start": "npm run build && node dist/example.js",
     "test": "jest --silent"
   },
