@@ -2,16 +2,18 @@
 
 import path from 'path';
 import fs from 'fs';
-import Database from 'better-sqlite3';
+import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { SQLiteAdapter } from '../adapters/sqlite';
 import { WorkflowRunner } from '../workflow-runner';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-
+import { STATUS } from '../dsl';
+import type { Step } from '../dsl';
 interface CliOptions {
   workflowDir?: string;
   contextFile?: string;
   verbose?: boolean;
+  restartFrom?: number;
 }
 
 function parseArgs(): CliOptions & { workflowPath: string } {
@@ -32,6 +34,9 @@ function parseArgs(): CliOptions & { workflowPath: string } {
           break;
         case 'verbose':
           options.verbose = true;
+          break;
+        case 'restartFrom':
+          options.restartFrom = parseInt(arg.split('=')[1], 10);
           break;
       }
     } else {
@@ -85,9 +90,37 @@ async function initializeDatabase(dbPath: string) {
   return db;
 }
 
+async function getLastWorkflowRun(db: DatabaseType, workflowName: string) {
+  const lastRun = db.prepare(`
+    SELECT * FROM workflow_runs
+    WHERE workflow_name = ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(workflowName) as any;
+
+  if (!lastRun) {
+    return null;
+  }
+
+  const completedSteps = db.prepare(`
+    SELECT * FROM workflow_steps
+    WHERE workflow_run_id = ?
+    ORDER BY id ASC
+  `).all(lastRun.id) as any[];
+
+  return {
+    runId: lastRun.id,
+    completedSteps: completedSteps.map(step => ({
+      title: step.title,
+      context: JSON.parse(step.new_context),
+      status: STATUS.COMPLETE
+    }))
+  };
+}
+
 async function main() {
   try {
-    const { workflowPath, workflowDir, contextFile, verbose } = parseArgs();
+    const { workflowPath, workflowDir, contextFile, verbose, restartFrom } = parseArgs();
 
     const fullPath = workflowDir
       ? path.resolve(process.cwd(), workflowDir, workflowPath)
@@ -104,15 +137,33 @@ async function main() {
     }
 
     const initialContext = await loadContext(contextFile);
-
     const db = await initializeDatabase('workflows.db');
+
+    let completedSteps: Step<any>[] = [];
+    let workflowRunId: number | undefined;
+
+    if (restartFrom !== undefined) {
+      const lastRun = await getLastWorkflowRun(db, workflow.name);
+      if (!lastRun) {
+        throw new Error(`No previous runs found for workflow: ${workflow.name}`);
+      }
+
+      const stepsToKeep = restartFrom - 1;
+      completedSteps = lastRun.completedSteps.slice(0, stepsToKeep);
+      workflowRunId = lastRun.runId;
+
+      if (completedSteps.length < stepsToKeep) {
+        throw new Error(`Workflow only has ${completedSteps.length} steps, cannot restart from step ${restartFrom}`);
+      }
+    }
+
     const runner = new WorkflowRunner<any>(
-      [new SQLiteAdapter(db)],
+      [new SQLiteAdapter(db, workflowRunId)],
       console,
       { verbose: !!verbose }
     );
 
-    await runner.run(workflow, initialContext);
+    await runner.run(workflow, initialContext, completedSteps, { workflowRunId });
 
   } catch (error) {
     if (error instanceof Error) {
