@@ -5,6 +5,8 @@ import fs from 'fs';
 import Database from 'better-sqlite3';
 import { SQLiteAdapter } from '../adapters/sqlite';
 import { WorkflowRunner } from '../workflow-runner';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
 interface CliOptions {
   workflowDir?: string;
@@ -62,6 +64,27 @@ async function loadTypeScriptWorkflow(filePath: string) {
   }
 }
 
+async function initializeDatabase(dbPath: string) {
+  const db = new Database(dbPath);
+
+  // Check if tables exist
+  const tableExists = db.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type='table' AND name='workflow_runs'
+  `).get();
+
+  if (!tableExists) {
+    // Get the current file's path and construct the path to init.sql
+    const currentFilePath = fileURLToPath(import.meta.url);
+    const currentDir = dirname(currentFilePath);
+    const initSql = fs.readFileSync(path.join(currentDir, '../init.sql'), 'utf8');
+    db.exec(initSql);
+  }
+
+  return db;
+}
+
 async function main() {
   try {
     const { workflowPath, workflowDir, contextFile } = parseArgs();
@@ -82,7 +105,7 @@ async function main() {
 
     const initialContext = await loadContext(contextFile);
 
-    const db = new Database('workflows.db');
+    const db = await initializeDatabase('workflows.db');
     const runner = new WorkflowRunner<any>([
       new SQLiteAdapter(db),
     ]);
