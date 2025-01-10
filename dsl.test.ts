@@ -1,4 +1,4 @@
-import { workflow, on, step, action, reduce } from './dsl';
+import { workflow, on, step, action, reduce, workflowAction } from './dsl';
 import { finalWorkflowEvent } from './adapters/test-helpers';
 import type { Event } from './dsl';
 describe('workflow creation', () => {
@@ -428,6 +428,111 @@ describe('workflow resumption', () => {
       { step: 'add-10', value: 14 },
       { step: 'multiply-3', value: 42 }
     ]);
+  });
+});
+
+describe('nested workflows', () => {
+  it('should execute nested workflows with proper context flow', async () => {
+    interface InnerContext {
+      value: number;
+    }
+
+    interface OuterContext {
+      prefix: string;
+      innerResult?: number;
+    }
+
+    // Create an inner workflow that will be nested
+    const innerWorkflow = workflow<InnerContext>(
+      'Inner Workflow',
+      step(
+        "Double value",
+        action(async (context) => context.value * 2),
+        reduce((newValue) => ({ value: newValue }))
+      )
+    );
+
+    // Create outer workflow that uses the inner workflow
+    const outerWorkflow = workflow<OuterContext>(
+      'Outer Workflow',
+      step(
+        "Set prefix",
+        action(async () => "test-"),
+        reduce((prefix) => ({ prefix }))
+      ),
+      step(
+        "Run inner workflow",
+        workflowAction(innerWorkflow, { value: 5 }),
+        reduce((innerContext, outerContext) => ({
+          ...outerContext,
+          innerResult: innerContext.value
+        }))
+      )
+    );
+
+    const { newContext, status } = await finalWorkflowEvent(
+      outerWorkflow.run({ initialContext: { prefix: "" } })
+    );
+
+    expect(status).toBe('complete');
+    expect(newContext).toEqual({
+      prefix: "test-",
+      innerResult: 10  // 5 * 2 from inner workflow
+    });
+  });
+
+  it('should handle errors in nested workflows', async () => {
+    interface InnerContext {
+      value: number;
+    }
+
+    interface OuterContext {
+      step: string;
+      innerResult?: number;
+    }
+
+    // Create an inner workflow that will throw an error
+    const innerWorkflow = workflow<InnerContext>(
+      'Failing Inner Workflow',
+      step(
+        "Throw error",
+        action(async (): Promise<void> => {
+          throw new Error('Inner workflow error');
+        })
+      )
+    );
+
+    const workflowEvents: string[] = [];
+
+    // Create outer workflow that uses the failing inner workflow
+    const outerWorkflow = workflow<OuterContext>(
+      'Second Outer Workflow',
+      step(
+        "First step",
+        action(async () => "first"),
+        reduce((step) => ({ step }))
+      ),
+      step(
+        "Run inner workflow",
+        workflowAction(innerWorkflow, { value: 5 }),
+        reduce((innerContext, outerContext) => ({
+          ...outerContext,
+          step: "second",
+          innerResult: innerContext.value
+        }))
+      ),
+      on('workflow:error', () => {
+        workflowEvents.push('outer:error');
+      })
+    );
+
+    const { status, error } = await finalWorkflowEvent(
+      outerWorkflow.run({ initialContext: { step: "" } })
+    );
+
+    expect(status).toBe('error');
+    expect(error?.message).toBe('Inner workflow error');
+    expect(workflowEvents).toContain('outer:error');
   });
 });
 

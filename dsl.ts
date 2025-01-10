@@ -357,6 +357,13 @@ function workflowAction<ContextShape, WorkflowContextShape>(
         if (event.type === WORKFLOW_EVENTS.COMPLETE) {
           finalContext = event.newContext;
         }
+        if (event.type === WORKFLOW_EVENTS.ERROR && event.error) {
+          // Reconstruct and rethrow the original error
+          const error = new Error(event.error.message);
+          error.name = event.error.name;
+          error.stack = event.error.stack;
+          throw error;
+        }
       }
 
       if (!finalContext) {
