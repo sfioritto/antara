@@ -1,11 +1,10 @@
-#!/usr/bin/env node
+#!/usr/bin/env node --loader ts-node/esm --experimental-specifier-resolution=node
 
 import path from 'path';
 import fs from 'fs';
 import Database from 'better-sqlite3';
-import { WorkflowBlock } from './dsl';
-import { SQLiteAdapter } from './adapters/sqlite';
-import { WorkflowRunner } from './workflow-runner';
+import { SQLiteAdapter } from '../adapters/sqlite';
+import { WorkflowRunner } from '../workflow-runner';
 
 interface CliOptions {
   workflowDir?: string;
@@ -53,6 +52,16 @@ async function loadContext(contextFile?: string) {
   return JSON.parse(content);
 }
 
+async function loadTypeScriptWorkflow(filePath: string) {
+  try {
+    const importedModule = await import(path.resolve(filePath));
+    return importedModule.default;
+  } catch (error) {
+    console.error('Failed to load TypeScript workflow:', error);
+    throw error;
+  }
+}
+
 async function main() {
   try {
     const { workflowPath, workflowDir, contextFile } = parseArgs();
@@ -65,8 +74,7 @@ async function main() {
       throw new Error(`Workflow file not found: ${fullPath}. CWD: ${process.cwd()}`);
     }
 
-    const workflowModule = await import(fullPath);
-    const workflow = workflowModule.default as WorkflowBlock<any>;
+    const workflow = await loadTypeScriptWorkflow(fullPath);
 
     if (!workflow || workflow.type !== 'workflow') {
       throw new Error(`File ${workflowPath} does not export a workflow as default export`);

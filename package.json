@@ -4,19 +4,20 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "positronic": "./dist/cli.js"
+    "positronic": "./bin/positronic.js"
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "swc . --out-dir dist && chmod +x dist/cli.js && cp -R node_modules dist/",
+    "build": "swc . --out-dir dist && chmod +x dist/bin/positronic.js && cp package.json dist",
     "build:watch": "nodemon --watch './**/*' --watch '*.ts' --ignore 'dist/**/*' --ext ts,js,json --exec 'npm run build'",
     "start": "npm run build && node dist/example.js",
     "test": "jest --silent"
   },
   "dependencies": {
-    "better-sqlite3": "^11.7.2"
+    "better-sqlite3": "^11.7.2",
+    "ts-node": "^10.9.2"
   },
   "devDependencies": {
     "@swc/cli": "^0.6.0",
@@ -33,7 +34,6 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    },
-    "./cli": "./dist/cli.js"
+    }
   }
 }
