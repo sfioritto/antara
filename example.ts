@@ -1,4 +1,4 @@
-import { workflow, step, action, reduce, on } from './dsl.js';
+import { workflow, workflowAction, step, action, reduce, on } from './dsl';
 
 interface ImportPath {
   current_import_path: string;
@@ -65,11 +65,11 @@ const testImprovementWorkflow = workflow<WorkflowState>(
 
   // Step 1: Analyze imports and fix paths
   step("Analyze and fix import paths",
-    action(async (state: WorkflowState) => {
+    action(async (state) => {
       const importPaths = await mockAnthropicClient.analyze(state.originalTest);
       return importPaths;
     }),
-    reduce((importPaths: ImportPaths, state: WorkflowState) => ({
+    reduce((importPaths: ImportPaths, state) => ({
       ...state,
       updatedTest: updateImports(
         state.originalTest,
@@ -102,11 +102,11 @@ const testImprovementWorkflow = workflow<WorkflowState>(
 
   // Step 3: Get improvement suggestions
   step("Generate test improvement suggestions",
-    action(async (state: WorkflowState) => {
+    action(async (state) => {
       const suggestions = await mockAnthropicClient.suggestImprovements(state.updatedTest);
       return suggestions;
     }),
-    reduce((suggestions: string[], state: WorkflowState) => ({
+    reduce((suggestions: string[], state) => ({
       ...state,
       suggestions
     })),
@@ -136,6 +136,35 @@ const initialState: WorkflowState = {
   suggestions: []
 };
 
+const nestedWorkflow = workflow<{ foo?: string; updatedTest?: string }>(
+  "Nested Workflow",
+  step("First Step",
+    action(async () => {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return { foo: 'bar' };
+    }),
+    reduce(({ foo }, context) => ({
+      ...context,
+      foo
+    }))
+  ),
+  step("Second Step",
+    workflowAction(testImprovementWorkflow, initialState),
+    reduce(({ updatedTest }, context) => ({
+      ...context,
+      updatedTest
+    }))
+  ),
+  on('workflow:complete', ({ newContext: finalContext }) => {
+    console.log('Nested workflow completed');
+    console.log('Final context:', finalContext);
+  })
+);
+
 for await (const event of testImprovementWorkflow.run({ initialContext: initialState })) {
+  console.log(event);
+}
+
+for await (const event of nestedWorkflow.run({ initialContext: {} })) {
   console.log(event);
 }

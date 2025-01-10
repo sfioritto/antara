@@ -339,6 +339,35 @@ const reduce = <ContextShape, ResultShape>(
   handler,
 });
 
+function workflowAction<ContextShape, WorkflowContextShape>(
+  workflow: WorkflowBlock<WorkflowContextShape>,
+  initialState: (() => WorkflowContextShape) | WorkflowContextShape
+): ActionBlock<ContextShape, WorkflowContextShape> {
+  return {
+    type: "action",
+    handler: async () => {
+      let finalContext: WorkflowContextShape | undefined;
+      const initialContext = (initialState instanceof Function)
+        ? initialState()
+        : initialState;
+
+      for await (const event of workflow.run({
+        initialContext: initialContext as Context<WorkflowContextShape>
+      })) {
+        if (event.type === WORKFLOW_EVENTS.COMPLETE) {
+          finalContext = event.newContext;
+        }
+      }
+
+      if (!finalContext) {
+        throw new Error("Workflow did not complete successfully");
+      }
+
+      return finalContext;
+    }
+  };
+}
+
 function step<ContextShape, ResultShape>(
   title: string,
   ...args: | [ActionBlock<ContextShape, ResultShape>, ...StepEventBlock<ContextShape>[]]
@@ -364,7 +393,7 @@ const workflow = <ContextShape>(
   return new WorkflowBlock(name, blocks, description);
 };
 
-export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS, STATUS };
+export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS, STATUS, workflowAction };
 export type {
   JsonValue,
   JsonObject,
