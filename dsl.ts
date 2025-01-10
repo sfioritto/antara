@@ -269,6 +269,7 @@ class WorkflowBlock<ContextShape> {
       } else {
         const updateEvent = {
           workflowName: this.name,
+          completedStep,
           previousContext: currentContext,
           newContext: nextContext,
           status: STATUS.RUNNING,
