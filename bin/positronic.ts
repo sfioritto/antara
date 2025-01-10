@@ -11,6 +11,7 @@ import { dirname } from 'path';
 interface CliOptions {
   workflowDir?: string;
   contextFile?: string;
+  verbose?: boolean;
 }
 
 function parseArgs(): CliOptions & { workflowPath: string } {
@@ -21,22 +22,21 @@ function parseArgs(): CliOptions & { workflowPath: string } {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg.startsWith('--')) {
-      const [key, value] = arg.slice(2).split('=');
+      const [key] = arg.slice(2).split('=');
       switch (key) {
         case 'workflow-dir':
-          options.workflowDir = value;
+          options.workflowDir = arg.split('=')[1];
           break;
         case 'context':
-          options.contextFile = value;
+          options.contextFile = arg.split('=')[1];
+          break;
+        case 'verbose':
+          options.verbose = true;
           break;
       }
     } else {
       nonOptionArgs.push(arg);
     }
-  }
-
-  if (nonOptionArgs.length === 0) {
-    throw new Error('Please provide a workflow file path');
   }
 
   return { ...options, workflowPath: nonOptionArgs[0] };
@@ -87,7 +87,7 @@ async function initializeDatabase(dbPath: string) {
 
 async function main() {
   try {
-    const { workflowPath, workflowDir, contextFile } = parseArgs();
+    const { workflowPath, workflowDir, contextFile, verbose } = parseArgs();
 
     const fullPath = workflowDir
       ? path.resolve(process.cwd(), workflowDir, workflowPath)
@@ -106,9 +106,11 @@ async function main() {
     const initialContext = await loadContext(contextFile);
 
     const db = await initializeDatabase('workflows.db');
-    const runner = new WorkflowRunner<any>([
-      new SQLiteAdapter(db),
-    ]);
+    const runner = new WorkflowRunner<any>(
+      [new SQLiteAdapter(db)],
+      console,
+      { verbose: !!verbose }
+    );
 
     await runner.run(workflow, initialContext);
 
