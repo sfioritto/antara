@@ -325,13 +325,6 @@ function on<ContextShape>(
   };
 }
 
-const action = <ContextShape, ResultShape>(
-  handler: Action<ContextShape, ResultShape>
-): ActionBlock<ContextShape, ResultShape> => ({
-  type: "action",
-  handler,
-});
-
 const reduce = <ContextShape, ResultShape>(
   handler: Reducer<ContextShape, ResultShape>
 ): ReducerBlock<ContextShape, ResultShape> => ({
@@ -339,39 +332,55 @@ const reduce = <ContextShape, ResultShape>(
   handler,
 });
 
-function workflowAction<ContextShape, WorkflowContextShape>(
+function action<ContextShape, ResultShape>(
+  handler: Action<ContextShape, ResultShape>
+): ActionBlock<ContextShape, ResultShape>;
+function action<ContextShape, WorkflowContextShape>(
   workflow: WorkflowBlock<WorkflowContextShape>,
   initialState: (() => WorkflowContextShape) | WorkflowContextShape
-): ActionBlock<ContextShape, WorkflowContextShape> {
+): ActionBlock<ContextShape, WorkflowContextShape>;
+function action<ContextShape, ResultShape>(
+  handlerOrWorkflow: Action<ContextShape, ResultShape> | WorkflowBlock<ResultShape>,
+  initialState?: (() => ResultShape) | ResultShape
+): ActionBlock<ContextShape, ResultShape> {
+  if (handlerOrWorkflow instanceof WorkflowBlock) {
+    if (!initialState) {
+      throw new Error("initialState is required when using a workflow as an action");
+    }
+    return {
+      type: "action",
+      handler: async () => {
+        let finalContext: ResultShape | undefined;
+        const initialContext = (initialState instanceof Function)
+          ? initialState()
+          : initialState;
+
+        for await (const event of handlerOrWorkflow.run({
+          initialContext: initialContext as Context<ResultShape>
+        })) {
+          if (event.type === WORKFLOW_EVENTS.COMPLETE) {
+            finalContext = event.newContext;
+          }
+          if (event.type === WORKFLOW_EVENTS.ERROR && event.error) {
+            const error = new Error(event.error.message);
+            error.name = event.error.name;
+            error.stack = event.error.stack;
+            throw error;
+          }
+        }
+
+        if (!finalContext) {
+          throw new Error("Workflow did not complete successfully");
+        }
+
+        return finalContext;
+      }
+    };
+  }
+
   return {
     type: "action",
-    handler: async () => {
-      let finalContext: WorkflowContextShape | undefined;
-      const initialContext = (initialState instanceof Function)
-        ? initialState()
-        : initialState;
-
-      for await (const event of workflow.run({
-        initialContext: initialContext as Context<WorkflowContextShape>
-      })) {
-        if (event.type === WORKFLOW_EVENTS.COMPLETE) {
-          finalContext = event.newContext;
-        }
-        if (event.type === WORKFLOW_EVENTS.ERROR && event.error) {
-          // Reconstruct and rethrow the original error
-          const error = new Error(event.error.message);
-          error.name = event.error.name;
-          error.stack = event.error.stack;
-          throw error;
-        }
-      }
-
-      if (!finalContext) {
-        throw new Error("Workflow did not complete successfully");
-      }
-
-      return finalContext;
-    }
+    handler: handlerOrWorkflow,
   };
 }
 
@@ -400,7 +409,7 @@ const workflow = <ContextShape>(
   return new WorkflowBlock(name, blocks, description);
 };
 
-export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS, STATUS, workflowAction };
+export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS, STATUS };
 export type {
   JsonValue,
   JsonObject,

@@ -1,4 +1,4 @@
-import { workflow, workflowAction, step, action, reduce, on } from './dsl';
+import { workflow, step, action, reduce, on } from './dsl';
 
 interface ImportPath {
   current_import_path: string;
@@ -149,7 +149,7 @@ const nestedWorkflow = workflow<{ foo?: string; updatedTest?: string }>(
     }))
   ),
   step("Second Step",
-    workflowAction(testImprovementWorkflow, initialState),
+    action(testImprovementWorkflow, initialState),
     reduce(({ updatedTest }, context) => ({
       ...context,
       updatedTest

@@ -1,4 +1,4 @@
-import { workflow, on, step, action, reduce, workflowAction } from './dsl';
+import { workflow, on, step, action, reduce } from './dsl';
 import { finalWorkflowEvent } from './adapters/test-helpers';
 import type { Event } from './dsl';
 describe('workflow creation', () => {
@@ -462,7 +462,7 @@ describe('nested workflows', () => {
       ),
       step(
         "Run inner workflow",
-        workflowAction(innerWorkflow, { value: 5 }),
+        action(innerWorkflow, { value: 5 }),
         reduce((innerContext, outerContext) => ({
           ...outerContext,
           innerResult: innerContext.value
@@ -514,7 +514,7 @@ describe('nested workflows', () => {
       ),
       step(
         "Run inner workflow",
-        workflowAction(innerWorkflow, { value: 5 }),
+        action(innerWorkflow, { value: 5 }),
         reduce((innerContext, outerContext) => ({
           ...outerContext,
           step: "second",
