@@ -1,4 +1,4 @@
-import { workflow, step, action, reduce, on } from './dsl';
+import { workflow, step, action, reduce, on, prompt } from './dsl';
 
 interface ImportPath {
   current_import_path: string;
@@ -16,6 +16,16 @@ interface WorkflowState {
   forgePath: string;
   updatedTest: string;
   suggestions: string[];
+}
+
+interface CodeAnalysisResult {
+  complexity: number;
+  suggestions: string[];
+}
+
+interface CodeAnalysisState {
+  code: string;
+  analysis?: CodeAnalysisResult;
 }
 
 const mockAnthropicClient = {
@@ -166,5 +176,49 @@ for await (const event of testImprovementWorkflow.run({ initialContext: initialS
 }
 
 for await (const event of nestedWorkflow.run({ initialContext: {} })) {
+  console.log(event);
+}
+
+const codeAnalysisWorkflow = workflow<CodeAnalysisState>(
+  "Code Analysis",
+  step("Analyze Code Complexity",
+    prompt(
+      {
+        responseModel: {
+          complexity: 0,
+          suggestions: [] as string[]
+        } as CodeAnalysisResult,
+        template: (props: { code: string }) => `
+          Analyze this code and return:
+          1. A complexity score (1-10)
+          2. A list of improvement suggestions
+
+          Code to analyze:
+          ${props.code}
+        `
+      },
+      (context) => ({ code: context.code }),
+      { temperature: 0.3 }
+    ),
+    reduce((result: CodeAnalysisResult, state) => ({
+      ...state,
+      analysis: result
+    })),
+    on('step:complete', ({ newContext }) => {
+      console.log('Analysis complete:', newContext.analysis);
+    })
+  )
+);
+
+const codeToAnalyze = `
+function fibonacci(n) {
+  if (n <= 1) return n;
+  return fibonacci(n - 1) + fibonacci(n - 2);
+}
+`;
+
+for await (const event of codeAnalysisWorkflow.run({
+  initialContext: { code: codeToAnalyze }
+})) {
   console.log(event);
 }

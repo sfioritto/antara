@@ -384,6 +384,56 @@ function action<ContextShape, ResultShape>(
   };
 }
 
+interface PromptConfig {
+  model?: 'gpt-4' | 'claude-3' | 'gemini' | string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+const getProjectConfig = () => ({
+  model: 'gpt-4',
+  temperature: 0.5,
+  maxTokens: 1000,
+});
+
+const executePrompt = async (...args: any[]) => {
+  return 'result';
+}
+
+export function prompt<ContextShape, TemplateProps, ResultShape>(
+  message: {
+    responseModel: ResultShape,
+    template: (props: TemplateProps) => string,
+  },
+  props?: (context: ContextShape) => (Promise<TemplateProps> | TemplateProps) | TemplateProps,
+  options?: Partial<PromptConfig>
+): ActionBlock<ContextShape, ResultShape> {
+  return {
+    type: "action",
+    handler: async (context: ContextShape) => {
+      const { responseModel, template } = message;
+      // Merge project config with provided options
+      const config = {
+        ...getProjectConfig(), // TODO: implement this
+        ...options
+      };
+
+      // Generate or use provided template data
+      const templateProps = typeof props === 'function'
+        ? await props(context)
+        : props ?? {} as TemplateProps;
+
+      // Generate prompt string using the template function
+      const promptString = template(templateProps);
+
+      // Execute the prompt with the AI service
+      const result = await executePrompt(promptString, config, responseModel);
+
+      return result as ResultShape;
+    }
+  };
+}
+
 function step<ContextShape, ResultShape>(
   title: string,
   ...args: | [ActionBlock<ContextShape, ResultShape>, ...StepEventBlock<ContextShape>[]]
