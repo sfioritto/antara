@@ -1,4 +1,5 @@
 import { workflow, step, action, reduce, on, prompt } from './dsl';
+import { z } from 'zod';
 
 interface ImportPath {
   current_import_path: string;
@@ -171,44 +172,40 @@ const nestedWorkflow = workflow<{ foo?: string; updatedTest?: string }>(
   })
 );
 
-for await (const event of testImprovementWorkflow.run({ initialContext: initialState })) {
-  console.log(event);
-}
+const template = ({ code }: CodeAnalysisState) => `
+  Analyze this code and return:
+  1. A complexity score (1-10)
+  2. A list of improvement suggestions
 
-for await (const event of nestedWorkflow.run({ initialContext: {} })) {
-  console.log(event);
-}
+  Code to analyze:
+  ${code}
+`;
 
 const codeAnalysisWorkflow = workflow<CodeAnalysisState>(
   "Code Analysis",
   step("Analyze Code Complexity",
-    prompt(
-      {
-        responseModel: {
-          complexity: 0,
-          suggestions: [] as string[]
-        } as CodeAnalysisResult,
-        template: (props: { code: string }) => `
-          Analyze this code and return:
-          1. A complexity score (1-10)
-          2. A list of improvement suggestions
-
-          Code to analyze:
-          ${props.code}
-        `
-      },
-      (context) => ({ code: context.code }),
-      { temperature: 0.3 }
-    ),
-    reduce((result: CodeAnalysisResult, state) => ({
-      ...state,
-      analysis: result
-    })),
+    prompt(template, {
+      schema: z.object({
+        complexity: z.number(),
+        suggestions: z.array(z.string())
+      }),
+      name: "CodeAnalysis"
+    }, {
+      temperature: 0.3
+    }),
     on('step:complete', ({ newContext }) => {
       console.log('Analysis complete:', newContext.analysis);
     })
   )
 );
+
+// for await (const event of testImprovementWorkflow.run({ initialContext: initialState })) {
+//   console.log(event);
+// }
+
+// for await (const event of nestedWorkflow.run({ initialContext: {} })) {
+//   console.log(event);
+// }
 
 const codeToAnalyze = `
 function fibonacci(n) {

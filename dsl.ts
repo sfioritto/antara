@@ -1,3 +1,5 @@
+import type { z } from 'zod';
+
 type JsonPrimitive = string | number | boolean | null;
 type JsonArray = JsonValue[];
 type JsonObject = { [Key in string]?: JsonValue };
@@ -396,37 +398,28 @@ const getProjectConfig = () => ({
   maxTokens: 1000,
 });
 
-const executePrompt = async (...args: any[]) => {
-  return 'result';
+const executePrompt = async <ResultShape>(...args: any[]) => {
+  return 'result' as ResultShape;
 }
 
-export function prompt<ContextShape, TemplateProps, ResultShape>(
-  message: {
-    responseModel: ResultShape,
-    template: (props: TemplateProps) => string,
+export function prompt<ContextShape, ResultShape extends z.ZodType>(
+  template: (context: ContextShape) => string,
+  responseModel: {
+    schema: ResultShape,
+    name: string
   },
-  props?: (context: ContextShape) => (Promise<TemplateProps> | TemplateProps) | TemplateProps,
   options?: Partial<PromptConfig>
 ): ActionBlock<ContextShape, ResultShape> {
   return {
     type: "action",
     handler: async (context: ContextShape) => {
-      const { responseModel, template } = message;
-      // Merge project config with provided options
       const config = {
-        ...getProjectConfig(), // TODO: implement this
+        ...getProjectConfig(),
         ...options
       };
 
-      // Generate or use provided template data
-      const templateProps = typeof props === 'function'
-        ? await props(context)
-        : props ?? {} as TemplateProps;
+      const promptString = template(context);
 
-      // Generate prompt string using the template function
-      const promptString = template(templateProps);
-
-      // Execute the prompt with the AI service
       const result = await executePrompt(promptString, config, responseModel);
 
       return result as ResultShape;
