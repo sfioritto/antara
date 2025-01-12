@@ -412,7 +412,7 @@ export function prompt<ContextShape, ResultShape extends z.ZodType>(
 ): ActionBlock<ContextShape, ResultShape> {
   return {
     type: "action",
-    handler: async (context: ContextShape) => {
+    handler: async (context: ContextShape): Promise<ResultShape> => {
       const config = {
         ...getProjectConfig(),
         ...options

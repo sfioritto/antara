@@ -19,12 +19,14 @@ interface WorkflowState {
   suggestions: string[];
 }
 
-interface CodeAnalysisResult {
-  complexity: number;
-  suggestions: string[];
-}
+const CodeAnalysisResultSchema = z.object({
+  complexity: z.number(),
+  suggestions: z.array(z.string())
+});
 
-interface CodeAnalysisState {
+type CodeAnalysisResult = z.infer<typeof CodeAnalysisResultSchema>;
+
+interface CodeAnalysisContext {
   code: string;
   analysis?: CodeAnalysisResult;
 }
@@ -172,7 +174,7 @@ const nestedWorkflow = workflow<{ foo?: string; updatedTest?: string }>(
   })
 );
 
-const template = ({ code }: CodeAnalysisState) => `
+const template = ({ code }: CodeAnalysisContext) => `
   Analyze this code and return:
   1. A complexity score (1-10)
   2. A list of improvement suggestions
@@ -181,18 +183,19 @@ const template = ({ code }: CodeAnalysisState) => `
   ${code}
 `;
 
-const codeAnalysisWorkflow = workflow<CodeAnalysisState>(
+const codeAnalysisWorkflow = workflow<CodeAnalysisContext>(
   "Code Analysis",
   step("Analyze Code Complexity",
     prompt(template, {
-      schema: z.object({
-        complexity: z.number(),
-        suggestions: z.array(z.string())
-      }),
+      schema: CodeAnalysisResultSchema,
       name: "CodeAnalysis"
     }, {
       temperature: 0.3
     }),
+    reduce((result, context) => ({
+      ...context,
+      analysis: result
+    })),
     on('step:complete', ({ newContext }) => {
       console.log('Analysis complete:', newContext.analysis);
     })
