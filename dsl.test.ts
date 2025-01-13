@@ -1,6 +1,9 @@
-import { workflow, on, step, action, reduce } from './dsl';
+import { workflow, on, step, action, reduce, file } from './dsl';
 import { finalWorkflowEvent } from './adapters/test-helpers';
-import type { Event } from './dsl';
+import type { Event, FileContext } from './dsl';
+import { promises as fs } from 'fs';
+import { jest } from '@jest/globals';
+
 describe('workflow creation', () => {
   it('should create a workflow with a name when passed a string', () => {
     const wf = workflow('my workflow');
@@ -533,6 +536,30 @@ describe('nested workflows', () => {
     expect(status).toBe('error');
     expect(error?.message).toBe('Inner workflow error');
     expect(workflowEvents).toContain('outer:error');
+  });
+});
+
+describe('file reading', () => {
+  it('should read a file and store its contents in context', async () => {
+    interface TestContext extends FileContext {
+      files: { [fileName: string]: string };
+    }
+
+    const fileWorkflow = workflow<TestContext>(
+      'File Reading Workflow',
+      file('test/sample.txt')
+    );
+
+    const { newContext, status } = await finalWorkflowEvent(
+      fileWorkflow.run({
+        initialContext: {
+          files: {}
+        }
+      })
+    );
+
+    expect(status).toBe('complete');
+    expect(newContext.files['sample.txt']).toBeDefined();
   });
 });
 
