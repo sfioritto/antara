@@ -1,5 +1,5 @@
 export { WorkflowRunner } from './workflow-runner';
-export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS, STATUS } from './dsl';
+export { workflow, step, action, reduce, on, file, prompt, WORKFLOW_EVENTS, STEP_EVENTS, STATUS } from './dsl';
 export type {
   JsonValue,
   JsonObject,
