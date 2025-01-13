@@ -1,8 +1,6 @@
 import { workflow, on, step, action, reduce, file } from './dsl';
 import { finalWorkflowEvent } from './adapters/test-helpers';
 import type { Event, FileContext } from './dsl';
-import { promises as fs } from 'fs';
-import { jest } from '@jest/globals';
 
 describe('workflow creation', () => {
   it('should create a workflow with a name when passed a string', () => {
