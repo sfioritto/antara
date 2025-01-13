@@ -158,9 +158,11 @@ async function main() {
     }
 
     const runner = new WorkflowRunner<any>(
-      [new SQLiteAdapter(db, workflowRunId)],
-      console,
-      { verbose: !!verbose }
+      {
+        adapters: [new SQLiteAdapter(db, workflowRunId)],
+        logger: console,
+        verbose: !!verbose,
+      }
     );
 
     await runner.run(workflow, initialContext, completedSteps, { workflowRunId });
