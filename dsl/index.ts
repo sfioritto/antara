@@ -184,6 +184,7 @@ class StepBlock<ContextShape, ResultShape = any> {
 }
 
 const workflowNames = new Map<string, string>();
+const fileNames = new Map<string, string>();
 class WorkflowBlock<ContextShape> {
   public type = 'workflow';
   private configuration: WorkflowConfiguration = {
@@ -465,12 +466,17 @@ export interface FileContext {
   files: { [fileName: string]: string };
 }
 
-function file<ContextShape extends FileContext>(filePath: string): StepBlock<ContextShape, string> {
-  const fileName = filePath.split('/').pop() || filePath;
-
+function file<ContextShape extends FileContext>(
+  fileName: string,
+  filePath: string,
+): StepBlock<ContextShape, string> {
   return step(
     `Reading file: ${fileName}`,
     action(async (context, { fileStore }) => {
+      // Check if fileName already exists in this context
+      if (context.files && fileName in context.files) {
+        throw new Error(`File name "${fileName}" already exists in this workflow run. Names must be unique within a workflow.`);
+      }
       return await fileStore.readFile(filePath);
     }),
     reduce((fileContents, context) => ({

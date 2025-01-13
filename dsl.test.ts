@@ -548,7 +548,7 @@ describe('file reading', () => {
 
     const fileWorkflow = workflow<TestContext>(
       'File Reading Workflow',
-      file('test/sample.txt')
+      file('sample', 'test/first.txt')
     );
 
     const { newContext, status } = await finalWorkflowEvent(
@@ -564,8 +564,55 @@ describe('file reading', () => {
     );
 
     expect(status).toBe('complete');
-    expect(newContext.files['sample.txt']).toBeDefined();
-    expect(newContext.files['sample.txt']).toBe('test');
+    expect(newContext.files['sample']).toBeDefined();
+    expect(newContext.files['sample']).toBe('test');
+  });
+
+  it('should handle duplicate file name errors correctly', async () => {
+    interface TestContext extends FileContext {
+      files: { [fileName: string]: string };
+    }
+
+    const workflowEvents: Array<{
+      type: string;
+      steps?: Array<{ status: string }>;
+      error?: Error;
+    }> = [];
+
+    const duplicateFileWorkflow = workflow<TestContext>(
+      'Duplicate File Workflow',
+      file('sample', 'test/first.txt'),
+      file('sample', 'test/second.txt'), // Same name as first file
+      on('workflow:error', ({ type, steps, error }) => {
+        workflowEvents.push({ type, steps, error });
+      })
+    );
+
+    const result = await finalWorkflowEvent(
+      duplicateFileWorkflow.configure({
+        fileStore: {
+          readFile: async () => 'test'
+        }
+      }).run({
+        initialContext: {
+          files: {}
+        }
+      })
+    );
+
+    // Verify workflow ended in error state
+    expect(result.status).toBe('error');
+
+    // Verify steps status
+    if (!result.steps) {
+      throw new Error('Steps not found');
+    }
+    expect(result.steps[0].status).toBe('complete');
+    expect(result.steps[1].status).toBe('error');
+
+    // Verify error was captured in workflow events
+    const workflowError = workflowEvents.find(e => e.type === 'workflow:error');
+    expect(workflowError?.error?.message).toContain('File name "sample" already exists in this workflow run');
   });
 });
 
