@@ -565,6 +565,7 @@ describe('file reading', () => {
 
     expect(status).toBe('complete');
     expect(newContext.files['sample.txt']).toBeDefined();
+    expect(newContext.files['sample.txt']).toBe('test');
   });
 });
 
