@@ -1,6 +1,6 @@
 import type { z } from 'zod';
-import type { PromptClient } from './types';
-import { AnthropicClient } from './clients/AnthropicClient';
+import type { PromptClient } from '../types';
+import { AnthropicClient } from '../clients/AnthropicClient';
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonArray = JsonValue[];
