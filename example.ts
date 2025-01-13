@@ -189,8 +189,6 @@ const codeAnalysisWorkflow = workflow<CodeAnalysisContext>(
     prompt(template, {
       schema: CodeAnalysisResultSchema,
       name: "CodeAnalysis"
-    }, {
-      temperature: 0.3
     }),
     reduce((result, context) => ({
       ...context,

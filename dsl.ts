@@ -1,4 +1,6 @@
 import type { z } from 'zod';
+import type { PromptClient } from './types';
+import { AnthropicClient } from './clients/AnthropicClient';
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonArray = JsonValue[];
@@ -386,43 +388,22 @@ function action<ContextShape, ResultShape>(
   };
 }
 
-interface PromptConfig {
-  model?: 'gpt-4' | 'claude-3' | 'gemini' | string;
-  temperature?: number;
-  maxTokens?: number;
-}
-
-const getProjectConfig = () => ({
-  model: 'gpt-4',
-  temperature: 0.5,
-  maxTokens: 1000,
-});
-
-const executePrompt = async <ResultShape>(...args: any[]) => {
-  return 'result' as ResultShape;
-}
-
-export function prompt<ContextShape, ResultShape extends z.ZodType>(
+export function prompt<ContextShape, ResultShape extends z.ZodObject<any>>(
   template: (context: ContextShape) => string,
   responseModel: {
     schema: ResultShape,
     name: string
   },
-  options?: Partial<PromptConfig>
-): ActionBlock<ContextShape, ResultShape> {
+  client?: PromptClient,
+): ActionBlock<ContextShape, z.infer<ResultShape>> {
   return {
     type: "action",
-    handler: async (context: ContextShape): Promise<ResultShape> => {
-      const config = {
-        ...getProjectConfig(),
-        ...options
-      };
-
+    handler: async (context: ContextShape): Promise<z.infer<ResultShape>> => {
       const promptString = template(context);
+      const defaultClient = new AnthropicClient();
+      const result = await (client ?? defaultClient).execute<ResultShape>(promptString, responseModel);
 
-      const result = await executePrompt(promptString, config, responseModel);
-
-      return result as ResultShape;
+      return result as z.infer<ResultShape>;
     }
   };
 }
