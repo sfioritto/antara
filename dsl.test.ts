@@ -1,7 +1,7 @@
-import { workflow, on, step, action, reduce, file } from './dsl';
 import { finalWorkflowEvent } from './adapters/test-helpers';
-import type { Event, FileContext } from './dsl';
+import type { Event, FileContext } from './dsl/types';
 import { LocalFileStore } from './file-stores';
+import { workflow, step, action, reduce, on, file } from './dsl/builders';
 
 describe('workflow creation', () => {
   it('should create a workflow with a name when passed a string', () => {

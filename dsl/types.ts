@@ -1,7 +1,7 @@
-import type { z } from 'zod';
-import type { PromptClient } from '../types';
 import type { FileStore } from '../file-stores';
 import { WORKFLOW_EVENTS, STEP_EVENTS, STATUS } from './constants';
+
+export { WorkflowBlock } from './workflow-block';
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonArray = JsonValue[];

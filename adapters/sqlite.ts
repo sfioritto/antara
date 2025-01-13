@@ -1,7 +1,7 @@
-import Database, { Database as DatabaseType } from "better-sqlite3";
+import { Database as DatabaseType } from "better-sqlite3";
 import { Adapter } from "./adapter";
-import { STATUS } from "../dsl";
-import type { Event } from "../dsl";
+import { STATUS } from "../dsl/constants";
+import type { Event, Step } from "../dsl/types";
 
 interface SQLiteOptions {
   workflowRunId?: number;
@@ -153,3 +153,8 @@ class SQLiteAdapter extends Adapter<SQLiteOptions> {
 }
 
 export { SQLiteAdapter };
+
+// Add type for step parameter
+export function stepToRow(step: Step<any>) {
+  // ... rest of file
+}

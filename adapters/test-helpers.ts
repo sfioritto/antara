@@ -1,5 +1,6 @@
-import type { WorkflowBlock, Event, Step } from "../dsl";
-import { WORKFLOW_EVENTS } from "../dsl";
+import { WORKFLOW_EVENTS } from '../dsl/constants';
+import type { Step } from '../dsl/types';
+import type { WorkflowBlock, Event } from "../dsl/types";
 import type { Adapter } from "./adapter";
 
 export async function runWorkflow(

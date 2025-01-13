@@ -1,6 +1,7 @@
-import { WorkflowBlock, Step, WORKFLOW_EVENTS } from "./dsl";
+import { WORKFLOW_EVENTS } from './dsl/constants';
+import type { WorkflowBlock, Step } from './dsl/types';
 import { Adapter } from "./adapters/adapter";
-import type { Context } from "./dsl";
+import type { Context } from "./dsl/types";
 import type { FileStore } from "./file-stores";
 
 interface Logger {

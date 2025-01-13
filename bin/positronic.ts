@@ -7,8 +7,9 @@ import { SQLiteAdapter } from '../adapters/sqlite';
 import { WorkflowRunner } from '../workflow-runner';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { STATUS } from '../dsl';
-import type { Step } from '../dsl';
+import { STATUS } from '../dsl/constants';
+import type { Step } from '../dsl/types';
+
 interface CliOptions {
   workflowDir?: string;
   contextFile?: string;

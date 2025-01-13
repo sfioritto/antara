@@ -1,6 +1,7 @@
 import Database, { Database as DatabaseType } from "better-sqlite3";
 import { SQLiteAdapter } from "./sqlite";
-import { workflow, step, action, reduce, STATUS } from "../dsl";
+import { STATUS } from "../dsl/constants";
+import { workflow, step, action, reduce } from "../dsl/builders";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { runWorkflow, runWorkflowStepByStep } from "./test-helpers";
