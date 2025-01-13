@@ -7,10 +7,6 @@ interface Logger {
   log(...args: any[]): void;
 }
 
-interface RunnerOptions {
-  verbose?: boolean;
-}
-
 export class WorkflowRunner<T> {
   constructor(
     private options: {

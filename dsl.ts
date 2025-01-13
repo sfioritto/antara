@@ -1,7 +1,6 @@
 import type { z } from 'zod';
-import type { PromptClient } from '../types';
-import { AnthropicClient } from '../clients/anthropic';
-import { readFile } from './helpers';
+import type { PromptClient } from './types';
+import { AnthropicClient } from './clients/anthropic';
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonArray = JsonValue[];
@@ -434,29 +433,7 @@ const workflow = <ContextShape>(
   return new WorkflowBlock(name, blocks, description);
 };
 
-export interface FileContext {
-  files: { [fileName: string]: string };
-}
-
-function file<ContextShape extends FileContext>(filePath: string): StepBlock<ContextShape, string> {
-  const fileName = filePath.split('/').pop() || filePath;
-
-  return step(
-    `Reading file: ${fileName}`,
-    action(async () => {
-      return await readFile(filePath);
-    }),
-    reduce((fileContents, context) => ({
-      ...context,
-      files: {
-        ...context.files,
-        [fileName]: fileContents
-      }
-    }))
-  );
-}
-
-export { workflow, step, action, reduce, on, file, WORKFLOW_EVENTS, STEP_EVENTS, STATUS };
+export { workflow, step, action, reduce, on, WORKFLOW_EVENTS, STEP_EVENTS, STATUS };
 export type {
   JsonValue,
   JsonObject,
