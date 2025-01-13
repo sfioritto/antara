@@ -192,7 +192,10 @@ const codeAnalysisWorkflow = workflow<CodeAnalysisContext>(
     }),
     reduce((result, context) => ({
       ...context,
-      analysis: result
+      analysis: {
+        complexity: result.complexity,
+        suggestions: result.suggestions
+      }
     })),
     on('step:complete', ({ newContext }) => {
       console.log('Analysis complete:', newContext.analysis);
@@ -200,13 +203,13 @@ const codeAnalysisWorkflow = workflow<CodeAnalysisContext>(
   )
 );
 
-// for await (const event of testImprovementWorkflow.run({ initialContext: initialState })) {
-//   console.log(event);
-// }
+for await (const event of testImprovementWorkflow.run({ initialContext: initialState })) {
+  console.log(event);
+}
 
-// for await (const event of nestedWorkflow.run({ initialContext: {} })) {
-//   console.log(event);
-// }
+for await (const event of nestedWorkflow.run({ initialContext: {} })) {
+  console.log(event);
+}
 
 const codeToAnalyze = `
 function fibonacci(n) {
@@ -218,5 +221,5 @@ function fibonacci(n) {
 for await (const event of codeAnalysisWorkflow.run({
   initialContext: { code: codeToAnalyze }
 })) {
-  console.log(event);
+  console.log(JSON.stringify(event, null, 2));
 }
