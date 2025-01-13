@@ -2,6 +2,7 @@ import type { z } from 'zod';
 import type { PromptClient } from '../types';
 import { AnthropicClient } from '../clients/anthropic';
 import { readFile } from './helpers';
+import { LocalFileStore, type FileStore } from '../file-stores';
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonArray = JsonValue[];
@@ -14,12 +15,19 @@ type SerializedError = {
   stack?: string;
 }
 
+interface WorkflowConfiguration {
+  fileStore: FileStore
+}
+
 // Use a mapped type to ensure all properties are serializable
 type Context<ContextShape> = ContextShape extends object
   ? { [K in keyof ContextShape]: ContextShape[K] extends JsonValue ? ContextShape[K] : never }
   : never;
 
-type Action<ContextShape, ResultShape> = (context: ContextShape) => (Promise<ResultShape> | ResultShape);
+type Action<ContextShape, ResultShape> = (
+  context: ContextShape,
+  configuration: WorkflowConfiguration
+) => (Promise<ResultShape> | ResultShape);
 type Reducer<ContextShape, ResultShape> = (result: ResultShape, context: ContextShape) => ContextShape;
 
 interface ActionBlock<ContextShape, ResultShape> {
@@ -122,10 +130,15 @@ class StepBlock<ContextShape, ResultShape = any> {
     }
   }
 
-  async run<Options = any>(context: ContextShape, options?: Options): Promise<Step<ContextShape>> {
+  async run<Options = any>(args: {
+    context: ContextShape,
+    options?: Options,
+    configuration: WorkflowConfiguration
+  }): Promise<Step<ContextShape>> {
+    const { context, options, configuration } = args;
     const clonedContext = structuredClone(context);
     try {
-      const result = await this.actionBlock.handler(clonedContext);
+      const result = await this.actionBlock.handler(clonedContext, configuration);
       const context = this.reducerBlock?.handler(result, clonedContext) ?? clonedContext;
       const completedStep = {
         title: this.title,
@@ -171,9 +184,11 @@ class StepBlock<ContextShape, ResultShape = any> {
 }
 
 const workflowNames = new Map<string, string>();
-
 class WorkflowBlock<ContextShape> {
   public type = 'workflow';
+  private configuration: WorkflowConfiguration = {
+    fileStore: new LocalFileStore(),
+  };
 
   constructor(
     public name: string,
@@ -192,6 +207,14 @@ class WorkflowBlock<ContextShape> {
 
   get eventBlocks(): WorkflowEventBlock<ContextShape>[] {
     return this.blocks.filter((block): block is WorkflowEventBlock<ContextShape> => block.type === 'workflow');
+  }
+
+  configure(configuration: Partial<WorkflowConfiguration>) {
+    this.configuration = {
+      ...this.configuration,
+      ...configuration,
+    };
+    return this;
   }
 
   #steps(
@@ -251,7 +274,11 @@ class WorkflowBlock<ContextShape> {
     let completedSteps = [...initialCompletedSteps];
 
     for (const stepBlock of this.stepBlocks.slice(initialCompletedSteps.length)) {
-      const completedStep = await stepBlock.run(currentContext, options);
+      const completedStep = await stepBlock.run({
+        context: currentContext,
+        options,
+        configuration: this.configuration,
+      });
       completedSteps.push(completedStep);
 
       const { error, context: nextContext } = completedStep;
@@ -443,8 +470,8 @@ function file<ContextShape extends FileContext>(filePath: string): StepBlock<Con
 
   return step(
     `Reading file: ${fileName}`,
-    action(async () => {
-      return await readFile(filePath);
+    action(async (context, { fileStore }) => {
+      return await fileStore.readFile(filePath);
     }),
     reduce((fileContents, context) => ({
       ...context,

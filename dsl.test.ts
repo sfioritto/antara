@@ -1,6 +1,7 @@
 import { workflow, on, step, action, reduce, file } from './dsl';
 import { finalWorkflowEvent } from './adapters/test-helpers';
 import type { Event, FileContext } from './dsl';
+import { LocalFileStore } from './file-stores';
 
 describe('workflow creation', () => {
   it('should create a workflow with a name when passed a string', () => {
@@ -333,8 +334,9 @@ describe('step creation', () => {
       })
     );
 
-    await mutatingActionStep.run(originalContext);
-    await mutatingReducerStep.run(originalContext);
+    const configuration = { fileStore: new LocalFileStore() };
+    await mutatingActionStep.run({ context: originalContext, configuration });
+    await mutatingReducerStep.run({ context: originalContext, configuration });
 
     // Verify original context remains unchanged
     expect(originalContext).toEqual({
@@ -357,7 +359,8 @@ describe('step creation', () => {
       })
     );
 
-    const { status, context } = await stepWithMutatingHandler.run({ value: 1 });
+    const configuration = { fileStore: new LocalFileStore() };
+    const { status, context } = await stepWithMutatingHandler.run({ context: { value: 1 }, configuration });
 
     // Verify that modifications in event handlers didn't persist
     expect(status).toEqual('complete');
@@ -549,7 +552,11 @@ describe('file reading', () => {
     );
 
     const { newContext, status } = await finalWorkflowEvent(
-      fileWorkflow.run({
+      fileWorkflow.configure({
+        fileStore: {
+          readFile: async () => 'test'
+        }
+      }).run({
         initialContext: {
           files: {}
         }
