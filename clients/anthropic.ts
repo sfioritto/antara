@@ -35,8 +35,9 @@ export class AnthropicClient implements PromptClient {
       messages: [{ role: "user", content: prompt }],
       model: "claude-3-5-sonnet-20241022",
       response_model: responseModel,
-      max_tokens: 1024,
+      max_tokens: 8192,
     })
+
     return response;
   }
 }
