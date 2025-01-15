@@ -195,11 +195,11 @@ function file<ContextShape extends FileContext>(
 ): StepBlock<ContextShape, string> {
   return step(
     `Reading file: ${fileName}`,
-    action(async (context, { fileStore }) => {
+    action(async (context, { fileStore, workflowDir }) => {
       if (context.files && fileName in context.files) {
         throw new Error(`File name "${fileName}" already exists in this workflow run. Names must be unique within a workflow.`);
       }
-      return await fileStore.readFile(filePath);
+      return await fileStore.readFile(filePath, workflowDir);
     }),
     reduce((fileContents, context) => ({
       ...context,

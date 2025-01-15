@@ -137,6 +137,12 @@ async function main() {
       throw new Error(`File ${workflowPath} does not export a workflow as default export`);
     }
 
+    // Configure workflow in development mode
+    if (process.env.NODE_ENV === 'development') {
+      const workflowDirectory = path.dirname(fullPath);
+      workflow.configure({ workflowDir: workflowDirectory });
+    }
+
     const initialContext = await loadContext(contextFile);
     const db = await initializeDatabase('workflows.db');
 

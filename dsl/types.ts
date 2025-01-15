@@ -16,6 +16,7 @@ export type SerializedError = {
 
 export interface WorkflowConfiguration {
   fileStore: FileStore
+  workflowDir?: string
 }
 
 export type Context<ContextShape> = ContextShape extends object

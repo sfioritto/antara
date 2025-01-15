@@ -1,10 +1,15 @@
+import { join } from 'path';
+import * as fs from 'fs/promises';
+
 export interface FileStore {
-  readFile(path: string): Promise<string>;
+  readFile(path: string, workflowDir?: string): Promise<string>;
 }
 
 export class LocalFileStore implements FileStore {
-  async readFile(path: string): Promise<string> {
-    const fs = await import('fs/promises');
+  async readFile(path: string, workflowDir?: string): Promise<string> {
+    if (workflowDir) {
+      path = join(workflowDir, path);
+    }
     return fs.readFile(path, 'utf-8');
   }
 }
