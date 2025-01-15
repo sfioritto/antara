@@ -367,6 +367,78 @@ describe('step creation', () => {
     expect(status).toEqual('complete');
     expect(context.value).toEqual(2);
   });
+
+  it('should create a step using a step function directly', async () => {
+    interface SimpleContext {
+      count: number;
+      message?: string;
+    }
+
+    // Create a step using the new function signature
+    const simpleStep = step<SimpleContext>(
+      "Direct function step",
+      async (context) => ({
+        count: context.count + 1,
+        message: `Count is now ${context.count + 1}`
+      })
+    );
+
+    const configuration = { fileStore: new LocalFileStore() };
+    const { status, context } = await simpleStep.run({
+      context: { count: 1 },
+      configuration
+    });
+
+    // Verify the step executed correctly
+    expect(status).toBe('complete');
+    expect(context).toEqual({
+      count: 2,
+      message: 'Count is now 2'
+    });
+
+    // Verify the internal structure
+    expect(simpleStep.blocks).toHaveLength(2);
+    expect(simpleStep.blocks.map(({ type }) => type)).toEqual(['action', 'reducer']);
+  });
+
+  it('should handle step function with events', async () => {
+    interface SimpleContext {
+      count: number;
+    }
+
+    const events: string[] = [];
+
+    const stepWithEvents = step<SimpleContext>(
+      "Step with events",
+      async (context) => ({
+        count: context.count + 1
+      }),
+      on('step:complete', () => {
+        events.push('complete');
+      })
+    );
+
+    const configuration = { fileStore: new LocalFileStore() };
+    const { status, context } = await stepWithEvents.run({
+      context: { count: 1 },
+      configuration
+    });
+
+    // Verify the step executed correctly
+    expect(status).toBe('complete');
+    expect(context.count).toBe(2);
+
+    // Verify events were fired in correct order
+    expect(events).toEqual(['complete']);
+
+    // Verify the internal structure
+    expect(stepWithEvents.blocks).toHaveLength(3);
+    expect(stepWithEvents.blocks.map(({ type }) => type)).toEqual([
+      'action',
+      'reducer',
+      'event'
+    ]);
+  });
 });
 
 describe('workflow resumption', () => {

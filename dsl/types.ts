@@ -30,6 +30,11 @@ export type Action<ContextShape, ResultShape> = (
 
 export type Reducer<ContextShape, ResultShape> = (result: ResultShape, context: ContextShape) => ContextShape;
 
+export type StepFunction<ContextShape> = (
+  context: ContextShape,
+  configuration: WorkflowConfiguration
+) => Promise<JsonObject> | JsonObject;
+
 export interface ActionBlock<ContextShape, ResultShape> {
   type: "action";
   handler: Action<ContextShape, ResultShape>;

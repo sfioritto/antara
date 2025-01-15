@@ -15,7 +15,9 @@ import type {
   AllEventTypes,
   EventHandler,
   FileContext,
-  Context
+  Context,
+  JsonObject,
+  StepFunction
 } from './types';
 import { StepBlock } from './step-block';
 import { WorkflowBlock } from './workflow-block';
@@ -168,13 +170,48 @@ function step<ContextShape, ResultShape>(
   title: string,
   ...args: | [ActionBlock<ContextShape, ResultShape>, ...StepEventBlock<ContextShape>[]]
         | [ActionBlock<ContextShape, ResultShape>, ReducerBlock<ContextShape, ResultShape>, ...StepEventBlock<ContextShape>[]]
-): StepBlock<ContextShape, ResultShape> {
-  const [action, ...rest] = args;
-  const hasReducer = rest[0]?.type === "reducer";
+): StepBlock<ContextShape, ResultShape>;
+function step<ContextShape>(
+  title: string,
+  stepFn: StepFunction<ContextShape>,
+  ...events: StepEventBlock<ContextShape>[]
+): StepBlock<ContextShape, JsonObject>;
+function step<ContextShape, ResultShape>(
+  title: string,
+  actionOrFunction: ActionBlock<ContextShape, ResultShape> | StepFunction<ContextShape>,
+  ...rest: (StepEventBlock<ContextShape> | ReducerBlock<ContextShape, ResultShape>)[]
+): StepBlock<ContextShape, ResultShape> | StepBlock<ContextShape, JsonObject> {
+  // If it's a function, create action and reducer blocks
+  if (typeof actionOrFunction === 'function') {
+    const stepFunction: StepFunction<ContextShape> = actionOrFunction;
+    const actionBlock: ActionBlock<ContextShape, JsonObject> = {
+      type: 'action',
+      handler: stepFunction,
+    };
+
+    const reducerBlock: ReducerBlock<ContextShape, JsonObject> = {
+      type: 'reducer',
+      handler: (result, context) => ({
+        ...context,
+        ...result
+      })
+    };
+
+    const events = rest as StepEventBlock<ContextShape>[];
+    return new StepBlock(title, actionBlock, events, reducerBlock);
+  }
+
+  const actionBlock: ActionBlock<ContextShape, ResultShape> = actionOrFunction;
+  const hasReducer = rest[0]?.type === 'reducer';
   const reducer = hasReducer ? rest[0] as ReducerBlock<ContextShape, ResultShape> : undefined;
   const events = (hasReducer ? rest.slice(1) : rest) as StepEventBlock<ContextShape>[];
 
-  return new StepBlock(title, action, events, reducer);
+  return new StepBlock(
+    title,
+    actionBlock,
+    events,
+    reducer
+  );
 }
 
 const workflow = <ContextShape>(
