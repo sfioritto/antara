@@ -70,7 +70,8 @@ type BranchNameArg<ContextShape> = string | ((context: ContextShape) => string);
 
 export function createBranch<ContextShape extends GithubContext>(
   branchName: BranchNameArg<ContextShape>,
-  baseBranchName: BranchNameArg<ContextShape> = 'develop'
+  baseBranchName: BranchNameArg<ContextShape> = 'develop',
+  contextKey?: string
 ) {
   return step(
     'Create git branch',
@@ -108,6 +109,13 @@ export function createBranch<ContextShape extends GithubContext>(
     }),
     reduce((branchName: string, context: ContextShape) => {
       const github = context.github ? context.github : { files: {} };
+
+      if (contextKey) {
+        return {
+          ...context,
+          [contextKey]: branchName,
+        }
+      }
       return {
         ...context,
         github: {
