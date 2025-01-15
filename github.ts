@@ -1,4 +1,4 @@
-import { step as positronicStep, action, reduce } from 'positronic';
+import { step, action, reduce } from 'positronic';
 import { Octokit } from '@octokit/rest';
 import { config } from 'dotenv';
 
@@ -39,8 +39,8 @@ export const getContent = async (filePath: string) => {
   }
 }
 
-const file = (name: string, path: string) => {
-  return positronicStep(`Get file content from github for ${path}`,
+export const file = (name: string, path: string) => {
+  return step(`Get file content from github for ${path}`,
     action(async () => {
       const content = await getContent(path);
       return content;
@@ -53,11 +53,11 @@ const file = (name: string, path: string) => {
 
 type BranchNameArg<ContextShape> = string | ((context: ContextShape) => string);
 
- function createBranch<ContextShape>(
+export function createBranch<ContextShape>(
   branchName: BranchNameArg<ContextShape>,
   baseBranchName: BranchNameArg<ContextShape> = 'develop'
 ) {
-  return positronicStep(
+  return step(
     'Create git branch',
     action(async (context: ContextShape) => {
       const targetBranch = typeof branchName === 'function' ? branchName(context) : branchName;
@@ -94,10 +94,5 @@ type BranchNameArg<ContextShape> = string | ((context: ContextShape) => string);
     reduce((branchName: string, context: ContextShape) => ({ ...context, branchName }))
   );
  }
-
-export const step = {
-  createBranch,
-  file,
-};
 
 
