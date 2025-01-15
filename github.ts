@@ -51,4 +51,48 @@ export const file = (name: string, path: string) => {
   )
 }
 
+type BranchNameArg<ContextShape> = string | ((context: ContextShape) => string);
+
+export function createBranch<ContextShape>(
+  branchName: BranchNameArg<ContextShape>,
+  baseBranchName: BranchNameArg<ContextShape> = 'develop'
+) {
+  return step(
+    'Create git branch',
+    action(async (context: ContextShape) => {
+      const targetBranch = typeof branchName === 'function' ? branchName(context) : branchName;
+      const baseBranch = typeof baseBranchName === 'function' ? baseBranchName(context) : baseBranchName;
+
+      try {
+        const response = await octokit.rest.git.getRef({
+          owner: REPO_OWNER,
+          repo: REPO_NAME,
+          ref: `heads/${baseBranch}`
+        });
+
+        const baseSha = response.data.object.sha;
+
+        try {
+          await octokit.rest.git.createRef({
+            owner: REPO_OWNER,
+            repo: REPO_NAME,
+            ref: `refs/heads/${targetBranch}`,
+            sha: baseSha
+          });
+        } catch (error: any) {
+          // If branch already exists, that's fine
+          if (error.status !== 422) {
+            throw error;
+          }
+        }
+
+        return targetBranch;
+      } catch (error) {
+        throw new Error(`Failed to create branch: ${error}`);
+      }
+    }),
+    reduce((branchName: string, context: ContextShape) => ({ ...context, branchName }))
+  );
+}
+
 
