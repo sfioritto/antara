@@ -68,7 +68,7 @@ export const file = <ContextShape extends GithubContext>(name: string, path: str
 
 type BranchNameArg<ContextShape> = string | ((context: ContextShape) => string);
 
-export function createBranch<ContextShape>(
+export function createBranch<ContextShape extends GithubContext>(
   branchName: BranchNameArg<ContextShape>,
   baseBranchName: BranchNameArg<ContextShape> = 'develop'
 ) {
@@ -106,7 +106,16 @@ export function createBranch<ContextShape>(
         throw new Error(`Failed to create branch: ${error}`);
       }
     }),
-    reduce((branchName: string, context: ContextShape) => ({ ...context, branchName }))
+    reduce((branchName: string, context: ContextShape) => {
+      const github = context.github ? context.github : { files: {} };
+      return {
+        ...context,
+        github: {
+          ...github,
+          branchName,
+        }
+      };
+    }),
   );
  }
 
