@@ -1,7 +1,8 @@
 import { finalWorkflowEvent } from './adapters/test-helpers';
 import type { Event, FileContext } from './dsl/types';
 import { LocalFileStore } from './file-stores';
-import { workflow, step, action, reduce, on, file } from './dsl/builders';
+import { workflow, step, action, reduce, on, file, prompt } from './dsl/builders';
+import { z } from 'zod';
 
 describe('workflow creation', () => {
   it('should create a workflow with a name when passed a string', () => {
@@ -613,6 +614,50 @@ describe('file reading', () => {
     // Verify error was captured in workflow events
     const workflowError = workflowEvents.find(e => e.type === 'workflow:error');
     expect(workflowError?.error?.message).toContain('File name "sample" already exists in this workflow run');
+  });
+});
+
+describe('prompt creation', () => {
+  it('should create a prompt action using object-style configuration', () => {
+    interface TestContext {
+      name: string;
+    }
+
+    const schema = z.object({
+      greeting: z.string()
+    });
+
+    const promptAction = prompt<TestContext, typeof schema>({
+      template: (context) => `Hello ${context.name}`,
+      responseModel: {
+        schema,
+        name: 'greeting'
+      }
+    });
+
+    expect(promptAction.type).toBe('action');
+    expect(typeof promptAction.handler).toBe('function');
+  });
+
+  it('should create a prompt action using original parameter signature', () => {
+    interface TestContext {
+      name: string;
+    }
+
+    const schema = z.object({
+      greeting: z.string()
+    });
+
+    const promptAction = prompt<TestContext, typeof schema>(
+      (context) => `Hello ${context.name}`,
+      {
+        schema,
+        name: 'greeting'
+      }
+    );
+
+    expect(promptAction.type).toBe('action');
+    expect(typeof promptAction.handler).toBe('function');
   });
 });
 

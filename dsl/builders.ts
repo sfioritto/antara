@@ -107,19 +107,57 @@ function action<ContextShape, ResultShape>(
 }
 
 export function prompt<ContextShape, ResultShape extends z.ZodObject<any>>(
+  config: {
+    template: (context: ContextShape) => string,
+    responseModel: {
+      schema: ResultShape,
+      name: string
+    }
+  },
+  client?: PromptClient
+): ActionBlock<ContextShape, z.infer<ResultShape>>;
+export function prompt<ContextShape, ResultShape extends z.ZodObject<any>>(
   template: (context: ContextShape) => string,
   responseModel: {
     schema: ResultShape,
     name: string
   },
   client?: PromptClient,
+): ActionBlock<ContextShape, z.infer<ResultShape>>;
+export function prompt<ContextShape, ResultShape extends z.ZodObject<any>>(
+  templateOrConfig: ((context: ContextShape) => string) | {
+    template: (context: ContextShape) => string,
+    responseModel: {
+      schema: ResultShape,
+      name: string
+    }
+  },
+  responseModelOrClient?: {
+    schema: ResultShape,
+    name: string
+  } | PromptClient,
+  client?: PromptClient,
 ): ActionBlock<ContextShape, z.infer<ResultShape>> {
+  let finalTemplate: (context: ContextShape) => string;
+  let finalResponseModel: { schema: ResultShape, name: string };
+  let finalClient: PromptClient | undefined;
+
+  if (typeof templateOrConfig === 'function') {
+    finalTemplate = templateOrConfig;
+    finalResponseModel = responseModelOrClient as { schema: ResultShape, name: string };
+    finalClient = client;
+  } else {
+    finalTemplate = templateOrConfig.template;
+    finalResponseModel = templateOrConfig.responseModel;
+    finalClient = responseModelOrClient as PromptClient;
+  }
+
   return {
     type: "action",
     handler: async (context: ContextShape): Promise<z.infer<ResultShape>> => {
-      const promptString = template(context);
+      const promptString = finalTemplate(context);
       const defaultClient = new AnthropicClient();
-      const result = await (client ?? defaultClient).execute<ResultShape>(promptString, responseModel);
+      const result = await (finalClient ?? defaultClient).execute<ResultShape>(promptString, finalResponseModel);
 
       return result as z.infer<ResultShape>;
     }
