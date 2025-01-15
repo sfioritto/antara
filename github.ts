@@ -127,7 +127,8 @@ export function files<ContextShape extends GithubContext>(files: { [key: string]
       downloadedFiles,
       context,
     ) => {
-      const { github: { files: githubFiles } } = context;
+      const githubFiles = context.github?.files || {};
+
       return {
         ...context,
         github: {
