@@ -211,6 +211,40 @@ function file<ContextShape extends FileContext>(
   );
 }
 
+function files<ContextShape extends FileContext>(
+  filePathMap: Record<string, string>
+): StepBlock<ContextShape, Record<string, string>> {
+  return step(
+    `Reading files: ${Object.keys(filePathMap).join(', ')}`,
+    action(async (context, { fileStore, workflowDir }) => {
+      // Check for conflicts with existing files in context
+      const conflicts = Object.keys(filePathMap)
+        .filter(name => context.files && name in context.files);
+      if (conflicts.length > 0) {
+        throw new Error(`File names already exist in this workflow run: ${conflicts.join(', ')}`);
+      }
+
+      // Read all files in parallel
+      const entries = Object.entries(filePathMap);
+      const fileContents = await Promise.all(
+        entries.map(([_, filePath]) => fileStore.readFile(filePath, workflowDir))
+      );
+
+      // Create map of filename to content
+      return Object.fromEntries(
+        entries.map(([fileName], index) => [fileName, fileContents[index]])
+      );
+    }),
+    reduce((fileContentsMap, context) => ({
+      ...context,
+      files: {
+        ...context.files,
+        ...fileContentsMap
+      }
+    }))
+  );
+}
+
 export {
   workflow,
   step,
@@ -218,4 +252,5 @@ export {
   reduce,
   on,
   file,
+  files,
 };

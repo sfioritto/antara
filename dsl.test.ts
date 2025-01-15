@@ -1,7 +1,7 @@
 import { finalWorkflowEvent } from './adapters/test-helpers';
 import type { Event, FileContext } from './dsl/types';
 import { LocalFileStore } from './file-stores';
-import { workflow, step, action, reduce, on, file, prompt } from './dsl/builders';
+import { workflow, step, action, reduce, on, file, prompt, files } from './dsl/builders';
 import { z } from 'zod';
 
 describe('workflow creation', () => {
@@ -614,6 +614,46 @@ describe('file reading', () => {
     // Verify error was captured in workflow events
     const workflowError = workflowEvents.find(e => e.type === 'workflow:error');
     expect(workflowError?.error?.message).toContain('File name "sample" already exists in this workflow run');
+  });
+
+  it('should read multiple files in parallel using files builder', async () => {
+    interface TestContext extends FileContext {
+      files: { [fileName: string]: string };
+    }
+
+    const multiFileWorkflow = workflow<TestContext>(
+      'Multi-File Reading Workflow',
+      files({
+        first: 'test/first.txt',
+        second: 'test/second.txt',
+        third: 'test/third.txt'
+      })
+    );
+
+    const fileContents = new Map([
+      ['test/first.txt', 'first content'],
+      ['test/second.txt', 'second content'],
+      ['test/third.txt', 'third content']
+    ]);
+
+    const { newContext, status } = await finalWorkflowEvent(
+      multiFileWorkflow.configure({
+        fileStore: {
+          readFile: async (path) => fileContents.get(path) ?? ''
+        }
+      }).run({
+        initialContext: {
+          files: {}
+        }
+      })
+    );
+
+    expect(status).toBe('complete');
+    expect(newContext.files).toEqual({
+      first: 'first content',
+      second: 'second content',
+      third: 'third content'
+    });
   });
 });
 
