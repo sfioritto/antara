@@ -14,6 +14,12 @@ if (!GITHUB_TOKEN || !REPO_OWNER || !REPO_NAME) {
     throw new Error('Required environment variables are not set');
 }
 
+export interface GithubContext {
+  github: {
+    files: { [fileName: string]: string };
+  }
+}
+
 // Create a custom Octokit instance
 // I'm not using defaults because TS throws errors when
 // I call octokit functions without providing the owner and repo
@@ -39,14 +45,23 @@ export const getContent = async (filePath: string) => {
   }
 }
 
-export const file = (name: string, path: string) => {
-  return step(`Get file content from github for ${path}`,
+export const file = <ContextShape extends GithubContext>(name: string, path: string) => {
+  return step<ContextShape, { [key: string]: string }>(`Get file content from github for ${path}`,
     action(async () => {
       const content = await getContent(path);
-      return content;
+      return { [name]: content };
     }),
-    reduce((fileContent, context: Record<string, any>) => (
-      { ...context, [name]: fileContent }
+    reduce((file, context) => (
+      {
+        ...context,
+        github: {
+          ...context.github,
+          files: {
+            ...context.github.files,
+            ...file
+          }
+        }
+      }
     ))
   )
 }
@@ -94,5 +109,37 @@ export function createBranch<ContextShape>(
     reduce((branchName: string, context: ContextShape) => ({ ...context, branchName }))
   );
  }
+
+export function files<ContextShape extends GithubContext>(files: { [key: string]: string }) {
+  return step<ContextShape, { [key: string]: string }[]>(
+    `Reading GitHub files: ${Object.keys(files).join(', ')}`,
+    action(async () => {
+      const fileContents = await Promise.all(
+        Object.entries(files).map(async ([fileName, filePath]) => {
+          const content = await getContent(filePath);
+          return { [fileName]: content };
+        })
+      );
+
+      return Object.assign({}, ...fileContents);
+    }),
+    reduce((
+      downloadedFiles,
+      context,
+    ) => {
+      const { github: { files: githubFiles } } = context;
+      return {
+        ...context,
+        github: {
+          ...context.github,
+          files: {
+            ...githubFiles,
+            ...downloadedFiles
+          }
+        }
+      };
+    }),
+  );
+}
 
 
