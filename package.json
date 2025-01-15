@@ -18,6 +18,7 @@
   "dependencies": {
     "@instructor-ai/instructor": "^1.5.0",
     "better-sqlite3": "^11.7.2",
+    "dotenv": "^16.4.7",
     "ts-node": "^10.9.2",
     "zod": "^3.24.1"
   },
@@ -27,7 +28,6 @@
     "@swc/plugin-transform-imports": "^6.0.4",
     "@types/better-sqlite3": "^7.6.12",
     "@types/jest": "^29.5.14",
-    "dotenv": "^16.4.7",
     "jest": "^29.7.0",
     "llm-polyglot": "^2.4.0",
     "nodemon": "^3.1.9",
@@ -38,6 +38,13 @@
     ".": {
       "import": "./index.js",
       "types": "./index.d.ts"
+    },
+    "./github": {
+      "import": "./github.js",
+      "types": "./github.d.ts"
     }
+  },
+  "peerDependencies": {
+    "@octokit/rest": "^21.1.0"
   }
 }
