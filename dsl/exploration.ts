@@ -1,20 +1,35 @@
-type Merge<OldContext, NewProps> =
-  Omit<OldContext, keyof NewProps> & NewProps;
+type JsonPrimitive = string | number | boolean | null;
+type JsonArray = JsonValue[];
+type JsonObject = { [Key in string]?: JsonValue };
+type JsonValue = JsonPrimitive | JsonArray | JsonObject;
 
-type Simplify<T> = {
+// Ensure Merge always returns a JsonObject
+type Merge<OldContext extends JsonObject, NewProps extends JsonObject> =
+  Omit<OldContext, keyof NewProps> & NewProps extends infer R
+  ? R extends JsonObject
+    ? R
+    : never
+  : never;
+
+// Ensure Simplify preserves the JsonObject constraint
+type Simplify<T extends JsonObject> = {
   [K in keyof T]: T[K];
-} extends infer O ? O : never;
+} extends infer O
+  ? O extends JsonObject
+    ? O
+    : never
+  : never;
 
-interface StepBlock<Ctx, Out extends object> {
+interface StepBlock<Ctx extends JsonObject, Out extends JsonObject> {
   title: string;
   action: (context: Ctx) => Out | Promise<Out>;
   reduce?: (result: Out, context: Ctx) => Simplify<Merge<Ctx, Out>>;
 }
 
-function createWorkflow<TContext = {}>() {
-  function addSteps<T>(steps: StepBlock<any, any>[]) {
+function createWorkflow<TContext extends JsonObject = {}>() {
+  function addSteps<T extends JsonObject>(steps: StepBlock<any, any>[]) {
     return {
-      step<TOutput extends object>(
+      step<TOutput extends JsonObject>(
         title: string,
         action: (context: T) => TOutput | Promise<TOutput>,
         reduce?: (result: TOutput, context: T) => Simplify<Merge<T, TOutput>>
