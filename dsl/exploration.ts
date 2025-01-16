@@ -1,30 +1,20 @@
 import { JsonObject } from "./types"
 
-// Ensure Merge always returns a JsonObject
-type Merge<OldContext extends JsonObject, NewProps extends JsonObject> =
-  Omit<OldContext, keyof NewProps> & NewProps extends infer R
-  ? R extends JsonObject
-    ? R
-    : never
-  : never;
-
-// Ensure Simplify preserves the JsonObject constraint
-type Simplify<T extends JsonObject> = {
-  [K in keyof T]: T[K];
-} extends infer O
-  ? O extends JsonObject
-    ? O
-    : never
-  : never;
-
 interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut> {
   title: string;
   action: ((context: ContextIn) => ActionOut | Promise<ActionOut>);
   reduce?: (result: ActionOut, context: ContextIn) => ContextOut
 }
 
-export function createWorkflow<InitialContext extends JsonObject = {}>() {
-  function addSteps<ContextIn extends JsonObject>(steps: StepBlock<any, any, any>[]) {
+export function createWorkflow<InitialContext extends JsonObject = {}>(name: string) {
+  function addSteps<ContextIn extends JsonObject>(steps: StepBlock<any, any, any>[]): {
+    step: <ActionOut, ContextOut extends JsonObject>(
+      title: string,
+      action: (context: ContextIn) => ActionOut | Promise<ActionOut>,
+      reduce?: (result: ActionOut, context: ContextIn) => ContextOut
+    ) => ReturnType<typeof addSteps<ContextOut>>,
+    run: (initialContext: InitialContext) => Promise<any>
+  } {
     return {
       step<ActionOut, ContextOut extends JsonObject>(
         title: string,
@@ -39,21 +29,15 @@ export function createWorkflow<InitialContext extends JsonObject = {}>() {
         const newSteps = [...steps, newStep];
         return addSteps<ContextOut>(newSteps);
       },
-      build(name: string) {
-        return {
-          name,
-          steps,
-          async run(initialContext: InitialContext) {
-            let context = initialContext;
-            for (const step of steps) {
-              const result = await step.action(context);
-              context = step.reduce
-                ? step.reduce(result, context)
-                : initialContext;
-            }
-            return context;
-          }
-        };
+      async run(initialContext: InitialContext) {
+        let context = initialContext;
+        for (const step of steps) {
+          const result = await step.action(context);
+          context = step.reduce
+            ? step.reduce(result, context)
+            : initialContext;
+        }
+        return context;
       }
     };
   }
@@ -61,7 +45,8 @@ export function createWorkflow<InitialContext extends JsonObject = {}>() {
   return addSteps<InitialContext>([]);
 }
 
-const workflow = createWorkflow()
+// Example usage would now look like:
+const workflow = createWorkflow("test")
   .step(
     "Step 1",
     () => ({ count: 1 }),
@@ -78,6 +63,6 @@ const workflow = createWorkflow()
       message: `${ctx.count} doubled is ${ctx.doubled}`
     })
   )
-  .build("test");
+  .run({ /* initial context */ });
 
 
