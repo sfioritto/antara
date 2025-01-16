@@ -1,4 +1,7 @@
 import { JsonObject } from "./types"
+import type { Event, Step, StatusOptions, SerializedError } from './types'
+import { WORKFLOW_EVENTS, STEP_EVENTS, STATUS } from './constants'
+
 
 interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut> {
   title: string;
@@ -13,7 +16,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(name: str
       action: (context: ContextIn) => ActionOut | Promise<ActionOut>,
       reduce?: (result: ActionOut, context: ContextIn) => ContextOut
     ) => ReturnType<typeof addSteps<ContextOut>>,
-    run: (initialContext?: InitialContext) => Promise<any>
+    run: (initialContext?: InitialContext) => AsyncGenerator<any, void, unknown>
   } {
     return {
       step<ActionOut, ContextOut extends JsonObject>(
@@ -29,15 +32,55 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(name: str
         const newSteps = [...steps, newStep];
         return addSteps<ContextOut>(newSteps);
       },
-      async run(initialContext?: InitialContext) {
+      async *run(initialContext?: InitialContext): AsyncGenerator<any, void, unknown> {
         let context = initialContext || {} as InitialContext;
-        for (const step of steps) {
-          const result = await step.action(context);
-          context = step.reduce
-            ? step.reduce(result, context)
-            : initialContext;
+
+        try {
+          for (const step of steps) {
+            const stepData: Step<InitialContext> = {
+              title: step.title,
+              status: STATUS.RUNNING,
+              context
+            };
+
+            const result = await step.action(context);
+            context = step.reduce
+              ? step.reduce(result, context)
+              : initialContext;
+
+            stepData.status = STATUS.COMPLETE;
+            stepData.context = context;
+
+            yield {
+              type: STEP_EVENTS.COMPLETE,
+              status: STATUS.COMPLETE,
+              completedStep: stepData,
+              previousContext: context,
+              newContext: context
+            };
+          }
+
+          yield {
+            type: WORKFLOW_EVENTS.COMPLETE,
+            status: STATUS.COMPLETE,
+            previousContext: context,
+            newContext: context
+          };
+        } catch (error) {
+          const serializedError: SerializedError = {
+            message: (error as Error).message,
+            name: (error as Error).name,
+            stack: (error as Error).stack
+          };
+
+          yield {
+            type: WORKFLOW_EVENTS.ERROR,
+            status: STATUS.ERROR,
+            error: serializedError,
+            previousContext: context,
+            newContext: context
+          };
         }
-        return context;
       }
     };
   }
