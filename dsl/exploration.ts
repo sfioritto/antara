@@ -1,18 +1,16 @@
 import { JsonObject } from "./types"
 import type { SerializedError } from './types'
-import { WORKFLOW_EVENTS, STEP_EVENTS, STATUS } from './constants'
+import { WORKFLOW_EVENTS, STATUS } from './constants'
 
-export type StepEventTypes = typeof STEP_EVENTS[keyof typeof STEP_EVENTS];
-export type WorkflowEventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
+export type EventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
 export type StatusOptions = typeof STATUS[keyof typeof STATUS];
-export type AllEventTypes = StepEventTypes | WorkflowEventTypes;
 
 export interface Event<ContextIn, ContextOut, Options = any> {
   workflowName: string,
   previousContext: ContextIn,
   newContext: ContextOut,
   error?: SerializedError,
-  type: AllEventTypes,
+  type: EventTypes,
   status: StatusOptions,
   completedStep?: Step<ContextOut>,
   steps?: Step<any>[],
