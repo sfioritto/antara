@@ -13,7 +13,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(name: str
       action: (context: ContextIn) => ActionOut | Promise<ActionOut>,
       reduce?: (result: ActionOut, context: ContextIn) => ContextOut
     ) => ReturnType<typeof addSteps<ContextOut>>,
-    run: (initialContext: InitialContext) => Promise<any>
+    run: (initialContext?: InitialContext) => Promise<any>
   } {
     return {
       step<ActionOut, ContextOut extends JsonObject>(
@@ -29,8 +29,8 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(name: str
         const newSteps = [...steps, newStep];
         return addSteps<ContextOut>(newSteps);
       },
-      async run(initialContext: InitialContext) {
-        let context = initialContext;
+      async run(initialContext?: InitialContext) {
+        let context = initialContext || {} as InitialContext;
         for (const step of steps) {
           const result = await step.action(context);
           context = step.reduce
@@ -45,7 +45,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(name: str
   return addSteps<InitialContext>([]);
 }
 
-// Example usage would now look like:
+// Example usage
 const workflow = createWorkflow("test")
   .step(
     "Step 1",
@@ -63,6 +63,6 @@ const workflow = createWorkflow("test")
       message: `${ctx.count} doubled is ${ctx.doubled}`
     })
   )
-  .run({ /* initial context */ });
+  .run();
 
 
