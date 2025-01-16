@@ -13,7 +13,7 @@ export interface Event<ContextIn, ContextOut, Options = any> {
   type: EventTypes,
   status: StatusOptions,
   completedStep?: Step<ContextOut>,
-  steps?: Step<JsonObject>[],
+  steps: Step<JsonObject>[],
   options?: Options,
 }
 
@@ -27,6 +27,24 @@ interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut> {
   title: string;
   action: ((context: ContextIn) => ActionOut | Promise<ActionOut>);
   reduce?: (result: ActionOut, context: ContextIn) => ContextOut
+}
+
+function outputSteps<Context extends JsonObject>(
+  currentContext: Context,
+  completedSteps: Step<JsonObject>[],
+  stepBlocks: StepBlock<any, any, any>[],
+): Step<JsonObject>[] {
+  return stepBlocks.map((stepBlock, index) => {
+    const completedStep = completedSteps[index];
+    if (!completedStep) {
+      return {
+        title: stepBlock.title,
+        status: STATUS.PENDING,
+        context: currentContext,
+      };
+    }
+    return completedStep;
+  });
 }
 
 export function createWorkflow<InitialContext extends JsonObject = {}>(workflowName: string) {
@@ -55,6 +73,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
       async *run(initialContext?: InitialContext): AsyncGenerator<Event<JsonObject, JsonObject>, void, unknown> {
         // This is going to be changed (potentially) after each step completes
         let newContext = initialContext || {} as InitialContext;
+        const completedSteps: Step<JsonObject>[] = [];
 
         const startEvent = {
           workflowName,
@@ -62,6 +81,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
           previousContext: newContext,
           newContext,
           status: STATUS.RUNNING,
+          steps: outputSteps(newContext, completedSteps, steps),
         }
 
         yield structuredClone(startEvent)
@@ -78,6 +98,13 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
             const error = stepError as Error;
             console.error(error.message)
 
+            const completedStep = {
+              title: step.title,
+              status: STATUS.ERROR,
+              context: newContext,
+            }
+            completedSteps.push(completedStep);
+
             const errorEvent = {
               workflowName,
               type: WORKFLOW_EVENTS.ERROR,
@@ -85,6 +112,8 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
               newContext,
               status: STATUS.ERROR,
               error,
+              completedStep,
+              steps: outputSteps(newContext, completedSteps, steps),
             };
             yield structuredClone(errorEvent);
             return;
@@ -95,6 +124,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
             status: STATUS.COMPLETE,
             context: newContext,
           };
+          completedSteps.push(completedStep);
 
           const updateEvent = {
             workflowName,
@@ -103,6 +133,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
             newContext,
             completedStep,
             status: STATUS.RUNNING,
+            steps: outputSteps(newContext, completedSteps, steps),
           }
 
           yield structuredClone(updateEvent);
@@ -113,7 +144,8 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
           type: WORKFLOW_EVENTS.COMPLETE,
           previousContext: initialContext || {},
           newContext,
-          status: STATUS.COMPLETE
+          status: STATUS.COMPLETE,
+          steps: outputSteps(newContext, completedSteps, steps),
         };
 
         yield structuredClone(completeEvent);
