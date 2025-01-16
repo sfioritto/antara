@@ -1,7 +1,4 @@
-type JsonPrimitive = string | number | boolean | null;
-type JsonArray = JsonValue[];
-type JsonObject = { [Key in string]?: JsonValue };
-type JsonValue = JsonPrimitive | JsonArray | JsonObject;
+import { JsonObject } from "./types"
 
 // Ensure Merge always returns a JsonObject
 type Merge<OldContext extends JsonObject, NewProps extends JsonObject> =
@@ -26,7 +23,7 @@ interface StepBlock<Ctx extends JsonObject, Out extends JsonObject> {
   reduce?: (result: Out, context: Ctx) => Simplify<Merge<Ctx, Out>>;
 }
 
-function createWorkflow<TContext extends JsonObject = {}>() {
+export function createWorkflow<TContext extends JsonObject = {}>() {
   function addSteps<T extends JsonObject>(steps: StepBlock<any, any>[]) {
     return {
       step<TOutput extends JsonObject>(
