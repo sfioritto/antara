@@ -2,18 +2,18 @@ import { createWorkflow } from "./new-dsl";
 
 // Example usage
 const myWorkflow = createWorkflow("workflow name")
-  .step("Get coverage", async () => {
-    return {
+  .step("Get coverage", () => {
+      return {
       coverage: { files: ["file1.ts", "file2.ts"] }
     };
   })
-  .step("Find lowest coverage", async (context) => {
+  .step("Find lowest coverage", (context) => {
     // context now has { coverage: { files: string[] } }
     return {
       lowestCoverageFile: { path: context.coverage.files[0] }
     };
   })
-  .step("For hovering over context to see type inference", async (context) => {
+  .step("For hovering over context to see type inference", (context) => {
     // context has coverage + lowestCoverageFile
     // => we can do context.lowestCoverageFile.path etc.
     return {

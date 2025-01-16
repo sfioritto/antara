@@ -26,7 +26,7 @@ export interface Step<Context> {
 interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut> {
   title: string;
   action: ((context: ContextIn) => ActionOut | Promise<ActionOut>);
-  reduce?: (result: ActionOut, context: ContextIn) => ContextOut
+  reduce?: (result: ActionOut, context: ContextIn) => ContextOut | Promise<ContextOut>
 }
 
 function outputSteps<Context extends JsonObject>(
@@ -60,7 +60,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
       step<ActionOut, ContextOut extends JsonObject>(
         title: string,
         action: (context: ContextIn) => ActionOut | Promise<ActionOut>,
-        reduce?: (result: ActionOut, context: ContextIn) => ContextOut
+        reduce?: (result: ActionOut, context: ContextIn) => ContextOut | Promise<ContextOut>
       ) {
         const newStep: StepBlock<ContextIn, ActionOut, ContextOut> = {
           title,
@@ -92,7 +92,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
           try {
             const result = await step.action(newContext);
             newContext = step.reduce
-              ? step.reduce(result, newContext)
+              ? await step.reduce(result, newContext)
               : newContext;
           } catch (stepError) {
             const error = stepError as Error;
