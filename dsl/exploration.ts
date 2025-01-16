@@ -13,7 +13,7 @@ export interface Event<ContextIn, ContextOut, Options = any> {
   type: EventTypes,
   status: StatusOptions,
   completedStep?: Step<ContextOut>,
-  steps?: Step<any>[],
+  steps?: Step<JsonObject>[],
   options?: Options,
 }
 
@@ -64,7 +64,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
           status: STATUS.RUNNING,
         }
 
-        yield startEvent
+        yield structuredClone(startEvent)
 
         for (const step of steps) {
           const previousContext = newContext;
@@ -86,7 +86,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
               status: STATUS.ERROR,
               error,
             };
-            yield errorEvent;
+            yield structuredClone(errorEvent);
             return;
           }
 
@@ -105,7 +105,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
             status: STATUS.RUNNING,
           }
 
-          yield updateEvent;
+          yield structuredClone(updateEvent);
         }
 
         const completeEvent = {
@@ -116,7 +116,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
           status: STATUS.COMPLETE
         };
 
-        yield completeEvent;
+        yield structuredClone(completeEvent);
       }
     };
   }
