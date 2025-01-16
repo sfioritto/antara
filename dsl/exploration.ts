@@ -1,7 +1,29 @@
 import { JsonObject } from "./types"
-import type { Event, Step, StatusOptions, SerializedError } from './types'
+import type { SerializedError } from './types'
 import { WORKFLOW_EVENTS, STEP_EVENTS, STATUS } from './constants'
 
+export type StepEventTypes = typeof STEP_EVENTS[keyof typeof STEP_EVENTS];
+export type WorkflowEventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
+export type StatusOptions = typeof STATUS[keyof typeof STATUS];
+export type AllEventTypes = StepEventTypes | WorkflowEventTypes;
+
+export interface Event<ContextIn, ContextOut, Options = any> {
+  workflowName: string,
+  previousContext: ContextIn,
+  newContext: ContextOut,
+  error?: SerializedError,
+  type: AllEventTypes,
+  status: StatusOptions,
+  completedStep?: Step<ContextOut>,
+  steps?: Step<any>[],
+  options?: Options,
+}
+
+export interface Step<Context> {
+  title: string
+  status: StatusOptions
+  context: Context
+}
 
 interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut> {
   title: string;
@@ -9,7 +31,7 @@ interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut> {
   reduce?: (result: ActionOut, context: ContextIn) => ContextOut
 }
 
-export function createWorkflow<InitialContext extends JsonObject = {}>(name: string) {
+export function createWorkflow<InitialContext extends JsonObject = {}>(workflowName: string) {
   function addSteps<ContextIn extends JsonObject>(steps: StepBlock<any, any, any>[]): {
     step: <ActionOut, ContextOut extends JsonObject>(
       title: string,
@@ -32,55 +54,71 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(name: str
         const newSteps = [...steps, newStep];
         return addSteps<ContextOut>(newSteps);
       },
-      async *run(initialContext?: InitialContext): AsyncGenerator<any, void, unknown> {
-        let context = initialContext || {} as InitialContext;
+      async *run(initialContext?: InitialContext): AsyncGenerator<Event<JsonObject, JsonObject>, void, unknown> {
+        // This is going to be changed (potentially) after each step completes
+        let newContext = initialContext || {} as InitialContext;
 
-        try {
-          for (const step of steps) {
-            const stepData: Step<InitialContext> = {
-              title: step.title,
-              status: STATUS.RUNNING,
-              context
-            };
+        const startEvent = {
+          workflowName,
+          type: WORKFLOW_EVENTS.START,
+          previousContext: newContext,
+          newContext,
+          status: STATUS.RUNNING,
+        }
 
-            const result = await step.action(context);
-            context = step.reduce
-              ? step.reduce(result, context)
+        yield startEvent
+
+        for (const step of steps) {
+          const previousContext = newContext;
+
+          try {
+            const result = await step.action(newContext);
+            newContext = step.reduce
+              ? step.reduce(result, newContext)
               : initialContext;
+          } catch (stepError) {
+            const error = stepError as Error;
+            console.error(error.message)
 
-            stepData.status = STATUS.COMPLETE;
-            stepData.context = context;
-
-            yield {
-              type: STEP_EVENTS.COMPLETE,
-              status: STATUS.COMPLETE,
-              completedStep: stepData,
-              previousContext: context,
-              newContext: context
+            const errorEvent = {
+              workflowName,
+              type: WORKFLOW_EVENTS.ERROR,
+              previousContext: newContext,
+              newContext,
+              status: STATUS.ERROR,
+              error,
             };
+            yield errorEvent;
+            return;
           }
 
-          yield {
-            type: WORKFLOW_EVENTS.COMPLETE,
+          const completedStep = {
+            title: step.title,
             status: STATUS.COMPLETE,
-            previousContext: context,
-            newContext: context
-          };
-        } catch (error) {
-          const serializedError: SerializedError = {
-            message: (error as Error).message,
-            name: (error as Error).name,
-            stack: (error as Error).stack
+            context: newContext,
           };
 
-          yield {
-            type: WORKFLOW_EVENTS.ERROR,
-            status: STATUS.ERROR,
-            error: serializedError,
-            previousContext: context,
-            newContext: context
-          };
+          const updateEvent = {
+            workflowName,
+            type: WORKFLOW_EVENTS.UPDATE,
+            previousContext,
+            newContext,
+            completedStep,
+            status: STATUS.RUNNING,
+          }
+
+          yield updateEvent;
         }
+
+        const completeEvent = {
+          workflowName,
+          type: WORKFLOW_EVENTS.COMPLETE,
+          previousContext: initialContext || {},
+          newContext,
+          status: STATUS.COMPLETE
+        };
+
+        yield completeEvent;
       }
     };
   }
