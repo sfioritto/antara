@@ -1,7 +1,7 @@
-import { createWorkflow } from "./exploration";
+import { createWorkflow } from "./new-dsl";
 
 // Example usage
-const myWorkflow = createWorkflow()
+const myWorkflow = createWorkflow("workflow name")
   .step("Get coverage", async () => {
     return {
       coverage: { files: ["file1.ts", "file2.ts"] }
@@ -19,15 +19,29 @@ const myWorkflow = createWorkflow()
     return {
       hovered: !!context.lowestCoverageFile
     };
-  })
-  .build("Test Coverage");
+  });
 
 // The resulting workflow is typed so that the final .run()
 // will return { coverage: { files: string[] }, lowestCoverageFile: { path: string }, hovered: boolean }
 
 (async () => {
-  const finalResult = await myWorkflow.run();
-  console.log(finalResult.coverage.files);
-  console.log(finalResult.lowestCoverageFile.path);
-  console.log(finalResult.hovered);
+  const workflow = await myWorkflow.run({ cool: 'cool' });
+
+  // START event
+  const start = await workflow.next();
+  console.log('Workflow started:', start.value);
+
+  // Each step will produce an UPDATE event
+  const step1 = await workflow.next();
+  console.log('Step 1 completed:', step1);
+
+  const step2 = await workflow.next();
+  console.log('Step 2 completed:', step2.value);
+
+  const step3 = await workflow.next();
+  console.log('Step 3 completed:', step3.value);
+
+  // COMPLETE event
+  const complete = await workflow.next();
+  console.log('Workflow completed:', complete.value);
 })();
