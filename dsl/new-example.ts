@@ -25,7 +25,7 @@ const myWorkflow = createWorkflow("workflow name")
 // will return { coverage: { files: string[] }, lowestCoverageFile: { path: string }, hovered: boolean }
 
 (async () => {
-  const workflow = await myWorkflow.run({ cool: 'cool' });
+  const workflow = await myWorkflow.run({ initialContext: { cool: 'cool' } });
 
   // START event
   const start = await workflow.next();
