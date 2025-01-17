@@ -27,15 +27,33 @@ export interface Step {
   context: JsonObject
 }
 
+type ActionHandlerParams<ContextIn extends JsonObject, WorkflowOptions extends JsonObject> = {
+  context: ContextIn;
+  options: WorkflowOptions;
+}
+
+type ReduceHandlerParams<
+  ActionOut,
+  ContextIn extends JsonObject,
+  WorkflowOptions extends JsonObject
+> = {
+  result: ActionOut;
+  context: ContextIn;
+  options: WorkflowOptions;
+}
+
 type ActionHandler<
   ContextIn extends JsonObject,
   WorkflowOptions extends JsonObject,
   ActionOut
-> = (context: ContextIn, options: WorkflowOptions) => ActionOut | Promise<ActionOut>
+> = (params: ActionHandlerParams<ContextIn, WorkflowOptions>) => ActionOut | Promise<ActionOut>
+
 type ReduceHandler<
   ActionOut,
   ContextIn extends JsonObject,
-  WorkflowOptions extends JsonObject, ContextOut extends JsonObject> = (result: ActionOut, context: ContextIn, options: WorkflowOptions) => ContextOut | Promise<ContextOut>
+  WorkflowOptions extends JsonObject,
+  ContextOut extends JsonObject
+> = (params: ReduceHandlerParams<ActionOut, ContextIn, WorkflowOptions>) => ContextOut | Promise<ContextOut>
 
 interface StepBlock<
   ContextIn extends JsonObject,
@@ -44,8 +62,8 @@ interface StepBlock<
   ContextOut extends JsonObject
 > {
   title: string;
-  action: ActionHandler<ContextIn, WorkflowOptions, ActionOut>,
-  reduce: ReduceHandler<ActionOut, ContextIn, WorkflowOptions, ContextOut>,
+  action: (params: ActionHandlerParams<ContextIn, WorkflowOptions>) => ActionOut | Promise<ActionOut>;
+  reduce: (params: ReduceHandlerParams<ActionOut, ContextIn, WorkflowOptions>) => ContextOut | Promise<ContextOut>;
 }
 
 type GenericReducerOutput<ActionOut, ContextIn> =
@@ -130,7 +148,8 @@ export function createWorkflow<
           ContextIn,
           WorkflowOptions,
           Merge<ActionOut & ContextIn>
-        > = (result: ActionOut, context: ContextIn) => {
+        > = (params) => {
+          const { result, context } = params;
           if (
             result &&
             typeof result === "object" &&
@@ -190,9 +209,9 @@ export function createWorkflow<
           const previousContext = newContext;
 
           try {
-            const result = await step.action(newContext, options);
+            const result = await step.action({ context: newContext, options });
             newContext = step.reduce
-              ? await step.reduce(result, newContext, options)
+              ? await step.reduce({ result, context: newContext, options })
               : newContext;
           } catch (stepError) {
             const error = stepError as Error;
@@ -280,26 +299,26 @@ const workflow = createWorkflow<typeof options>("test")
   .step(
     "Step 1",
     () => ({ count: 1 }),
-    (result) => result
+    (params) => params.result
   )
   .step(
     "Step 2",
-    (ctx, options) => ({ doubled: ctx.count * 2 }),
-    (result, ctx, options) => ({
-      ...ctx,
-      doubled: result.doubled,
-      featureOne: options.features[0],
+    (params) => ({ doubled: params.context.count * 2 }),
+    (params) => ({
+      ...params.context,
+      doubled: params.result.doubled,
+      featureOne: params.options.features[0],
     })
   )
   .step(
     "Step 3",
-    (ctx) => ({
-      message: `${ctx.count} doubled is ${ctx.doubled}`,
-      featureTwo: options.features[1],
+    (params) => ({
+      message: `${params.context.count} doubled is ${params.context.doubled}`,
+      featureTwo: params.options.features[1],
     }))
   .step(
     "Step 4",
-    (ctx) => console.log(ctx),
+    (params) => console.log(params.context),
 );
 
 const workflowRun = workflow.run({
@@ -322,7 +341,7 @@ console.log(stepAgain.value?.previousContext)
 
 const actionOnlyWorkflow = createWorkflow("actions only")
   .step("First step", () => ({ firstStep: "first" }))
-  .step("Second step", (context) => ({ secondStep: context.firstStep }))
+  .step("Second step", (params) => ({ secondStep: params.context.firstStep }))
 
 // TODO: figure out how to get types to flow through to each step event
 // const workflowRun = workflow.run();
