@@ -81,12 +81,12 @@ export interface AddSteps<
 > {
   (steps: StepBlock<JsonObject, any, JsonObject, WorkflowOptions>[]): {
     step: StepFunction<ContextIn, InitialContext, WorkflowOptions>;
-    run<T extends WorkflowOptions>(
-      params: RunParams<T, InitialContext>
+    run<Options extends WorkflowOptions>(
+      params: RunParams<Options, InitialContext>
     ): AsyncGenerator<
-      | Event<InitialContext, InitialContext, T>  // START event
-      | Event<ContextIn, ContextIn, T>  // UPDATE events
-      | Event<InitialContext, ContextIn, T>  // COMPLETE event
+      | Event<InitialContext, InitialContext, Options>  // START event
+      | Event<ContextIn, ContextIn, Options>  // UPDATE events
+      | Event<InitialContext, ContextIn, Options>  // COMPLETE event
       , void, unknown>;
   };
 }
@@ -177,23 +177,23 @@ export function createWorkflow<
         return addSteps<ContextOut>(newSteps);
       }) as StepFunction<ContextIn, InitialContext, WorkflowOptions>,
 
-      async *run<T extends WorkflowOptions = WorkflowOptions>({
+      async *run<Options extends WorkflowOptions = WorkflowOptions>({
         initialContext = {} as InitialContext,
         initialCompletedSteps = [],
-        options = {} as T
-      }: RunParams<T, InitialContext> & {
+        options = {} as Options
+      }: RunParams<Options, InitialContext> & {
         initialCompletedSteps?: Step[]
       }): AsyncGenerator<
-        | Event<InitialContext, InitialContext, T>  // START event
-        | Event<ContextIn, ContextIn, T>  // UPDATE events
-        | Event<InitialContext, ContextIn, T>  // COMPLETE event
+        | Event<InitialContext, InitialContext, Options>  // START event
+        | Event<ContextIn, ContextIn, Options>  // UPDATE events
+        | Event<InitialContext, ContextIn, Options>  // COMPLETE event
         , void, unknown> {
         let newContext = initialCompletedSteps.length > 0
           ? initialCompletedSteps[initialCompletedSteps.length - 1].context
           : initialContext;
         const completedSteps = [...initialCompletedSteps];
 
-        const startEvent: Event<InitialContext, InitialContext, T> = {
+        const startEvent: Event<InitialContext, InitialContext, Options> = {
           workflowName,
           type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
           previousContext: initialContext,
@@ -227,7 +227,7 @@ export function createWorkflow<
             };
             completedSteps.push(completedStep);
 
-            const errorEvent: Event<ContextIn, ContextIn, T> = {
+            const errorEvent: Event<ContextIn, ContextIn, Options> = {
               workflowName,
               type: WORKFLOW_EVENTS.ERROR,
               previousContext: previousContext as ContextIn,
@@ -249,7 +249,7 @@ export function createWorkflow<
           };
           completedSteps.push(completedStep);
 
-          const updateEvent: Event<ContextIn, ContextIn, T> = {
+          const updateEvent: Event<ContextIn, ContextIn, Options> = {
             workflowName,
             type: WORKFLOW_EVENTS.UPDATE,
             previousContext: previousContext as ContextIn,
@@ -263,7 +263,7 @@ export function createWorkflow<
           yield updateEvent;
         }
 
-        const completeEvent: Event<InitialContext, ContextIn, T> = {
+        const completeEvent: Event<InitialContext, ContextIn, Options> = {
           workflowName,
           type: WORKFLOW_EVENTS.COMPLETE,
           previousContext: initialContext,
