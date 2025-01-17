@@ -279,12 +279,17 @@ const workflow = createWorkflow<typeof options>("test")
   .step(
     "Step 2",
     (ctx, options) => ({ doubled: ctx.count * 2 }),
-    (result, ctx) => ({ ...ctx, doubled: result.doubled })
+    (result, ctx, options) => ({
+      ...ctx,
+      doubled: result.doubled,
+      featureOne: options.features[0],
+    })
   )
   .step(
     "Step 3",
     (ctx) => ({
-      message: `${ctx.count} doubled is ${ctx.doubled}`
+      message: `${ctx.count} doubled is ${ctx.doubled}`,
+      featureTwo: options.features[1],
     }))
   .step(
     "Step 4",
