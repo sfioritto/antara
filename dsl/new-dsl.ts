@@ -63,7 +63,9 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
         reduce?: ReduceHandler<ActionOut, ContextIn, ContextOut>
       ) {
 
-        const genericReducer = (result: ActionOut, context: ContextIn): ContextOut => {
+        const genericReducer: ReduceHandler<
+          ActionOut, ContextIn, ContextOut
+        > = (result: ActionOut, context: ContextIn): ContextOut => {
           if (result
             && typeof result === 'object'
             && !Array.isArray(result)
@@ -175,7 +177,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
 }
 
 // Example usage with reformatted function calls
-const workflow = await createWorkflow("test")
+const workflow = createWorkflow("test")
   .step(
     "Step 1",
     () => ({ count: 1 }),
@@ -191,10 +193,14 @@ const workflow = await createWorkflow("test")
     (ctx) => ({
       message: `${ctx.count} doubled is ${ctx.doubled}`
     })
-  )
-  .run();
+);
+
+const actionOnlyWorkflow = createWorkflow("actions only")
+  .step("First step", () => ({ firstStep: "first" }))
+  .step("Second step", (context) => ({ secondStep: context.firstStep }))
 
 // TODO: figure out how to get types to flow through to each step event
+// const workflowRun = workflow.run();
 // const step1 = await workflow.next();
 // console.log((step1.value as Event<any, any>).newContext.count)
 
