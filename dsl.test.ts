@@ -773,3 +773,44 @@ describe('prompt creation', () => {
   });
 });
 
+describe('workflow options', () => {
+  it('should pass options through to event handlers', async () => {
+    interface SimpleContext {
+      value: number;
+    }
+
+    const eventOptions: any[] = [];
+
+    const optionsWorkflow = workflow<SimpleContext>(
+      'Options Workflow',
+      step(
+        "Simple step",
+        action(async (context) => context.value + 1),
+        reduce((newValue) => ({ value: newValue })),
+        on('step:complete', ({ options }) => {
+          eventOptions.push(options);
+        })
+      ),
+      on('workflow:complete', ({ options }) => {
+        eventOptions.push(options);
+      })
+    );
+
+    const workflowOptions = {
+      testOption: 'test-value'
+    };
+
+    await finalWorkflowEvent(
+      optionsWorkflow.run({
+        initialContext: { value: 1 },
+        options: workflowOptions
+      })
+    );
+
+    // Verify options were passed to event handlers
+    expect(eventOptions).toHaveLength(2); // step:complete and workflow:complete
+    expect(eventOptions[0]).toEqual(workflowOptions);
+    expect(eventOptions[1]).toEqual(workflowOptions);
+  });
+});
+
