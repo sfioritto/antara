@@ -157,12 +157,15 @@ export function createWorkflow<
 
       async *run({
         initialContext,
+        initialCompletedSteps = [],
         options = {} as WorkflowOptions
-      }: RunParams<
-        WorkflowOptions, InitialContext
-      >): AsyncGenerator<Event<JsonObject, JsonObject, WorkflowOptions>, void, unknown> {
-        let newContext = initialContext || {};
-        const completedSteps: Step[] = [];
+      }: RunParams<WorkflowOptions, InitialContext> & {
+        initialCompletedSteps?: Step[]
+      }): AsyncGenerator<Event<JsonObject, JsonObject, WorkflowOptions>, void, unknown> {
+        let newContext = initialCompletedSteps.length > 0
+          ? initialCompletedSteps[initialCompletedSteps.length - 1].context
+          : initialContext || {};
+        const completedSteps = [...initialCompletedSteps];
 
         const startEvent: Event<
           InitialContext,
@@ -170,7 +173,7 @@ export function createWorkflow<
           WorkflowOptions
         > = {
           workflowName,
-          type: WORKFLOW_EVENTS.START,
+          type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
           previousContext: newContext as InitialContext,
           newContext: newContext as InitialContext,
           status: STATUS.RUNNING,
@@ -180,7 +183,10 @@ export function createWorkflow<
 
         yield structuredClone(startEvent);
 
-        for (const step of steps) {
+        // Skip already completed steps
+        const remainingSteps = steps.slice(initialCompletedSteps.length);
+
+        for (const step of remainingSteps) {
           const previousContext = newContext;
 
           try {
