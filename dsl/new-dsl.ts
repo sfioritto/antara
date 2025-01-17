@@ -35,11 +35,6 @@ interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends 
 type GenericReducerOutput<ActionOut, ContextIn> =
   ActionOut extends JsonObject ? ContextIn & ActionOut : ContextIn;
 
-// -----
-// 1. Define a type alias for the function that adds steps
-//    so we don't inline everything.
-// -----
-
 export interface AddSteps<
   ContextIn extends JsonObject,
   InitialContext extends JsonObject
@@ -51,11 +46,6 @@ export interface AddSteps<
     ): AsyncGenerator<Event<JsonObject, JsonObject>, void, unknown>;
   };
 }
-
-// -----
-// 2. Define a type alias for the step function, referencing AddSteps
-//    so TypeScript doesn't try to expand it all inline.
-// -----
 
 export type StepFunction<
   ContextIn extends JsonObject,
