@@ -133,6 +133,11 @@ type Merge<T> = T extends object ? {
   [K in keyof T]: T[K]
 } & {} : T;
 
+// Add a type-safe clone helper
+function cloneEvent<EventType extends Event<any, any, any>>(event: EventType): EventType {
+  return structuredClone(event);
+}
+
 export function createWorkflow<
   WorkflowOptions extends JsonObject = {},
   InitialContext extends JsonObject = {}
@@ -203,7 +208,7 @@ export function createWorkflow<
           options,
         };
 
-        yield startEvent;
+        yield cloneEvent(startEvent);
 
         // Skip already completed steps
         const remainingSteps = steps.slice(initialCompletedSteps.length);
@@ -238,7 +243,7 @@ export function createWorkflow<
               options,
               steps: outputSteps(newContext, completedSteps, steps),
             };
-            yield errorEvent;
+            yield cloneEvent(errorEvent);
             return;
           }
 
@@ -260,7 +265,7 @@ export function createWorkflow<
             steps: outputSteps(newContext, completedSteps, steps),
           };
 
-          yield updateEvent;
+          yield cloneEvent(updateEvent);
         }
 
         const completeEvent: Event<InitialContext, ContextIn, Options> = {
@@ -273,7 +278,7 @@ export function createWorkflow<
           steps: outputSteps(newContext, completedSteps, steps),
         };
 
-        yield completeEvent;
+        yield cloneEvent(completeEvent);
       },
     };
   }
