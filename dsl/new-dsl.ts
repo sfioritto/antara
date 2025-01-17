@@ -33,7 +33,7 @@ interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends 
 }
 
 type GenericReducerOutput<ActionOut, ContextIn> =
-  ActionOut extends JsonObject ? ContextIn & ActionOut : ContextIn;
+  ActionOut extends JsonObject ? Merge<ContextIn & ActionOut> : ContextIn;
 
 export interface AddSteps<
   ContextIn extends JsonObject,
@@ -55,13 +55,13 @@ export type StepFunction<
     title: string,
     action: ActionHandler<ContextIn, ActionOut>,
     reduce: ReduceHandler<ActionOut, ContextIn, ContextOut>
-  ): ReturnType<AddSteps<ContextOut, InitialContext>>;
+  ): ReturnType<AddSteps<Merge<ContextOut>, InitialContext>>;
 
   <ActionOut>(
     title: string,
     action: ActionHandler<ContextIn, ActionOut>
   ): ReturnType<
-    AddSteps<GenericReducerOutput<ActionOut, ContextIn>, InitialContext>
+    AddSteps<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext>
   >;
 };
 
@@ -83,6 +83,11 @@ function outputSteps(
   });
 }
 
+// Add this type utility near your other type definitions
+type Merge<T> = T extends object ? {
+  [K in keyof T]: T[K]
+} & {} : T;
+
 export function createWorkflow<
   InitialContext extends JsonObject = {}
 >(workflowName: string) {
@@ -99,7 +104,7 @@ export function createWorkflow<
         const genericReducer: ReduceHandler<
           ActionOut,
           ContextIn,
-          ActionOut & ContextIn | ContextIn
+          Merge<ActionOut & ContextIn>
         > = (result: ActionOut, context: ContextIn) => {
           if (
             result &&
@@ -110,9 +115,9 @@ export function createWorkflow<
             return {
               ...context,
               ...result,
-            } as ActionOut & ContextIn;
+            } as Merge<ActionOut & ContextIn>;
           }
-          return context as ContextIn;
+          return context as Merge<ActionOut & ContextIn>;
         };
 
         const newStep = {
