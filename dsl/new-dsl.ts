@@ -5,7 +5,11 @@ import { WORKFLOW_EVENTS, STATUS } from './constants'
 export type EventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
 export type StatusOptions = typeof STATUS[keyof typeof STATUS];
 
-export interface Event<ContextIn, ContextOut, Options = any> {
+export interface Event<
+  ContextIn extends JsonObject,
+  ContextOut extends JsonObject,
+  Options extends JsonObject,
+> {
   workflowName: string,
   previousContext: ContextIn,
   newContext: ContextOut,
@@ -14,7 +18,7 @@ export interface Event<ContextIn, ContextOut, Options = any> {
   status: StatusOptions,
   completedStep?: Step,
   steps: Step[],
-  options?: Options,
+  options: Options,
 }
 
 export interface Step {
@@ -35,33 +39,40 @@ interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends 
 type GenericReducerOutput<ActionOut, ContextIn> =
   ActionOut extends JsonObject ? Merge<ContextIn & ActionOut> : ContextIn;
 
+interface RunParams<WorkflowOptions extends JsonObject, InitialContext extends JsonObject> {
+  initialContext?: InitialContext;
+  options?: WorkflowOptions;
+}
+
 export interface AddSteps<
   ContextIn extends JsonObject,
-  InitialContext extends JsonObject
+  InitialContext extends JsonObject,
+  WorkflowOptions extends JsonObject,
 > {
   (steps: StepBlock<JsonObject, any, JsonObject>[]): {
-    step: StepFunction<ContextIn, InitialContext>;
-    run(
-      initialContext?: InitialContext
-    ): AsyncGenerator<Event<JsonObject, JsonObject>, void, unknown>;
+    step: StepFunction<ContextIn, InitialContext, WorkflowOptions>;
+    run<T extends WorkflowOptions>(
+      params: RunParams<T, InitialContext>
+    ): AsyncGenerator<Event<JsonObject, JsonObject, T>, void, unknown>;
   };
 }
 
 export type StepFunction<
   ContextIn extends JsonObject,
-  InitialContext extends JsonObject
+  InitialContext extends JsonObject,
+  WorkflowOptions extends JsonObject,
 > = {
   <ActionOut, ContextOut extends JsonObject>(
     title: string,
     action: ActionHandler<ContextIn, ActionOut>,
     reduce: ReduceHandler<ActionOut, ContextIn, ContextOut>
-  ): ReturnType<AddSteps<Merge<ContextOut>, InitialContext>>;
+  ): ReturnType<AddSteps<Merge<ContextOut>, InitialContext, WorkflowOptions>>;
 
   <ActionOut>(
     title: string,
     action: ActionHandler<ContextIn, ActionOut>
   ): ReturnType<
-    AddSteps<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext>
+    AddSteps<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions>
   >;
 };
 
@@ -89,6 +100,7 @@ type Merge<T> = T extends object ? {
 } & {} : T;
 
 export function createWorkflow<
+  WorkflowOptions extends JsonObject = {},
   InitialContext extends JsonObject = {}
 >(workflowName: string) {
   // Actually define the function that adds steps
@@ -128,21 +140,29 @@ export function createWorkflow<
 
         const newSteps = [...steps, newStep];
         return addSteps<ContextOut>(newSteps);
-      }) as StepFunction<ContextIn, InitialContext>,
+      }) as StepFunction<ContextIn, InitialContext, WorkflowOptions>,
 
-      async *run(
-        initialContext?: InitialContext
-      ): AsyncGenerator<Event<JsonObject, JsonObject>, void, unknown> {
+      async *run({
+        initialContext,
+        options = {} as WorkflowOptions
+      }: RunParams<
+        WorkflowOptions, InitialContext
+      >): AsyncGenerator<Event<JsonObject, JsonObject, WorkflowOptions>, void, unknown> {
         let newContext = initialContext || {};
         const completedSteps: Step[] = [];
 
-        const startEvent: Event<JsonObject, JsonObject> = {
+        const startEvent: Event<
+          InitialContext,
+          InitialContext,
+          WorkflowOptions
+        > = {
           workflowName,
           type: WORKFLOW_EVENTS.START,
-          previousContext: newContext,
-          newContext,
+          previousContext: newContext as InitialContext,
+          newContext: newContext as InitialContext,
           status: STATUS.RUNNING,
           steps: outputSteps(newContext, completedSteps, steps),
+          options,
         };
 
         yield structuredClone(startEvent);
@@ -166,7 +186,11 @@ export function createWorkflow<
             };
             completedSteps.push(completedStep);
 
-            const errorEvent: Event<JsonObject, JsonObject> = {
+            const errorEvent: Event<
+              typeof newContext,
+              typeof newContext,
+              WorkflowOptions
+            > = {
               workflowName,
               type: WORKFLOW_EVENTS.ERROR,
               previousContext: newContext,
@@ -174,6 +198,7 @@ export function createWorkflow<
               status: STATUS.ERROR,
               error,
               completedStep,
+              options,
               steps: outputSteps(newContext, completedSteps, steps),
             };
             yield structuredClone(errorEvent);
@@ -187,25 +212,35 @@ export function createWorkflow<
           };
           completedSteps.push(completedStep);
 
-          const updateEvent: Event<JsonObject, JsonObject> = {
+          const updateEvent: Event<
+            typeof previousContext,
+            typeof newContext,
+            WorkflowOptions
+          > = {
             workflowName,
             type: WORKFLOW_EVENTS.UPDATE,
             previousContext,
             newContext,
             completedStep,
             status: STATUS.RUNNING,
+            options,
             steps: outputSteps(newContext, completedSteps, steps),
           };
 
           yield structuredClone(updateEvent);
         }
 
-        const completeEvent: Event<JsonObject, JsonObject> = {
+        const completeEvent: Event<
+          InitialContext,
+          typeof newContext,
+          WorkflowOptions
+        > = {
           workflowName,
           type: WORKFLOW_EVENTS.COMPLETE,
-          previousContext: initialContext || {},
+          previousContext: (initialContext || {}) as InitialContext,
           newContext,
           status: STATUS.COMPLETE,
+          options,
           steps: outputSteps(newContext, completedSteps, steps),
         };
 
@@ -218,9 +253,11 @@ export function createWorkflow<
   return addSteps<InitialContext>([]);
 }
 
-
 // Example usage with reformatted function calls
-const workflow = createWorkflow("test")
+const options = {
+  features: ['speed', 'maneuver'],
+}
+const workflow = createWorkflow<typeof options>("test")
   .step(
     "Step 1",
     () => ({ count: 1 }),
@@ -241,6 +278,24 @@ const workflow = createWorkflow("test")
     (ctx) => console.log(ctx),
 );
 
+const workflowRun = workflow.run({
+  options,
+})
+
+const stepOne = await workflowRun.next()
+console.log(stepOne.value?.options)
+
+const workflowRunTwo = workflow.run({
+  options: {
+    ...options,
+    workflowRunId: 4,
+  }
+})
+
+const stepAgain = await workflowRunTwo.next()
+console.log(stepAgain.value?.options)
+console.log(stepAgain.value?.previousContext)
+
 const actionOnlyWorkflow = createWorkflow("actions only")
   .step("First step", () => ({ firstStep: "first" }))
   .step("Second step", (context) => ({ secondStep: context.firstStep }))
@@ -249,5 +304,4 @@ const actionOnlyWorkflow = createWorkflow("actions only")
 // const workflowRun = workflow.run();
 // const step1 = await workflow.next();
 // console.log((step1.value as Event<any, any>).newContext.count)
-
 
