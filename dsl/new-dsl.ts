@@ -35,7 +35,7 @@ interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends 
 function outputSteps<CurrentContext extends JsonObject>(
   currentContext: CurrentContext,
   completedSteps: Step[],
-  stepBlocks: StepBlock<any, any, any>[]
+  stepBlocks: StepBlock<JsonObject, any, JsonObject>[]
 ): Step[] {
   return stepBlocks.map((stepBlock, index) => {
     const completedStep = completedSteps[index];
