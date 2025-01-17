@@ -509,3 +509,60 @@ describe('workflow options', () => {
     ]);
   });
 });
+
+describe('context immutability', () => {
+  it('should not modify the original context when action or reducer mutates context', async () => {
+    const originalContext = {
+      value: 1,
+      nested: { count: 0 }
+    } as const;
+
+    type TestContext = {
+      value: number;
+      nested: { count: number };
+    }
+
+    const workflow = createWorkflow<{}, TestContext>('Mutation Test Workflow')
+      .step(
+        "Mutating action step",
+        ({ context }) => {
+          // Try to mutate context directly
+          (context as any).value = 99;
+          (context as any).nested.count = 99;
+          return { value: 99, nested: { count: 99 } };
+        }
+      )
+      .step(
+        "Mutating reducer step",
+        () => 42,
+        ({ context }) => {
+          // Try to mutate context directly
+          (context as any).value = 100;
+          (context as any).nested.count = 100;
+          return { value: 100, nested: { count: 100 } };
+        }
+      );
+
+    const workflowRun = workflow.run({
+      initialContext: originalContext
+    });
+
+    // Run through all events
+    const events: Event<any, any, any>[] = [];
+    for await (const event of workflowRun) {
+      events.push(event);
+    }
+
+    // Verify original context remains unchanged
+    expect(originalContext).toEqual({
+      value: 1,
+      nested: { count: 0 }
+    });
+
+    // Verify that the workflow still progressed with the new values
+    expect(events[events.length - 1].newContext).toEqual({
+      value: 100,
+      nested: { count: 100 }
+    });
+  });
+});

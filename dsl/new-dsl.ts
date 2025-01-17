@@ -208,8 +208,8 @@ export function createWorkflow<
         | Event<InitialContext, ContextIn, Options>  // COMPLETE event
         , void, unknown> {
         let newContext = initialCompletedSteps.length > 0
-          ? initialCompletedSteps[initialCompletedSteps.length - 1].context
-          : initialContext;
+          ? structuredClone(initialCompletedSteps[initialCompletedSteps.length - 1].context)
+          : structuredClone(initialContext);
         const completedSteps = [...initialCompletedSteps];
 
         const startEvent: Event<InitialContext, InitialContext, Options> = {
@@ -229,12 +229,12 @@ export function createWorkflow<
         const remainingSteps = steps.slice(initialCompletedSteps.length);
 
         for (const step of remainingSteps) {
-          const previousContext = newContext;
+          const previousContext = structuredClone(newContext);
 
           try {
-            const result = await step.action({ context: newContext, options });
+            const result = await step.action({ context: structuredClone(newContext), options });
             newContext = step.reduce
-              ? await step.reduce({ result, context: newContext, options })
+              ? await step.reduce({ result, context: structuredClone(newContext), options })
               : newContext;
           } catch (stepError) {
             const error = stepError as Error;
