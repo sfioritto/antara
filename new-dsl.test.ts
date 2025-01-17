@@ -41,6 +41,28 @@ describe('workflow creation', () => {
     expect(completeResult.value?.status).toBe(STATUS.COMPLETE);
     expect(completeResult.value?.newContext).toEqual({ count: 1, doubled: 2 });
   });
+
+  it('should create a workflow with a name and description when passed an object', async () => {
+    const workflow = createWorkflow({
+      name: 'my named workflow',
+      description: 'some description'
+    });
+
+    const workflowRun = workflow.run({});
+    const startResult = await workflowRun.next();
+
+    expect(startResult.value?.workflowName).toBe('my named workflow');
+    expect(startResult.value?.description).toBe('some description');
+  });
+
+  it('should create a workflow with just a name when passed a string', async () => {
+    const workflow = createWorkflow('simple workflow');
+    const workflowRun = workflow.run({});
+    const startResult = await workflowRun.next();
+
+    expect(startResult.value?.workflowName).toBe('simple workflow');
+    expect(startResult.value?.description).toBeUndefined();
+  });
 });
 
 describe('error handling', () => {

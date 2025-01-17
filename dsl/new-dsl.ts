@@ -11,6 +11,7 @@ export interface Event<
   Options extends JsonObject,
 > {
   workflowName: string,
+  description?: string,
   previousContext: ContextIn,
   newContext: ContextOut,
   error?: SerializedError,
@@ -140,10 +141,18 @@ function cloneEvent<EventType extends Event<any, any, any>>(event: EventType): E
   return structuredClone(event);
 }
 
+interface WorkflowConfig {
+  name: string;
+  description?: string;
+}
+
 export function createWorkflow<
   WorkflowOptions extends JsonObject = {},
   InitialContext extends JsonObject = {}
->(workflowName: string) {
+>(nameOrConfig: string | WorkflowConfig) {
+  const workflowName = typeof nameOrConfig === 'string' ? nameOrConfig : nameOrConfig.name;
+  const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
+
   // Actually define the function that adds steps
   function addSteps<ContextIn extends JsonObject>(
     steps: StepBlock<JsonObject, WorkflowOptions, any, JsonObject>[]
@@ -205,6 +214,7 @@ export function createWorkflow<
 
         const startEvent: Event<InitialContext, InitialContext, Options> = {
           workflowName,
+          description,
           type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
           previousContext: initialContext,
           newContext: initialContext,
