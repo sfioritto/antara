@@ -32,8 +32,8 @@ interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends 
   reduce?: ReduceHandler<ActionOut, ContextIn, ContextOut>,
 }
 
-function outputSteps<CurrentContext extends JsonObject>(
-  currentContext: CurrentContext,
+function outputSteps(
+  currentContext: JsonObject,
   completedSteps: Step[],
   stepBlocks: StepBlock<JsonObject, any, JsonObject>[]
 ): Step[] {
