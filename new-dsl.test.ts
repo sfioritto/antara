@@ -415,3 +415,97 @@ describe('step completion', () => {
     ]);
   });
 });
+
+describe('workflow options', () => {
+  it('should pass options through to steps and maintain them in events', async () => {
+    interface WorkflowOptions extends JsonObject {
+      testOption: string;
+      [key: string]: any;
+    }
+
+    const workflow = createWorkflow<WorkflowOptions>('Options Workflow')
+      .step(
+        "First step",
+        () => ({ value: 1 }),
+        ({ result, options }) => ({
+          value: result.value,
+          usedOption: options.testOption
+        })
+      )
+      .step(
+        "Second step",
+        ({ context }) => ({ value: context.value * 2 }),
+        ({ result, options }) => ({
+          value: result.value,
+          usedOption: options.testOption
+        })
+      );
+
+    const workflowOptions = {
+      testOption: 'test-value'
+    };
+
+    const events: Event<any, any, any>[] = [];
+    const workflowRun = workflow.run({
+      options: workflowOptions
+    });
+
+    // Collect all events
+    for await (const event of workflowRun) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        workflowName: 'Options Workflow',
+        type: WORKFLOW_EVENTS.START,
+        status: STATUS.RUNNING,
+        previousContext: {},
+        newContext: {},
+        steps: [
+          { title: 'First step', status: STATUS.PENDING, context: {} },
+          { title: 'Second step', status: STATUS.PENDING, context: {} }
+        ],
+        options: workflowOptions
+      },
+      {
+        workflowName: 'Options Workflow',
+        type: WORKFLOW_EVENTS.UPDATE,
+        status: STATUS.RUNNING,
+        previousContext: {},
+        newContext: { value: 1, usedOption: 'test-value' },
+        completedStep: { title: 'First step', status: STATUS.COMPLETE, context: { value: 1, usedOption: 'test-value' } },
+        steps: [
+          { title: 'First step', status: STATUS.COMPLETE, context: { value: 1, usedOption: 'test-value' } },
+          { title: 'Second step', status: STATUS.PENDING, context: { value: 1, usedOption: 'test-value' } }
+        ],
+        options: workflowOptions
+      },
+      {
+        workflowName: 'Options Workflow',
+        type: WORKFLOW_EVENTS.UPDATE,
+        status: STATUS.RUNNING,
+        previousContext: { value: 1, usedOption: 'test-value' },
+        newContext: { value: 2, usedOption: 'test-value' },
+        completedStep: { title: 'Second step', status: STATUS.COMPLETE, context: { value: 2, usedOption: 'test-value' } },
+        steps: [
+          { title: 'First step', status: STATUS.COMPLETE, context: { value: 1, usedOption: 'test-value' } },
+          { title: 'Second step', status: STATUS.COMPLETE, context: { value: 2, usedOption: 'test-value' } }
+        ],
+        options: workflowOptions
+      },
+      {
+        workflowName: 'Options Workflow',
+        type: WORKFLOW_EVENTS.COMPLETE,
+        status: STATUS.COMPLETE,
+        previousContext: {},
+        newContext: { value: 2, usedOption: 'test-value' },
+        steps: [
+          { title: 'First step', status: STATUS.COMPLETE, context: { value: 1, usedOption: 'test-value' } },
+          { title: 'Second step', status: STATUS.COMPLETE, context: { value: 2, usedOption: 'test-value' } }
+        ],
+        options: workflowOptions
+      }
+    ]);
+  });
+});
