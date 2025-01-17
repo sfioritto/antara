@@ -23,10 +23,13 @@ export interface Step {
   context: JsonObject
 }
 
+type ActionHandler<ContextIn, ActionOut> = ((context: ContextIn) => ActionOut | Promise<ActionOut>);
+type ReduceHandler<ActionOut, ContextIn, ContextOut> = (result: ActionOut, context: ContextIn) => ContextOut | Promise<ContextOut>
+
 interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends JsonObject> {
   title: string;
-  action: ((context: ContextIn) => ActionOut | Promise<ActionOut>);
-  reduce?: (result: ActionOut, context: ContextIn) => ContextOut | Promise<ContextOut>
+  action: ActionHandler<ContextIn, ActionOut>,
+  reduce?: ReduceHandler<ActionOut, ContextIn, ContextOut>,
 }
 
 function outputSteps<CurrentContext extends JsonObject>(
