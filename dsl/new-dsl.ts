@@ -75,6 +75,7 @@ type GenericReducerOutput<ActionOut, ContextIn> =
 interface RunParams<WorkflowOptions extends JsonObject, InitialContext extends JsonObject> {
   initialContext?: InitialContext;
   options?: WorkflowOptions;
+  initialCompletedSteps?: Step[];
 }
 
 export interface AddSteps<

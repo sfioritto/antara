@@ -566,3 +566,83 @@ describe('context immutability', () => {
     });
   });
 });
+
+describe('workflow resumption', () => {
+  it('should resume workflow from a specific step with correct context chain', async () => {
+    type Context = {
+      value: number;
+      [key: string]: any;
+    }
+
+    const workflow = createWorkflow<{}, Context>('Three Step Workflow')
+      .step(
+        "Step 1: Double",
+        ({ context }) => ({ value: context.value * 2 })
+      )
+      .step(
+        "Step 2: Add 10",
+        ({ context }) => ({ value: context.value + 10 })
+      )
+      .step(
+        "Step 3: Multiply by 3",
+        ({ context }) => ({ value: context.value * 3 })
+      );
+
+    const initialContext = { value: 2 };
+
+    // First run the workflow normally to get completed steps
+    const events: Event<any, any, any>[] = [];
+    const fullRun = workflow.run({ initialContext });
+    for await (const event of fullRun) {
+      events.push(event);
+    }
+
+    // Get the completed first step
+    const firstStep = events[1].completedStep!;
+
+    // Now run the workflow again, but starting from step 2
+    const resumedEvents: Event<any, any, any>[] = [];
+    const resumedRun = workflow.run({
+      initialContext,
+      initialCompletedSteps: [firstStep]
+    });
+
+    for await (const event of resumedRun) {
+      resumedEvents.push(event);
+    }
+
+    // Verify the full run executed correctly
+    expect(events[events.length - 1].newContext).toEqual({
+      value: 42  // ((2 * 2) + 10) * 3 = 42
+    });
+    expect(events.map(e => e.type)).toEqual([
+      WORKFLOW_EVENTS.START,
+      WORKFLOW_EVENTS.UPDATE,  // After double
+      WORKFLOW_EVENTS.UPDATE,  // After add 10
+      WORKFLOW_EVENTS.UPDATE,  // After multiply by 3
+      WORKFLOW_EVENTS.COMPLETE
+    ]);
+    expect(events[1].completedStep?.context.value).toBe(4);   // After double
+    expect(events[2].completedStep?.context.value).toBe(14);  // After add 10
+    expect(events[3].completedStep?.context.value).toBe(42);  // After multiply by 3
+
+    // Verify the resumed run started from step 2
+    expect(resumedEvents[0].type).toBe(WORKFLOW_EVENTS.RESTART);
+    expect(resumedEvents[0].steps).toEqual([
+      { title: 'Step 1: Double', status: STATUS.COMPLETE, context: { value: 4 } },
+      { title: 'Step 2: Add 10', status: STATUS.PENDING, context: { value: 4 } },
+      { title: 'Step 3: Multiply by 3', status: STATUS.PENDING, context: { value: 4 } }
+    ]);
+
+    // Verify resumed run completed correctly
+    expect(resumedEvents[resumedEvents.length - 1].newContext).toEqual({
+      value: 42  // Same final result
+    });
+    expect(resumedEvents.map(e => e.type)).toEqual([
+      WORKFLOW_EVENTS.RESTART,
+      WORKFLOW_EVENTS.UPDATE,   // After add 10
+      WORKFLOW_EVENTS.UPDATE,   // After multiply by 3
+      WORKFLOW_EVENTS.COMPLETE
+    ]);
+  });
+});
