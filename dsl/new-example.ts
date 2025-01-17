@@ -1,6 +1,6 @@
-import { createWorkflow } from "./new-dsl";
+import { createWorkflow } from './new-dsl';
 
-// Example usage
+// Original example showing type inference
 const myWorkflow = createWorkflow("workflow name")
   .step("Get coverage", () => {
       return {
@@ -45,3 +45,65 @@ const myWorkflow = createWorkflow("workflow name")
   const complete = await workflow.next();
   console.log('Workflow completed:', complete.value?.newContext);
 })();
+
+// Additional examples showing options and different patterns
+
+// Example with workflow options
+const optionsExample = {
+  features: ['speed', 'maneuver'],
+}
+
+const optionsWorkflow = createWorkflow<typeof optionsExample>("options test")
+  .step(
+    "Step 1",
+    () => ({ count: 1 }),
+    ({ result }) => result
+  )
+  .step(
+    "Step 2",
+    ({ context, options }) => ({ doubled: context.count * 2 }),
+    ({ result, context, options }) => ({
+      ...context,
+      doubled: result.doubled,
+      featureOne: options.features[0],
+    })
+  )
+  .step(
+    "Step 3",
+    ({ context, options }) => ({
+      message: `${context.count} doubled is ${context.doubled}`,
+      featureTwo: options.features[1],
+    }))
+  .step(
+    "Step 4",
+    ({ context }) => console.log(context),
+);
+
+// Example of running workflows with different options
+async function runOptionsExample() {
+  const workflowRun = optionsWorkflow.run({
+    options: optionsExample,
+  })
+
+  const stepOne = await workflowRun.next()
+  console.log(stepOne.value?.options)
+
+  const workflowRunTwo = optionsWorkflow.run({
+    options: {
+      ...optionsExample,
+      workflowRunId: 4,
+    }
+  })
+
+  const stepAgain = await workflowRunTwo.next()
+  console.log(stepAgain.value?.options)
+  console.log(stepAgain.value?.previousContext)
+}
+
+// Example of a simpler workflow with just actions
+const actionOnlyWorkflow = createWorkflow("actions only")
+  .step("First step", () => ({ firstStep: "first" }))
+  .step("Second step", ({ context }) => ({ secondStep: context.firstStep }))
+
+// Note: These examples show different patterns of using the DSL
+// They're here for reference and aren't meant to be run directly
