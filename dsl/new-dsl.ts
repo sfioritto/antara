@@ -35,6 +35,46 @@ interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends 
 type GenericReducerOutput<ActionOut, ContextIn> =
   ActionOut extends JsonObject ? ContextIn & ActionOut : ContextIn;
 
+// -----
+// 1. Define a type alias for the function that adds steps
+//    so we don't inline everything.
+// -----
+
+export interface AddSteps<
+  ContextIn extends JsonObject,
+  InitialContext extends JsonObject
+> {
+  (steps: StepBlock<JsonObject, any, JsonObject>[]): {
+    step: StepFunction<ContextIn, InitialContext>;
+    run(
+      initialContext?: InitialContext
+    ): AsyncGenerator<Event<JsonObject, JsonObject>, void, unknown>;
+  };
+}
+
+// -----
+// 2. Define a type alias for the step function, referencing AddSteps
+//    so TypeScript doesn't try to expand it all inline.
+// -----
+
+export type StepFunction<
+  ContextIn extends JsonObject,
+  InitialContext extends JsonObject
+> = {
+  <ActionOut, ContextOut extends JsonObject>(
+    title: string,
+    action: ActionHandler<ContextIn, ActionOut>,
+    reduce: ReduceHandler<ActionOut, ContextIn, ContextOut>
+  ): ReturnType<AddSteps<ContextOut, InitialContext>>;
+
+  <ActionOut>(
+    title: string,
+    action: ActionHandler<ContextIn, ActionOut>
+  ): ReturnType<
+    AddSteps<GenericReducerOutput<ActionOut, ContextIn>, InitialContext>
+  >;
+};
+
 function outputSteps(
   currentContext: JsonObject,
   completedSteps: Step[],
@@ -53,23 +93,10 @@ function outputSteps(
   });
 }
 
-export function createWorkflow<InitialContext extends JsonObject = {}>(
-  workflowName: string
-) {
-
-  type StepFunction<ContextIn extends JsonObject> = {
-    <ActionOut, ContextOut extends JsonObject>(
-      title: string,
-      action: ActionHandler<ContextIn, ActionOut>,
-      reduce: ReduceHandler<ActionOut, ContextIn, ContextOut>
-    ): ReturnType<typeof addSteps<ContextOut>>;
-
-    <ActionOut>(
-      title: string,
-      action: ActionHandler<ContextIn, ActionOut>
-    ): ReturnType<typeof addSteps<GenericReducerOutput<ActionOut, ContextIn>>>;
-  }
-
+export function createWorkflow<
+  InitialContext extends JsonObject = {}
+>(workflowName: string) {
+  // Actually define the function that adds steps
   function addSteps<ContextIn extends JsonObject>(
     steps: StepBlock<JsonObject, any, JsonObject>[]
   ) {
@@ -84,10 +111,11 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
           ContextIn,
           ActionOut & ContextIn | ContextIn
         > = (result: ActionOut, context: ContextIn) => {
-          if (result
-            && typeof result === 'object'
-            && !Array.isArray(result)
-            && Object.getPrototypeOf(result) === Object.prototype
+          if (
+            result &&
+            typeof result === "object" &&
+            !Array.isArray(result) &&
+            Object.getPrototypeOf(result) === Object.prototype
           ) {
             return {
               ...context,
@@ -102,27 +130,27 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
           action,
           reduce: reduce ?? genericReducer,
         } as StepBlock<JsonObject, ActionOut, ContextOut>;
+
         const newSteps = [...steps, newStep];
         return addSteps<ContextOut>(newSteps);
-      }) as StepFunction<ContextIn>,
+      }) as StepFunction<ContextIn, InitialContext>,
 
       async *run(
         initialContext?: InitialContext
       ): AsyncGenerator<Event<JsonObject, JsonObject>, void, unknown> {
-        // This is going to be changed (potentially) after each step completes
         let newContext = initialContext || {};
         const completedSteps: Step[] = [];
 
-        const startEvent = {
+        const startEvent: Event<JsonObject, JsonObject> = {
           workflowName,
           type: WORKFLOW_EVENTS.START,
           previousContext: newContext,
           newContext,
           status: STATUS.RUNNING,
           steps: outputSteps(newContext, completedSteps, steps),
-        }
+        };
 
-        yield structuredClone(startEvent)
+        yield structuredClone(startEvent);
 
         for (const step of steps) {
           const previousContext = newContext;
@@ -134,16 +162,16 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
               : newContext;
           } catch (stepError) {
             const error = stepError as Error;
-            console.error(error.message)
+            console.error(error.message);
 
             const completedStep = {
               title: step.title,
               status: STATUS.ERROR,
               context: newContext,
-            }
+            };
             completedSteps.push(completedStep);
 
-            const errorEvent = {
+            const errorEvent: Event<JsonObject, JsonObject> = {
               workflowName,
               type: WORKFLOW_EVENTS.ERROR,
               previousContext: newContext,
@@ -164,7 +192,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
           };
           completedSteps.push(completedStep);
 
-          const updateEvent = {
+          const updateEvent: Event<JsonObject, JsonObject> = {
             workflowName,
             type: WORKFLOW_EVENTS.UPDATE,
             previousContext,
@@ -172,12 +200,12 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
             completedStep,
             status: STATUS.RUNNING,
             steps: outputSteps(newContext, completedSteps, steps),
-          }
+          };
 
           yield structuredClone(updateEvent);
         }
 
-        const completeEvent = {
+        const completeEvent: Event<JsonObject, JsonObject> = {
           workflowName,
           type: WORKFLOW_EVENTS.COMPLETE,
           previousContext: initialContext || {},
@@ -187,12 +215,14 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
         };
 
         yield structuredClone(completeEvent);
-      }
+      },
     };
   }
 
+  // 4. Return the "addSteps" result with a blank array to start
   return addSteps<InitialContext>([]);
 }
+
 
 // Example usage with reformatted function calls
 const workflow = createWorkflow("test")
@@ -210,7 +240,10 @@ const workflow = createWorkflow("test")
     "Step 3",
     (ctx) => ({
       message: `${ctx.count} doubled is ${ctx.doubled}`
-    })
+    }))
+  .step(
+    "Step 4",
+    (ctx) => console.log(ctx),
 );
 
 const actionOnlyWorkflow = createWorkflow("actions only")
