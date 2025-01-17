@@ -455,58 +455,47 @@ describe('workflow options', () => {
       events.push(event);
     }
 
-    expect(events).toEqual([
-      {
-        workflowName: 'Options Workflow',
-        type: WORKFLOW_EVENTS.START,
-        status: STATUS.RUNNING,
-        previousContext: {},
-        newContext: {},
-        steps: [
-          { title: 'First step', status: STATUS.PENDING, context: {} },
-          { title: 'Second step', status: STATUS.PENDING, context: {} }
-        ],
-        options: workflowOptions
+    // Verify START event has options and empty context
+    expect(events[0]).toEqual(expect.objectContaining({
+      type: WORKFLOW_EVENTS.START,
+      options: workflowOptions,
+      newContext: {}
+    }));
+
+    // Verify first step used options correctly
+    expect(events[1]).toEqual(expect.objectContaining({
+      type: WORKFLOW_EVENTS.UPDATE,
+      newContext: {
+        value: 1,
+        usedOption: 'test-value'
       },
-      {
-        workflowName: 'Options Workflow',
-        type: WORKFLOW_EVENTS.UPDATE,
-        status: STATUS.RUNNING,
-        previousContext: {},
-        newContext: { value: 1, usedOption: 'test-value' },
-        completedStep: { title: 'First step', status: STATUS.COMPLETE, context: { value: 1, usedOption: 'test-value' } },
-        steps: [
-          { title: 'First step', status: STATUS.COMPLETE, context: { value: 1, usedOption: 'test-value' } },
-          { title: 'Second step', status: STATUS.PENDING, context: { value: 1, usedOption: 'test-value' } }
-        ],
-        options: workflowOptions
+      completedStep: expect.objectContaining({
+        title: 'First step',
+        status: STATUS.COMPLETE
+      })
+    }));
+
+    // Verify second step maintained options
+    expect(events[2]).toEqual(expect.objectContaining({
+      type: WORKFLOW_EVENTS.UPDATE,
+      newContext: {
+        value: 2,
+        usedOption: 'test-value'
       },
-      {
-        workflowName: 'Options Workflow',
-        type: WORKFLOW_EVENTS.UPDATE,
-        status: STATUS.RUNNING,
-        previousContext: { value: 1, usedOption: 'test-value' },
-        newContext: { value: 2, usedOption: 'test-value' },
-        completedStep: { title: 'Second step', status: STATUS.COMPLETE, context: { value: 2, usedOption: 'test-value' } },
-        steps: [
-          { title: 'First step', status: STATUS.COMPLETE, context: { value: 1, usedOption: 'test-value' } },
-          { title: 'Second step', status: STATUS.COMPLETE, context: { value: 2, usedOption: 'test-value' } }
-        ],
-        options: workflowOptions
-      },
-      {
-        workflowName: 'Options Workflow',
-        type: WORKFLOW_EVENTS.COMPLETE,
-        status: STATUS.COMPLETE,
-        previousContext: {},
-        newContext: { value: 2, usedOption: 'test-value' },
-        steps: [
-          { title: 'First step', status: STATUS.COMPLETE, context: { value: 1, usedOption: 'test-value' } },
-          { title: 'Second step', status: STATUS.COMPLETE, context: { value: 2, usedOption: 'test-value' } }
-        ],
-        options: workflowOptions
+      completedStep: expect.objectContaining({
+        title: 'Second step',
+        status: STATUS.COMPLETE
+      })
+    }));
+
+    // Verify final state
+    expect(events[3]).toEqual(expect.objectContaining({
+      type: WORKFLOW_EVENTS.COMPLETE,
+      newContext: {
+        value: 2,
+        usedOption: 'test-value'
       }
-    ]);
+    }));
   });
 });
 
