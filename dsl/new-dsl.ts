@@ -58,8 +58,8 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
   ): {
     step: <ActionOut, ContextOut extends JsonObject>(
       title: string,
-      action: (context: ContextIn) => ActionOut | Promise<ActionOut>,
-      reduce?: (result: ActionOut, context: ContextIn) => ContextOut | Promise<ContextOut>
+      action: ActionHandler<ContextIn, ActionOut>,
+      reduce?: ReduceHandler<ActionOut, ContextIn, ContextOut>
     ) => ReturnType<typeof addSteps<ContextOut>>,
     run: (initialContext?: InitialContext) => AsyncGenerator<any, void, unknown>
   } {
