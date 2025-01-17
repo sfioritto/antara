@@ -41,3 +41,56 @@ describe('workflow creation', () => {
     expect(completeResult.value?.newContext).toEqual({ count: 1, doubled: 2 });
   });
 });
+
+describe('error handling', () => {
+  it('should handle errors in steps and maintain correct status/context', async () => {
+    const workflow = createWorkflow('Error Workflow')
+      .step(
+        "First step",
+        () => ({ value: 1 })
+      )
+      .step(
+        "Error step",
+        () => {
+          throw new Error('Test error');
+          return {}; // TypeScript needs this to infer return type
+        }
+      )
+      .step(
+        "Never reached",
+        ({ context }) => ({ value: context.value + 1 })
+      );
+
+    const workflowRun = workflow.run({});
+
+    // Check start event
+    const startResult = await workflowRun.next();
+    expect(startResult.value?.type).toBe(WORKFLOW_EVENTS.START);
+    expect(startResult.value?.status).toBe(STATUS.RUNNING);
+
+    // Check first step completion
+    const firstStepResult = await workflowRun.next();
+    expect(firstStepResult.value?.type).toBe(WORKFLOW_EVENTS.UPDATE);
+    expect(firstStepResult.value?.status).toBe(STATUS.RUNNING);
+    expect(firstStepResult.value?.newContext).toEqual({ value: 1 });
+
+    // Check error step
+    const errorResult = await workflowRun.next();
+    expect(errorResult.value?.type).toBe(WORKFLOW_EVENTS.ERROR);
+    expect(errorResult.value?.status).toBe(STATUS.ERROR);
+    expect(errorResult.value?.error?.message).toBe('Test error');
+    expect(errorResult.value?.newContext).toEqual({ value: 1 }); // Context should be preserved from previous step
+
+    // Verify steps array in error event
+    expect(errorResult.value?.steps).toBeDefined();
+    if (!errorResult.value?.steps) throw new Error('Steps not found');
+
+    expect(errorResult.value.steps[0].status).toBe(STATUS.COMPLETE);
+    expect(errorResult.value.steps[1].status).toBe(STATUS.ERROR);
+    expect(errorResult.value.steps[2].status).toBe(STATUS.PENDING);
+
+    // Verify workflow stops after error
+    const noMoreResults = await workflowRun.next();
+    expect(noMoreResults.done).toBe(true);
+  });
+});
