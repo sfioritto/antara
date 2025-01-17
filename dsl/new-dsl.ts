@@ -27,13 +27,25 @@ export interface Step {
   context: JsonObject
 }
 
-type ActionHandler<ContextIn, ActionOut> = (context: ContextIn) => ActionOut | Promise<ActionOut>
-type ReduceHandler<ActionOut, ContextIn, ContextOut> = (result: ActionOut, context: ContextIn) => ContextOut | Promise<ContextOut>
+type ActionHandler<
+  ContextIn extends JsonObject,
+  WorkflowOptions extends JsonObject,
+  ActionOut
+> = (context: ContextIn, options: WorkflowOptions) => ActionOut | Promise<ActionOut>
+type ReduceHandler<
+  ActionOut,
+  ContextIn extends JsonObject,
+  WorkflowOptions extends JsonObject, ContextOut extends JsonObject> = (result: ActionOut, context: ContextIn, options: WorkflowOptions) => ContextOut | Promise<ContextOut>
 
-interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends JsonObject> {
+interface StepBlock<
+  ContextIn extends JsonObject,
+  WorkflowOptions extends JsonObject,
+  ActionOut,
+  ContextOut extends JsonObject
+> {
   title: string;
-  action: ActionHandler<ContextIn, ActionOut>,
-  reduce: ReduceHandler<ActionOut, ContextIn, ContextOut>,
+  action: ActionHandler<ContextIn, WorkflowOptions, ActionOut>,
+  reduce: ReduceHandler<ActionOut, ContextIn, WorkflowOptions, ContextOut>,
 }
 
 type GenericReducerOutput<ActionOut, ContextIn> =
@@ -49,7 +61,7 @@ export interface AddSteps<
   InitialContext extends JsonObject,
   WorkflowOptions extends JsonObject,
 > {
-  (steps: StepBlock<JsonObject, any, JsonObject>[]): {
+  (steps: StepBlock<JsonObject, any, JsonObject, WorkflowOptions>[]): {
     step: StepFunction<ContextIn, InitialContext, WorkflowOptions>;
     run<T extends WorkflowOptions>(
       params: RunParams<T, InitialContext>
@@ -64,13 +76,13 @@ export type StepFunction<
 > = {
   <ActionOut, ContextOut extends JsonObject>(
     title: string,
-    action: ActionHandler<ContextIn, ActionOut>,
-    reduce: ReduceHandler<ActionOut, ContextIn, ContextOut>
+    action: ActionHandler<ContextIn, WorkflowOptions, ActionOut>,
+    reduce: ReduceHandler<ActionOut, ContextIn, WorkflowOptions, ContextOut>
   ): ReturnType<AddSteps<Merge<ContextOut>, InitialContext, WorkflowOptions>>;
 
   <ActionOut>(
     title: string,
-    action: ActionHandler<ContextIn, ActionOut>
+    action: ActionHandler<ContextIn, WorkflowOptions, ActionOut>
   ): ReturnType<
     AddSteps<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions>
   >;
@@ -79,7 +91,7 @@ export type StepFunction<
 function outputSteps(
   currentContext: JsonObject,
   completedSteps: Step[],
-  stepBlocks: StepBlock<JsonObject, any, JsonObject>[]
+  stepBlocks: StepBlock<JsonObject, any, JsonObject, JsonObject>[]
 ): Step[] {
   return stepBlocks.map((stepBlock, index) => {
     const completedStep = completedSteps[index];
@@ -105,17 +117,18 @@ export function createWorkflow<
 >(workflowName: string) {
   // Actually define the function that adds steps
   function addSteps<ContextIn extends JsonObject>(
-    steps: StepBlock<JsonObject, any, JsonObject>[]
+    steps: StepBlock<JsonObject, WorkflowOptions, any, JsonObject>[]
   ) {
     return {
       step: (<ActionOut, ContextOut extends JsonObject>(
         title: string,
-        action: ActionHandler<ContextIn, ActionOut>,
-        reduce?: ReduceHandler<ActionOut, ContextIn, ContextOut>
+        action: ActionHandler<ContextIn, WorkflowOptions, ActionOut>,
+        reduce?: ReduceHandler<ActionOut, ContextIn, WorkflowOptions, ContextOut>
       ) => {
         const genericReducer: ReduceHandler<
           ActionOut,
           ContextIn,
+          WorkflowOptions,
           Merge<ActionOut & ContextIn>
         > = (result: ActionOut, context: ContextIn) => {
           if (
@@ -136,9 +149,9 @@ export function createWorkflow<
           title,
           action,
           reduce: reduce ?? genericReducer,
-        } as StepBlock<JsonObject, ActionOut, ContextOut>;
+        } as StepBlock<JsonObject, WorkflowOptions, ActionOut, ContextOut>;
 
-        const newSteps = [...steps, newStep];
+        const newSteps = [...steps, newStep] as typeof steps;
         return addSteps<ContextOut>(newSteps);
       }) as StepFunction<ContextIn, InitialContext, WorkflowOptions>,
 
@@ -171,9 +184,9 @@ export function createWorkflow<
           const previousContext = newContext;
 
           try {
-            const result = await step.action(newContext);
+            const result = await step.action(newContext, options);
             newContext = step.reduce
-              ? await step.reduce(result, newContext)
+              ? await step.reduce(result, newContext, options)
               : newContext;
           } catch (stepError) {
             const error = stepError as Error;
@@ -265,7 +278,7 @@ const workflow = createWorkflow<typeof options>("test")
   )
   .step(
     "Step 2",
-    (ctx) => ({ doubled: ctx.count * 2 }),
+    (ctx, options) => ({ doubled: ctx.count * 2 }),
     (result, ctx) => ({ ...ctx, doubled: result.doubled })
   )
   .step(
