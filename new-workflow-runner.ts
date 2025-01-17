@@ -30,7 +30,12 @@ export class WorkflowRunner {
           status: string,
           context: JsonObject
         }>,
-        options?: WorkflowOptions
+        options?: WorkflowOptions,
+        configuration?: {
+          fileStore?: FileStore,
+          logger: Logger,
+          verbose: boolean
+        }
       }) => AsyncGenerator<Event<JsonObject, JsonObject, WorkflowOptions>, void, unknown>
     },
     initialContext?: InitialContext,
@@ -41,29 +46,31 @@ export class WorkflowRunner {
     }> = [],
     options: WorkflowOptions = {} as WorkflowOptions
   ) {
-    const { logger: { log } } = this.options;
+    const { adapters, fileStore, logger, verbose } = this.options;
 
     for await (const event of workflow.run({
       initialContext,
       initialCompletedSteps,
       options,
+      configuration: {
+        fileStore,
+        logger,
+        verbose
+      }
     })) {
-      // Dispatch to all adapters
       await Promise.all(
-        this.options.adapters.map((adapter) => adapter.dispatch(event))
+        adapters.map((adapter) => adapter.dispatch(event))
       );
 
-      // Log completed steps
       if (event.completedStep) {
-        log(`${event.completedStep.title} ✅`);
+        logger.log(`${event.completedStep.title} ✅`);
       }
 
-      // Log final context if verbose
       if ((
         event.type === WORKFLOW_EVENTS.COMPLETE ||
         event.type === WORKFLOW_EVENTS.ERROR
-      ) && this.options.verbose) {
-        log(`Workflow completed: \n\n ${JSON.stringify(
+      ) && verbose) {
+        logger.log(`Workflow completed: \n\n ${JSON.stringify(
           this.truncateDeep(structuredClone(event.newContext)), null, 2
         )}`);
       }
