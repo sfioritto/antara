@@ -18,28 +18,65 @@ describe('workflow creation', () => {
 
     // Check start event
     const startResult = await workflowRun.next();
-    expect(startResult.value).toBeDefined();
-    expect(startResult.value?.type).toBe(WORKFLOW_EVENTS.START);
-    expect(startResult.value?.status).toBe(STATUS.RUNNING);
-    expect(startResult.value?.workflowName).toBe('test workflow');
+    expect(startResult.value).toEqual({
+      workflowName: 'test workflow',
+      type: WORKFLOW_EVENTS.START,
+      status: STATUS.RUNNING,
+      previousContext: {},
+      newContext: {},
+      steps: [
+        { title: 'First step', status: STATUS.PENDING, context: {} },
+        { title: 'Second step', status: STATUS.PENDING, context: {} }
+      ],
+      options: {}
+    });
 
     // Check first step completion
     const firstStepResult = await workflowRun.next();
-    expect(firstStepResult.value?.type).toBe(WORKFLOW_EVENTS.UPDATE);
-    expect(firstStepResult.value?.status).toBe(STATUS.RUNNING);
-    expect(firstStepResult.value?.newContext).toEqual({ count: 1 });
+    expect(firstStepResult.value).toEqual({
+      workflowName: 'test workflow',
+      type: WORKFLOW_EVENTS.UPDATE,
+      status: STATUS.RUNNING,
+      previousContext: {},
+      newContext: { count: 1 },
+      completedStep: { title: 'First step', status: STATUS.COMPLETE, context: { count: 1 } },
+      steps: [
+        { title: 'First step', status: STATUS.COMPLETE, context: { count: 1 } },
+        { title: 'Second step', status: STATUS.PENDING, context: { count: 1 } }
+      ],
+      options: {}
+    });
 
     // Check second step completion
     const secondStepResult = await workflowRun.next();
-    expect(secondStepResult.value?.type).toBe(WORKFLOW_EVENTS.UPDATE);
-    expect(secondStepResult.value?.status).toBe(STATUS.RUNNING);
-    expect(secondStepResult.value?.newContext).toEqual({ count: 1, doubled: 2 });
+    expect(secondStepResult.value).toEqual({
+      workflowName: 'test workflow',
+      type: WORKFLOW_EVENTS.UPDATE,
+      status: STATUS.RUNNING,
+      previousContext: { count: 1 },
+      newContext: { count: 1, doubled: 2 },
+      completedStep: { title: 'Second step', status: STATUS.COMPLETE, context: { count: 1, doubled: 2 } },
+      steps: [
+        { title: 'First step', status: STATUS.COMPLETE, context: { count: 1 } },
+        { title: 'Second step', status: STATUS.COMPLETE, context: { count: 1, doubled: 2 } }
+      ],
+      options: {}
+    });
 
     // Check workflow completion
     const completeResult = await workflowRun.next();
-    expect(completeResult.value?.type).toBe(WORKFLOW_EVENTS.COMPLETE);
-    expect(completeResult.value?.status).toBe(STATUS.COMPLETE);
-    expect(completeResult.value?.newContext).toEqual({ count: 1, doubled: 2 });
+    expect(completeResult.value).toEqual({
+      workflowName: 'test workflow',
+      type: WORKFLOW_EVENTS.COMPLETE,
+      status: STATUS.COMPLETE,
+      previousContext: {},
+      newContext: { count: 1, doubled: 2 },
+      steps: [
+        { title: 'First step', status: STATUS.COMPLETE, context: { count: 1 } },
+        { title: 'Second step', status: STATUS.COMPLETE, context: { count: 1, doubled: 2 } }
+      ],
+      options: {}
+    });
   });
 
   it('should create a workflow with a name and description when passed an object', async () => {
@@ -50,18 +87,31 @@ describe('workflow creation', () => {
 
     const workflowRun = workflow.run({});
     const startResult = await workflowRun.next();
-
-    expect(startResult.value?.workflowName).toBe('my named workflow');
-    expect(startResult.value?.description).toBe('some description');
+    expect(startResult.value).toEqual({
+      workflowName: 'my named workflow',
+      description: 'some description',
+      type: WORKFLOW_EVENTS.START,
+      status: STATUS.RUNNING,
+      previousContext: {},
+      newContext: {},
+      steps: [],
+      options: {}
+    });
   });
 
   it('should create a workflow with just a name when passed a string', async () => {
     const workflow = createWorkflow('simple workflow');
     const workflowRun = workflow.run({});
     const startResult = await workflowRun.next();
-
-    expect(startResult.value?.workflowName).toBe('simple workflow');
-    expect(startResult.value?.description).toBeUndefined();
+    expect(startResult.value).toEqual({
+      workflowName: 'simple workflow',
+      type: WORKFLOW_EVENTS.START,
+      status: STATUS.RUNNING,
+      previousContext: {},
+      newContext: {},
+      steps: [],
+      options: {}
+    });
   });
 });
 
@@ -87,29 +137,54 @@ describe('error handling', () => {
 
     // Check start event
     const startResult = await workflowRun.next();
-    expect(startResult.value?.type).toBe(WORKFLOW_EVENTS.START);
-    expect(startResult.value?.status).toBe(STATUS.RUNNING);
+    expect(startResult.value).toEqual({
+      workflowName: 'Error Workflow',
+      type: WORKFLOW_EVENTS.START,
+      status: STATUS.RUNNING,
+      previousContext: {},
+      newContext: {},
+      steps: [
+        { title: 'First step', status: STATUS.PENDING, context: {} },
+        { title: 'Error step', status: STATUS.PENDING, context: {} },
+        { title: 'Never reached', status: STATUS.PENDING, context: {} }
+      ],
+      options: {}
+    });
 
     // Check first step completion
     const firstStepResult = await workflowRun.next();
-    expect(firstStepResult.value?.type).toBe(WORKFLOW_EVENTS.UPDATE);
-    expect(firstStepResult.value?.status).toBe(STATUS.RUNNING);
-    expect(firstStepResult.value?.newContext).toEqual({ value: 1 });
+    expect(firstStepResult.value).toEqual({
+      workflowName: 'Error Workflow',
+      type: WORKFLOW_EVENTS.UPDATE,
+      status: STATUS.RUNNING,
+      previousContext: {},
+      newContext: { value: 1 },
+      completedStep: { title: 'First step', status: STATUS.COMPLETE, context: { value: 1 } },
+      steps: [
+        { title: 'First step', status: STATUS.COMPLETE, context: { value: 1 } },
+        { title: 'Error step', status: STATUS.PENDING, context: { value: 1 } },
+        { title: 'Never reached', status: STATUS.PENDING, context: { value: 1 } }
+      ],
+      options: {}
+    });
 
     // Check error step
     const errorResult = await workflowRun.next();
-    expect(errorResult.value?.type).toBe(WORKFLOW_EVENTS.ERROR);
-    expect(errorResult.value?.status).toBe(STATUS.ERROR);
-    expect(errorResult.value?.error?.message).toBe('Test error');
-    expect(errorResult.value?.newContext).toEqual({ value: 1 }); // Context should be preserved from previous step
-
-    // Verify steps array in error event
-    expect(errorResult.value?.steps).toBeDefined();
-    if (!errorResult.value?.steps) throw new Error('Steps not found');
-
-    expect(errorResult.value.steps[0].status).toBe(STATUS.COMPLETE);
-    expect(errorResult.value.steps[1].status).toBe(STATUS.ERROR);
-    expect(errorResult.value.steps[2].status).toBe(STATUS.PENDING);
+    expect(errorResult.value).toEqual({
+      workflowName: 'Error Workflow',
+      type: WORKFLOW_EVENTS.ERROR,
+      status: STATUS.ERROR,
+      previousContext: { value: 1 },
+      newContext: { value: 1 },
+      error: new Error('Test error'),
+      completedStep: { title: 'Error step', status: STATUS.ERROR, context: { value: 1 } },
+      steps: [
+        { title: 'First step', status: STATUS.COMPLETE, context: { value: 1 } },
+        { title: 'Error step', status: STATUS.ERROR, context: { value: 1 } },
+        { title: 'Never reached', status: STATUS.PENDING, context: { value: 1 } }
+      ],
+      options: {}
+    });
 
     // Verify workflow stops after error
     const noMoreResults = await workflowRun.next();
@@ -137,7 +212,19 @@ describe('step immutability', () => {
     const workflowRun = workflow.run({ initialContext: { value: 1 } });
 
     // Get past the START event
-    await workflowRun.next();
+    const startResult = await workflowRun.next();
+    expect(startResult.value).toEqual({
+      workflowName: 'Immutable Steps Workflow',
+      type: WORKFLOW_EVENTS.START,
+      status: STATUS.RUNNING,
+      previousContext: { value: 1 },
+      newContext: { value: 1 },
+      steps: [
+        { title: 'Step 1', status: STATUS.PENDING, context: { value: 1 } },
+        { title: 'Step 2', status: STATUS.PENDING, context: { value: 1 } }
+      ],
+      options: {}
+    });
 
     // After first step completes, try to modify its data
     const firstStepResult = await workflowRun.next();
@@ -153,20 +240,34 @@ describe('step immutability', () => {
 
     // Get the second step result
     const secondStepResult = await workflowRun.next();
-
-    // Verify that modifications didn't persist
-    expect(secondStepResult.value?.steps[0].status).toBe(STATUS.COMPLETE);
-    expect((secondStepResult.value?.steps[0].context as SimpleContext).value).toBe(2);
-
-    // Verify second step executed correctly
-    expect(secondStepResult.value?.steps[1].status).toBe(STATUS.COMPLETE);
-    expect((secondStepResult.value?.steps[1].context as SimpleContext).value).toBe(4);
+    expect(secondStepResult.value).toEqual({
+      workflowName: 'Immutable Steps Workflow',
+      type: WORKFLOW_EVENTS.UPDATE,
+      status: STATUS.RUNNING,
+      previousContext: { value: 2 },
+      newContext: { value: 4 },
+      completedStep: { title: 'Step 2', status: STATUS.COMPLETE, context: { value: 4 } },
+      steps: [
+        { title: 'Step 1', status: STATUS.COMPLETE, context: { value: 2 } },
+        { title: 'Step 2', status: STATUS.COMPLETE, context: { value: 4 } }
+      ],
+      options: {}
+    });
 
     // Verify final state
     const finalResult = await workflowRun.next();
-    expect(finalResult.value?.type).toBe(WORKFLOW_EVENTS.COMPLETE);
-    expect(finalResult.value?.status).toBe(STATUS.COMPLETE);
-    expect((finalResult.value?.newContext as SimpleContext).value).toBe(4);
+    expect(finalResult.value).toEqual({
+      workflowName: 'Immutable Steps Workflow',
+      type: WORKFLOW_EVENTS.COMPLETE,
+      status: STATUS.COMPLETE,
+      previousContext: { value: 1 },
+      newContext: { value: 4 },
+      steps: [
+        { title: 'Step 1', status: STATUS.COMPLETE, context: { value: 2 } },
+        { title: 'Step 2', status: STATUS.COMPLETE, context: { value: 4 } }
+      ],
+      options: {}
+    });
   });
 });
 
@@ -195,45 +296,57 @@ describe('workflow event sequence', () => {
       events.push(event);
     }
 
-    // Verify we got all expected events
-    expect(events).toHaveLength(4); // START, UPDATE, UPDATE, COMPLETE
-
-    // Verify START event
-    expect(events[0].type).toBe(WORKFLOW_EVENTS.START);
-    expect(events[0].status).toBe(STATUS.RUNNING);
-    expect(events[0].newContext).toEqual({ value: 0 });
-
-    // Verify first UPDATE event (after increment)
-    expect(events[1].type).toBe(WORKFLOW_EVENTS.UPDATE);
-    expect(events[1].status).toBe(STATUS.RUNNING);
-    expect(events[1].newContext).toEqual({ value: 1 });
-    expect(events[1].completedStep?.title).toBe("Increment step");
-    expect(events[1].completedStep?.status).toBe(STATUS.COMPLETE);
-
-    // Verify second UPDATE event (after double)
-    expect(events[2].type).toBe(WORKFLOW_EVENTS.UPDATE);
-    expect(events[2].status).toBe(STATUS.RUNNING);
-    expect(events[2].newContext).toEqual({ value: 2 });
-    expect(events[2].completedStep?.title).toBe("Double step");
-    expect(events[2].completedStep?.status).toBe(STATUS.COMPLETE);
-
-    // Verify COMPLETE event
-    expect(events[3].type).toBe(WORKFLOW_EVENTS.COMPLETE);
-    expect(events[3].status).toBe(STATUS.COMPLETE);
-    expect(events[3].newContext).toEqual({ value: 2 });
-
-    // Verify steps array progression
-    expect(events[0].steps).toHaveLength(2);
-    expect(events[0].steps[0].status).toBe(STATUS.PENDING);
-    expect(events[0].steps[1].status).toBe(STATUS.PENDING);
-
-    expect(events[1].steps[0].status).toBe(STATUS.COMPLETE);
-    expect(events[1].steps[1].status).toBe(STATUS.PENDING);
-
-    expect(events[2].steps[0].status).toBe(STATUS.COMPLETE);
-    expect(events[2].steps[1].status).toBe(STATUS.COMPLETE);
-
-    expect(events[3].steps[0].status).toBe(STATUS.COMPLETE);
-    expect(events[3].steps[1].status).toBe(STATUS.COMPLETE);
+    expect(events).toEqual([
+      {
+        workflowName: 'Simple Workflow',
+        type: WORKFLOW_EVENTS.START,
+        status: STATUS.RUNNING,
+        previousContext: { value: 0 },
+        newContext: { value: 0 },
+        steps: [
+          { title: 'Increment step', status: STATUS.PENDING, context: { value: 0 } },
+          { title: 'Double step', status: STATUS.PENDING, context: { value: 0 } }
+        ],
+        options: {}
+      },
+      {
+        workflowName: 'Simple Workflow',
+        type: WORKFLOW_EVENTS.UPDATE,
+        status: STATUS.RUNNING,
+        previousContext: { value: 0 },
+        newContext: { value: 1 },
+        completedStep: { title: 'Increment step', status: STATUS.COMPLETE, context: { value: 1 } },
+        steps: [
+          { title: 'Increment step', status: STATUS.COMPLETE, context: { value: 1 } },
+          { title: 'Double step', status: STATUS.PENDING, context: { value: 1 } }
+        ],
+        options: {}
+      },
+      {
+        workflowName: 'Simple Workflow',
+        type: WORKFLOW_EVENTS.UPDATE,
+        status: STATUS.RUNNING,
+        previousContext: { value: 1 },
+        newContext: { value: 2 },
+        completedStep: { title: 'Double step', status: STATUS.COMPLETE, context: { value: 2 } },
+        steps: [
+          { title: 'Increment step', status: STATUS.COMPLETE, context: { value: 1 } },
+          { title: 'Double step', status: STATUS.COMPLETE, context: { value: 2 } }
+        ],
+        options: {}
+      },
+      {
+        workflowName: 'Simple Workflow',
+        type: WORKFLOW_EVENTS.COMPLETE,
+        status: STATUS.COMPLETE,
+        previousContext: { value: 0 },
+        newContext: { value: 2 },
+        steps: [
+          { title: 'Increment step', status: STATUS.COMPLETE, context: { value: 1 } },
+          { title: 'Double step', status: STATUS.COMPLETE, context: { value: 2 } }
+        ],
+        options: {}
+      }
+    ]);
   });
 });
