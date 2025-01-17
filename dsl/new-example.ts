@@ -7,13 +7,13 @@ const myWorkflow = createWorkflow("workflow name")
       coverage: { files: ["file1.ts", "file2.ts"] }
     };
   })
-  .step("Find lowest coverage", (context) => {
+  .step("Find lowest coverage", ({ context }) => {
     // context now has { coverage: { files: string[] } }
     return {
       lowestCoverageFile: { path: context.coverage.files[0] }
     };
   })
-  .step("For hovering over context to see type inference", (context) => {
+  .step("For hovering over context to see type inference", ({ context }) => {
     // context has coverage + lowestCoverageFile
     // => we can do context.lowestCoverageFile.path etc.
     return {
@@ -43,5 +43,5 @@ const myWorkflow = createWorkflow("workflow name")
 
   // COMPLETE event
   const complete = await workflow.next();
-  console.log('Workflow completed:', complete.value);
+  console.log('Workflow completed:', complete.value?.newContext);
 })();

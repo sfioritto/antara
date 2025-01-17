@@ -148,8 +148,7 @@ export function createWorkflow<
           ContextIn,
           WorkflowOptions,
           Merge<ActionOut & ContextIn>
-        > = (params) => {
-          const { result, context } = params;
+        > = ({ result, context }) => {
           if (
             result &&
             typeof result === "object" &&
@@ -299,26 +298,26 @@ const workflow = createWorkflow<typeof options>("test")
   .step(
     "Step 1",
     () => ({ count: 1 }),
-    (params) => params.result
+    ({ result }) => result
   )
   .step(
     "Step 2",
-    (params) => ({ doubled: params.context.count * 2 }),
-    (params) => ({
-      ...params.context,
-      doubled: params.result.doubled,
-      featureOne: params.options.features[0],
+    ({ context, options }) => ({ doubled: context.count * 2 }),
+    ({ result, context, options }) => ({
+      ...context,
+      doubled: result.doubled,
+      featureOne: options.features[0],
     })
   )
   .step(
     "Step 3",
-    (params) => ({
-      message: `${params.context.count} doubled is ${params.context.doubled}`,
-      featureTwo: params.options.features[1],
+    ({ context, options }) => ({
+      message: `${context.count} doubled is ${context.doubled}`,
+      featureTwo: options.features[1],
     }))
   .step(
     "Step 4",
-    (params) => console.log(params.context),
+    ({ context }) => console.log(context),
 );
 
 const workflowRun = workflow.run({
@@ -341,7 +340,7 @@ console.log(stepAgain.value?.previousContext)
 
 const actionOnlyWorkflow = createWorkflow("actions only")
   .step("First step", () => ({ firstStep: "first" }))
-  .step("Second step", (params) => ({ secondStep: params.context.firstStep }))
+  .step("Second step", ({ context }) => ({ secondStep: context.firstStep }))
 
 // TODO: figure out how to get types to flow through to each step event
 // const workflowRun = workflow.run();
