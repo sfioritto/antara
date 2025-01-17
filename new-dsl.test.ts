@@ -51,9 +51,8 @@ describe('error handling', () => {
       )
       .step(
         "Error step",
-        () => {
+        (): void => {
           throw new Error('Test error');
-          return {}; // TypeScript needs this to infer return type
         }
       )
       .step(

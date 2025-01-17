@@ -67,7 +67,9 @@ interface StepBlock<
 }
 
 type GenericReducerOutput<ActionOut, ContextIn> =
-  ActionOut extends JsonObject ? Merge<ContextIn & ActionOut> : ContextIn;
+  ActionOut extends JsonObject ? Merge<ContextIn & ActionOut> :
+  ActionOut extends void ? ContextIn :
+  ContextIn;
 
 interface RunParams<WorkflowOptions extends JsonObject, InitialContext extends JsonObject> {
   initialContext?: InitialContext;
@@ -158,6 +160,9 @@ export function createWorkflow<
           WorkflowOptions,
           Merge<ActionOut & ContextIn>
         > = ({ result, context }) => {
+          if (result === undefined || result === null) {
+            return context as Merge<ActionOut & ContextIn>;
+          }
           if (
             result &&
             typeof result === "object" &&
