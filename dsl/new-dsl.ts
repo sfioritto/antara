@@ -32,7 +32,7 @@ interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut> {
 function outputSteps<Context extends JsonObject>(
   currentContext: Context,
   completedSteps: Step<JsonObject>[],
-  stepBlocks: StepBlock<any, any, any>[],
+  stepBlocks: StepBlock<any, any, any>[]
 ): Step<JsonObject>[] {
   return stepBlocks.map((stepBlock, index) => {
     const completedStep = completedSteps[index];
@@ -47,8 +47,12 @@ function outputSteps<Context extends JsonObject>(
   });
 }
 
-export function createWorkflow<InitialContext extends JsonObject = {}>(workflowName: string) {
-  function addSteps<ContextIn extends JsonObject>(steps: StepBlock<any, any, any>[]): {
+export function createWorkflow<InitialContext extends JsonObject = {}>(
+  workflowName: string
+) {
+  function addSteps<ContextIn extends JsonObject>(
+    steps: StepBlock<any, any, any>[]
+  ): {
     step: <ActionOut, ContextOut extends JsonObject>(
       title: string,
       action: (context: ContextIn) => ActionOut | Promise<ActionOut>,
@@ -70,7 +74,10 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
         const newSteps = [...steps, newStep];
         return addSteps<ContextOut>(newSteps);
       },
-      async *run(initialContext?: InitialContext): AsyncGenerator<Event<JsonObject, JsonObject>, void, unknown> {
+
+      async *run(
+        initialContext?: InitialContext
+      ): AsyncGenerator<Event<JsonObject, JsonObject>, void, unknown> {
         // This is going to be changed (potentially) after each step completes
         let newContext = initialContext || {} as InitialContext;
         const completedSteps: Step<JsonObject>[] = [];
@@ -156,12 +163,12 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(workflowN
   return addSteps<InitialContext>([]);
 }
 
-// Example usage
+// Example usage with reformatted function calls
 const workflow = createWorkflow("test")
   .step(
     "Step 1",
     () => ({ count: 1 }),
-    (result) => result,
+    (result) => result
   )
   .step(
     "Step 2",
