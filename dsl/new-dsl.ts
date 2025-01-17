@@ -83,7 +83,11 @@ export interface AddSteps<
     step: StepFunction<ContextIn, InitialContext, WorkflowOptions>;
     run<T extends WorkflowOptions>(
       params: RunParams<T, InitialContext>
-    ): AsyncGenerator<Event<JsonObject, JsonObject, T>, void, unknown>;
+    ): AsyncGenerator<
+      | Event<InitialContext, InitialContext, T>  // START event
+      | Event<ContextIn, ContextIn, T>  // UPDATE events
+      | Event<InitialContext, ContextIn, T>  // COMPLETE event
+      , void, unknown>;
   };
 }
 
@@ -173,33 +177,33 @@ export function createWorkflow<
         return addSteps<ContextOut>(newSteps);
       }) as StepFunction<ContextIn, InitialContext, WorkflowOptions>,
 
-      async *run({
-        initialContext,
+      async *run<T extends WorkflowOptions = WorkflowOptions>({
+        initialContext = {} as InitialContext,
         initialCompletedSteps = [],
-        options = {} as WorkflowOptions
-      }: RunParams<WorkflowOptions, InitialContext> & {
+        options = {} as T
+      }: RunParams<T, InitialContext> & {
         initialCompletedSteps?: Step[]
-      }): AsyncGenerator<Event<JsonObject, JsonObject, WorkflowOptions>, void, unknown> {
+      }): AsyncGenerator<
+        | Event<InitialContext, InitialContext, T>  // START event
+        | Event<ContextIn, ContextIn, T>  // UPDATE events
+        | Event<InitialContext, ContextIn, T>  // COMPLETE event
+        , void, unknown> {
         let newContext = initialCompletedSteps.length > 0
           ? initialCompletedSteps[initialCompletedSteps.length - 1].context
-          : initialContext || {};
+          : initialContext;
         const completedSteps = [...initialCompletedSteps];
 
-        const startEvent: Event<
-          InitialContext,
-          InitialContext,
-          WorkflowOptions
-        > = {
+        const startEvent: Event<InitialContext, InitialContext, T> = {
           workflowName,
           type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
-          previousContext: newContext as InitialContext,
-          newContext: newContext as InitialContext,
+          previousContext: initialContext,
+          newContext: initialContext,
           status: STATUS.RUNNING,
           steps: outputSteps(newContext, completedSteps, steps),
           options,
         };
 
-        yield structuredClone(startEvent);
+        yield startEvent;
 
         // Skip already completed steps
         const remainingSteps = steps.slice(initialCompletedSteps.length);
@@ -223,22 +227,18 @@ export function createWorkflow<
             };
             completedSteps.push(completedStep);
 
-            const errorEvent: Event<
-              typeof newContext,
-              typeof newContext,
-              WorkflowOptions
-            > = {
+            const errorEvent: Event<ContextIn, ContextIn, T> = {
               workflowName,
               type: WORKFLOW_EVENTS.ERROR,
-              previousContext: newContext,
-              newContext,
+              previousContext: previousContext as ContextIn,
+              newContext: newContext as ContextIn,
               status: STATUS.ERROR,
               error,
               completedStep,
               options,
               steps: outputSteps(newContext, completedSteps, steps),
             };
-            yield structuredClone(errorEvent);
+            yield errorEvent;
             return;
           }
 
@@ -249,39 +249,31 @@ export function createWorkflow<
           };
           completedSteps.push(completedStep);
 
-          const updateEvent: Event<
-            typeof previousContext,
-            typeof newContext,
-            WorkflowOptions
-          > = {
+          const updateEvent: Event<ContextIn, ContextIn, T> = {
             workflowName,
             type: WORKFLOW_EVENTS.UPDATE,
-            previousContext,
-            newContext,
+            previousContext: previousContext as ContextIn,
+            newContext: newContext as ContextIn,
             completedStep,
             status: STATUS.RUNNING,
             options,
             steps: outputSteps(newContext, completedSteps, steps),
           };
 
-          yield structuredClone(updateEvent);
+          yield updateEvent;
         }
 
-        const completeEvent: Event<
-          InitialContext,
-          typeof newContext,
-          WorkflowOptions
-        > = {
+        const completeEvent: Event<InitialContext, ContextIn, T> = {
           workflowName,
           type: WORKFLOW_EVENTS.COMPLETE,
-          previousContext: (initialContext || {}) as InitialContext,
-          newContext,
+          previousContext: initialContext,
+          newContext: newContext as ContextIn,
           status: STATUS.COMPLETE,
           options,
           steps: outputSteps(newContext, completedSteps, steps),
         };
 
-        yield structuredClone(completeEvent);
+        yield completeEvent;
       },
     };
   }
