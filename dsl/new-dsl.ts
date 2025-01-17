@@ -32,6 +32,9 @@ interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends 
   reduce: ReduceHandler<ActionOut, ContextIn, ContextOut>,
 }
 
+type GenericReducerOutput<ActionOut, ContextIn> =
+  ActionOut extends JsonObject ? ContextIn & ActionOut : ContextIn;
+
 function outputSteps(
   currentContext: JsonObject,
   completedSteps: Step[],
@@ -53,19 +56,34 @@ function outputSteps(
 export function createWorkflow<InitialContext extends JsonObject = {}>(
   workflowName: string
 ) {
+
+  type StepFunction<ContextIn extends JsonObject> = {
+    <ActionOut, ContextOut extends JsonObject>(
+      title: string,
+      action: ActionHandler<ContextIn, ActionOut>,
+      reduce: ReduceHandler<ActionOut, ContextIn, ContextOut>
+    ): ReturnType<typeof addSteps<ContextOut>>;
+
+    <ActionOut>(
+      title: string,
+      action: ActionHandler<ContextIn, ActionOut>
+    ): ReturnType<typeof addSteps<GenericReducerOutput<ActionOut, ContextIn>>>;
+  }
+
   function addSteps<ContextIn extends JsonObject>(
     steps: StepBlock<JsonObject, any, JsonObject>[]
   ) {
     return {
-      step<ActionOut, ContextOut extends JsonObject>(
+      step: (<ActionOut, ContextOut extends JsonObject>(
         title: string,
         action: ActionHandler<ContextIn, ActionOut>,
         reduce?: ReduceHandler<ActionOut, ContextIn, ContextOut>
-      ) {
-
+      ) => {
         const genericReducer: ReduceHandler<
-          ActionOut, ContextIn, ContextOut
-        > = (result: ActionOut, context: ContextIn): ContextOut => {
+          ActionOut,
+          ContextIn,
+          ActionOut & ContextIn | ContextIn
+        > = (result: ActionOut, context: ContextIn) => {
           if (result
             && typeof result === 'object'
             && !Array.isArray(result)
@@ -74,19 +92,19 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
             return {
               ...context,
               ...result,
-            } as unknown as ContextOut;
+            } as ActionOut & ContextIn;
           }
-          return context as unknown as ContextOut;
-        }
+          return context as ContextIn;
+        };
 
         const newStep = {
           title,
           action,
-          reduce: reduce ? reduce : genericReducer,
+          reduce: reduce ?? genericReducer,
         } as StepBlock<JsonObject, ActionOut, ContextOut>;
         const newSteps = [...steps, newStep];
         return addSteps<ContextOut>(newSteps);
-      },
+      }) as StepFunction<ContextIn>,
 
       async *run(
         initialContext?: InitialContext
