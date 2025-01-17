@@ -1,4 +1,4 @@
-import { createWorkflow } from './dsl/new-dsl';
+import { createWorkflow, Event } from './dsl/new-dsl';
 import { WORKFLOW_EVENTS, STATUS } from './dsl/constants';
 import { JsonObject } from './dsl/types';
 
@@ -167,5 +167,73 @@ describe('step immutability', () => {
     expect(finalResult.value?.type).toBe(WORKFLOW_EVENTS.COMPLETE);
     expect(finalResult.value?.status).toBe(STATUS.COMPLETE);
     expect((finalResult.value?.newContext as SimpleContext).value).toBe(4);
+  });
+});
+
+describe('workflow event sequence', () => {
+  it('should emit events in correct order with proper context/status', async () => {
+    interface SimpleContext extends JsonObject {
+      value: number;
+      [key: string]: any;
+    }
+
+    const workflow = createWorkflow<{}, SimpleContext>('Simple Workflow')
+      .step(
+        "Increment step",
+        ({ context }) => ({ value: context.value + 1 })
+      )
+      .step(
+        "Double step",
+        ({ context }) => ({ value: context.value * 2 })
+      );
+
+    const events: Event<any, any, any>[] = [];
+    const workflowRun = workflow.run({ initialContext: { value: 0 } });
+
+    // Collect all events
+    for await (const event of workflowRun) {
+      events.push(event);
+    }
+
+    // Verify we got all expected events
+    expect(events).toHaveLength(4); // START, UPDATE, UPDATE, COMPLETE
+
+    // Verify START event
+    expect(events[0].type).toBe(WORKFLOW_EVENTS.START);
+    expect(events[0].status).toBe(STATUS.RUNNING);
+    expect(events[0].newContext).toEqual({ value: 0 });
+
+    // Verify first UPDATE event (after increment)
+    expect(events[1].type).toBe(WORKFLOW_EVENTS.UPDATE);
+    expect(events[1].status).toBe(STATUS.RUNNING);
+    expect(events[1].newContext).toEqual({ value: 1 });
+    expect(events[1].completedStep?.title).toBe("Increment step");
+    expect(events[1].completedStep?.status).toBe(STATUS.COMPLETE);
+
+    // Verify second UPDATE event (after double)
+    expect(events[2].type).toBe(WORKFLOW_EVENTS.UPDATE);
+    expect(events[2].status).toBe(STATUS.RUNNING);
+    expect(events[2].newContext).toEqual({ value: 2 });
+    expect(events[2].completedStep?.title).toBe("Double step");
+    expect(events[2].completedStep?.status).toBe(STATUS.COMPLETE);
+
+    // Verify COMPLETE event
+    expect(events[3].type).toBe(WORKFLOW_EVENTS.COMPLETE);
+    expect(events[3].status).toBe(STATUS.COMPLETE);
+    expect(events[3].newContext).toEqual({ value: 2 });
+
+    // Verify steps array progression
+    expect(events[0].steps).toHaveLength(2);
+    expect(events[0].steps[0].status).toBe(STATUS.PENDING);
+    expect(events[0].steps[1].status).toBe(STATUS.PENDING);
+
+    expect(events[1].steps[0].status).toBe(STATUS.COMPLETE);
+    expect(events[1].steps[1].status).toBe(STATUS.PENDING);
+
+    expect(events[2].steps[0].status).toBe(STATUS.COMPLETE);
+    expect(events[2].steps[1].status).toBe(STATUS.COMPLETE);
+
+    expect(events[3].steps[0].status).toBe(STATUS.COMPLETE);
+    expect(events[3].steps[1].status).toBe(STATUS.COMPLETE);
   });
 });
