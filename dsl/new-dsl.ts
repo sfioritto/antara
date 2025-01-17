@@ -23,7 +23,7 @@ export interface Step {
   context: JsonObject
 }
 
-type ActionHandler<ContextIn, ActionOut> = ((context: ContextIn) => ActionOut | Promise<ActionOut>);
+type ActionHandler<ContextIn, ActionOut> = (context: ContextIn) => ActionOut | Promise<ActionOut>
 type ReduceHandler<ActionOut, ContextIn, ContextOut> = (result: ActionOut, context: ContextIn) => ContextOut | Promise<ContextOut>
 
 interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends JsonObject> {
@@ -55,19 +55,12 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
 ) {
   function addSteps<ContextIn extends JsonObject>(
     steps: StepBlock<JsonObject, any, JsonObject>[]
-  ): {
-    step: <ActionOut, ContextOut extends JsonObject>(
-      title: string,
-      action: ActionHandler<ContextIn, ActionOut>,
-      reduce?: ReduceHandler<ActionOut, ContextIn, ContextOut>
-    ) => ReturnType<typeof addSteps<ContextOut>>,
-    run: (initialContext?: InitialContext) => AsyncGenerator<any, void, unknown>
-  } {
+  ) {
     return {
       step<ActionOut, ContextOut extends JsonObject>(
         title: string,
-        action: (context: ContextIn) => ActionOut | Promise<ActionOut>,
-        reduce?: (result: ActionOut, context: ContextIn) => ContextOut | Promise<ContextOut>
+        action: ActionHandler<ContextIn, ActionOut>,
+        reduce?: ReduceHandler<ActionOut, ContextIn, ContextOut>
       ) {
         const newStep = {
           title,
@@ -167,7 +160,7 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
 }
 
 // Example usage with reformatted function calls
-const workflow = createWorkflow("test")
+const workflow = await createWorkflow("test")
   .step(
     "Step 1",
     () => ({ count: 1 }),
@@ -185,5 +178,9 @@ const workflow = createWorkflow("test")
     })
   )
   .run();
+
+// TODO: figure out how to get types to flow through to each step event
+// const step1 = await workflow.next();
+// console.log((step1.value as Event<any, any>).newContext.count)
 
 
