@@ -350,3 +350,68 @@ describe('workflow event sequence', () => {
     ]);
   });
 });
+
+describe('step completion', () => {
+  it('should track step completion independently with correct context transformations', async () => {
+    interface SimpleContext extends JsonObject {
+      value: number;
+      [key: string]: any;
+    }
+
+    const workflow = createWorkflow<{}, SimpleContext>('Two Step Workflow')
+      .step(
+        "Double step",
+        ({ context }) => ({ value: context.value * 2 })
+      )
+      .step(
+        "Add one step",
+        ({ context }) => ({ value: context.value + 1 })
+      );
+
+    const stepCompletions: Array<{
+      title: string;
+      context: SimpleContext;
+    }> = [];
+
+    const workflowRun = workflow.run({ initialContext: { value: 1 } });
+
+    // Skip START event
+    await workflowRun.next();
+
+    // Collect step completions from UPDATE events
+    let result = await workflowRun.next();
+    while (!result.done && result.value.type === WORKFLOW_EVENTS.UPDATE) {
+      stepCompletions.push({
+        title: result.value.completedStep!.title,
+        context: result.value.completedStep!.context as SimpleContext
+      });
+      result = await workflowRun.next();
+    }
+
+    // Verify final state
+    expect(result.value).toEqual({
+      workflowName: 'Two Step Workflow',
+      type: WORKFLOW_EVENTS.COMPLETE,
+      status: STATUS.COMPLETE,
+      previousContext: { value: 1 },
+      newContext: { value: 3 },
+      steps: [
+        { title: 'Double step', status: STATUS.COMPLETE, context: { value: 2 } },
+        { title: 'Add one step', status: STATUS.COMPLETE, context: { value: 3 } }
+      ],
+      options: {}
+    });
+
+    // Verify step completions happened in correct order with correct contexts
+    expect(stepCompletions).toEqual([
+      {
+        title: 'Double step',
+        context: { value: 2 }
+      },
+      {
+        title: 'Add one step',
+        context: { value: 3 }
+      }
+    ]);
+  });
+});
