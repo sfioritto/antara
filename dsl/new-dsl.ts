@@ -29,7 +29,7 @@ type ReduceHandler<ActionOut, ContextIn, ContextOut> = (result: ActionOut, conte
 interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends JsonObject> {
   title: string;
   action: ActionHandler<ContextIn, ActionOut>,
-  reduce?: ReduceHandler<ActionOut, ContextIn, ContextOut>,
+  reduce: ReduceHandler<ActionOut, ContextIn, ContextOut>,
 }
 
 function outputSteps(
@@ -62,11 +62,26 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
         action: ActionHandler<ContextIn, ActionOut>,
         reduce?: ReduceHandler<ActionOut, ContextIn, ContextOut>
       ) {
+
+        const genericReducer = (result: ActionOut, context: ContextIn): ContextOut => {
+          if (result
+            && typeof result === 'object'
+            && !Array.isArray(result)
+            && Object.getPrototypeOf(result) === Object.prototype
+          ) {
+            return {
+              ...context,
+              ...result,
+            } as unknown as ContextOut;
+          }
+          return context as unknown as ContextOut;
+        }
+
         const newStep = {
           title,
           action,
-          reduce,
-        } as StepBlock<JsonObject, any, JsonObject>;
+          reduce: reduce ? reduce : genericReducer,
+        } as StepBlock<JsonObject, ActionOut, ContextOut>;
         const newSteps = [...steps, newStep];
         return addSteps<ContextOut>(newSteps);
       },
