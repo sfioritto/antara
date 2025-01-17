@@ -12,28 +12,28 @@ export interface Event<ContextIn, ContextOut, Options = any> {
   error?: SerializedError,
   type: EventTypes,
   status: StatusOptions,
-  completedStep?: Step<ContextOut>,
-  steps: Step<JsonObject>[],
+  completedStep?: Step,
+  steps: Step[],
   options?: Options,
 }
 
-export interface Step<Context> {
+export interface Step {
   title: string
   status: StatusOptions
-  context: Context
+  context: JsonObject
 }
 
-interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut> {
+interface StepBlock<ContextIn extends JsonObject, ActionOut, ContextOut extends JsonObject> {
   title: string;
   action: ((context: ContextIn) => ActionOut | Promise<ActionOut>);
   reduce?: (result: ActionOut, context: ContextIn) => ContextOut | Promise<ContextOut>
 }
 
-function outputSteps<Context extends JsonObject>(
-  currentContext: Context,
-  completedSteps: Step<JsonObject>[],
+function outputSteps<CurrentContext extends JsonObject>(
+  currentContext: CurrentContext,
+  completedSteps: Step[],
   stepBlocks: StepBlock<any, any, any>[]
-): Step<JsonObject>[] {
+): Step[] {
   return stepBlocks.map((stepBlock, index) => {
     const completedStep = completedSteps[index];
     if (!completedStep) {
@@ -51,12 +51,12 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
   workflowName: string
 ) {
   function addSteps<ContextIn extends JsonObject>(
-    steps: StepBlock<any, any, any>[]
+    steps: StepBlock<JsonObject, any, JsonObject>[]
   ): {
     step: <ActionOut, ContextOut extends JsonObject>(
       title: string,
       action: (context: ContextIn) => ActionOut | Promise<ActionOut>,
-      reduce?: (result: ActionOut, context: ContextIn) => ContextOut
+      reduce?: (result: ActionOut, context: ContextIn) => ContextOut | Promise<ContextOut>
     ) => ReturnType<typeof addSteps<ContextOut>>,
     run: (initialContext?: InitialContext) => AsyncGenerator<any, void, unknown>
   } {
@@ -66,11 +66,11 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
         action: (context: ContextIn) => ActionOut | Promise<ActionOut>,
         reduce?: (result: ActionOut, context: ContextIn) => ContextOut | Promise<ContextOut>
       ) {
-        const newStep: StepBlock<ContextIn, ActionOut, ContextOut> = {
+        const newStep = {
           title,
           action,
           reduce,
-        };
+        } as StepBlock<JsonObject, any, JsonObject>;
         const newSteps = [...steps, newStep];
         return addSteps<ContextOut>(newSteps);
       },
@@ -79,8 +79,8 @@ export function createWorkflow<InitialContext extends JsonObject = {}>(
         initialContext?: InitialContext
       ): AsyncGenerator<Event<JsonObject, JsonObject>, void, unknown> {
         // This is going to be changed (potentially) after each step completes
-        let newContext = initialContext || {} as InitialContext;
-        const completedSteps: Step<JsonObject>[] = [];
+        let newContext = initialContext || {};
+        const completedSteps: Step[] = [];
 
         const startEvent = {
           workflowName,
