@@ -542,7 +542,7 @@ describe('file extension', () => {
       .file('config', 'config.json')
       .step(
         "Process config",
-        ({ context }) => {
+        ({ context }: { context: { files: Record<string, string> } }) => {
           expect(context.files.config).toBe("File content will go here.");
           return { processed: true };
         }
@@ -619,7 +619,7 @@ describe('file extension', () => {
       .file('config2', 'config2.json')
       .step(
         "Process configs",
-        ({ context }) => {
+        ({ context }: { context: { files: Record<string, string> } }) => {
           expect(context.files.config1).toBe("File content will go here.");
           expect(context.files.config2).toBe("File content will go here.");
           return { processed: true };

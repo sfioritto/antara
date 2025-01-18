@@ -1,4 +1,5 @@
 import { createWorkflow } from './new-dsl';
+import type { FileContext } from './new-dsl';
 
 // Original example showing type inference
 const myWorkflow = createWorkflow("workflow name")
@@ -112,8 +113,8 @@ const actionOnlyWorkflow = createWorkflow("actions only")
 // Example using the files extension
 const fileWorkflow = createWorkflow("file example")
   .file("config", "config.json")
-  .step("Process config", ({ context }) => {
-    // context.files.config will contain the file content
+  .step("Process config", ({ context }: { context: { files: Record<string, string> } }) => {
+    // TypeScript should infer that context has files.config
     console.log("Config file content:", context.files.config);
     return {
       processed: true
@@ -125,6 +126,8 @@ const fileWorkflow = createWorkflow("file example")
   const workflow = await fileWorkflow.run({});
 
   for await (const event of workflow) {
-    console.log(`Step "${event.completedStep?.title}":`, event.newContext);
+    if (event.completedStep) {
+      console.log(`Step "${event.completedStep.title}":`, event.newContext);
+    }
   }
 })();

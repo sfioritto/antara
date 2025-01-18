@@ -9,22 +9,11 @@ export type FileContext = {
   files: Record<string, string>;
 }
 
-export type FileExtensionMethods<
-  InitialContext extends JsonObject,
-  WorkflowOptions extends JsonObject
-> = {
-  file(name: string, path: string): Builder<
-    Merge<FileContext>,
-    InitialContext,
-    WorkflowOptions
-  >
-}
-
 export interface Builder<
   ContextIn extends JsonObject,
   InitialContext extends JsonObject,
   WorkflowOptions extends JsonObject
-> extends FileExtensionMethods<InitialContext, WorkflowOptions> {
+> {
   step: AddStep<ContextIn, InitialContext, WorkflowOptions>;
   run<Options extends WorkflowOptions>(
     params: RunParams<Options, InitialContext>
@@ -151,20 +140,50 @@ function serializedSteps(
 export interface Extension<
   ContextIn extends JsonObject = JsonObject,
   InitialContext extends JsonObject = JsonObject,
-  WorkflowOptions extends JsonObject = JsonObject
+  WorkflowOptions extends JsonObject = JsonObject,
+  ExtensionApi extends Record<string, any> = Record<string, any>
 > {
   name: string;
-  create(args: {
+  create<T extends ContextIn>(args: {
     workflowName: string;
     description?: string;
-    builder: Builder<ContextIn, InitialContext, WorkflowOptions>;
-  }): Partial<Builder<ContextIn, InitialContext, WorkflowOptions>>;
+    builder: Builder<T, InitialContext, WorkflowOptions>;
+  }): ExtensionApi;
 }
 
 const globalExtensions: Record<string, Extension> = {};
 export function registerExtension(extension: Extension) {
   globalExtensions[extension.name] = extension;
 }
+
+// Example of a file extension
+export const filesExtension: Extension<JsonObject, JsonObject, JsonObject, {
+  file(name: string, path: string): Builder<FileContext, any, any>
+}> = {
+  name: 'files',
+  create: ({ builder }) => ({
+    file(name: string, path: string) {
+      return builder.step(
+        `Reading file: ${name}`,
+        async () => ({
+          files: {
+            [name]: "File content will go here."
+          }
+        }),
+        ({ result, context }) => ({
+          ...context,
+          files: {
+            ...(context as Partial<FileContext>).files,
+            ...result.files
+          }
+        })
+      );
+    }
+  })
+};
+
+// Register the files extension by default
+registerExtension(filesExtension);
 
 export function createWorkflow<
   WorkflowOptions extends JsonObject = {},
@@ -177,7 +196,7 @@ export function createWorkflow<
     ContextIn extends JsonObject
   >(
     steps: StepBlock<JsonObject, WorkflowOptions, any, JsonObject>[]
-  ): Builder<ContextIn, InitialContext, WorkflowOptions> {
+  ): Builder<ContextIn, InitialContext, WorkflowOptions> & Record<string, any> {
     const builder = {
       step: (<ActionOut, ContextOut extends JsonObject>(
         title: string,
@@ -318,37 +337,16 @@ export function createWorkflow<
       }
     };
 
-    // Create the files extension
-    const filesExtension = {
-      file(name: string, path: string) {
-        return builder.step(
-          `Reading file: ${name}`,
-          async ({ context }) => {
-            const ctx = context as Partial<FileContext>;
-            if (ctx.files && name in ctx.files) {
-              throw new Error(
-                `File name "${name}" already exists in this workflow run. Names must be unique within a workflow.`
-              );
-            }
-            // Note: fileStore and workflowDir will need to be passed in through options
-            // return await context.fileStore.readFile(path, context.workflowDir);
-            return "File content will go here."
-          },
-          ({ result, context }) => {
-            const ctx = context as Partial<FileContext>;
-            return {
-              ...context,
-              files: {
-                ...ctx.files,
-                [name]: result
-              }
-            } as Merge<FileContext>;
-          }
-        );
-      }
-    };
+    // Apply all registered extensions
+    const extensions = Object.values(globalExtensions).map(extension =>
+      extension.create({
+        workflowName,
+        description,
+        builder: builder as Builder<ContextIn, InitialContext, WorkflowOptions>
+      })
+    );
 
-    return { ...builder, ...filesExtension } as Builder<ContextIn, InitialContext, WorkflowOptions>;
+    return Object.assign(builder, ...extensions);
   }
 
   return createBuilder<InitialContext>([]);
