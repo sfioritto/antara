@@ -113,10 +113,10 @@ interface WorkflowConfig {
 }
 
 export interface Extension<
+  ExtensionApi extends Record<string, any> = Record<string, any>,
   ContextIn extends JsonObject = JsonObject,
   InitialContext extends JsonObject = JsonObject,
   WorkflowOptions extends JsonObject = JsonObject,
-  ExtensionApi extends Record<string, any> = Record<string, any>
 > {
   name: string;
   create<T extends ContextIn>(args: {

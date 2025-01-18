@@ -6,9 +6,7 @@ export type FileContext = {
 }
 
 // Example of a file extension
-export const filesExtension: Extension<JsonObject, JsonObject, JsonObject, {
-  file(name: string, path: string): Builder<FileContext, any, any>
-}> = {
+export const filesExtension: Extension = {
   name: 'files',
   create: ({ builder }) => ({
     file(name: string, path: string) {
