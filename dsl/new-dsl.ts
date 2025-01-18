@@ -165,11 +165,19 @@ export const filesExtension: Extension<JsonObject, JsonObject, JsonObject, {
     file(name: string, path: string) {
       return builder.step(
         `Reading file: ${name}`,
-        async () => ({
-          files: {
-            [name]: "File content will go here."
+        async ({ context }) => {
+          const ctx = context as Partial<FileContext>;
+          if (ctx.files && name in ctx.files) {
+            throw new Error(
+              `File name "${name}" already exists in this workflow run. Names must be unique within a workflow.`
+            );
           }
-        }),
+          return {
+            files: {
+              [name]: "File content will go here."
+            }
+          };
+        },
         ({ result, context }) => ({
           ...context,
           files: {
