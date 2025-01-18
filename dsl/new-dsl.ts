@@ -28,33 +28,25 @@ export interface Step {
   context: JsonObject
 }
 
-type ActionHandlerParams<ContextIn extends JsonObject, WorkflowOptions extends JsonObject> = {
-  context: ContextIn;
-  options: WorkflowOptions;
-}
-
-type ReduceHandlerParams<
-  ActionOut,
-  ContextIn extends JsonObject,
-  WorkflowOptions extends JsonObject
-> = {
-  result: ActionOut;
-  context: ContextIn;
-  options: WorkflowOptions;
-}
-
 type Action<
   ContextIn extends JsonObject,
   WorkflowOptions extends JsonObject,
   ActionOut
-> = (params: ActionHandlerParams<ContextIn, WorkflowOptions>) => ActionOut | Promise<ActionOut>
+> = (params: {
+  context: ContextIn;
+  options: WorkflowOptions;
+}) => ActionOut | Promise<ActionOut>
 
 type Reduce<
   ActionOut,
   ContextIn extends JsonObject,
   WorkflowOptions extends JsonObject,
   ContextOut extends JsonObject
-> = (params: ReduceHandlerParams<ActionOut, ContextIn, WorkflowOptions>) => ContextOut | Promise<ContextOut>
+> = (params: {
+  result: ActionOut;
+  context: ContextIn;
+  options: WorkflowOptions;
+}) => ContextOut | Promise<ContextOut>
 
 interface StepBlock<
   ContextIn extends JsonObject,
@@ -63,8 +55,8 @@ interface StepBlock<
   ContextOut extends JsonObject
 > {
   title: string;
-  action: (params: ActionHandlerParams<ContextIn, WorkflowOptions>) => ActionOut | Promise<ActionOut>;
-  reduce: (params: ReduceHandlerParams<ActionOut, ContextIn, WorkflowOptions>) => ContextOut | Promise<ContextOut>;
+  action: Action<ContextIn, WorkflowOptions, ActionOut>;
+  reduce: Reduce<ActionOut, ContextIn, WorkflowOptions, ContextOut>;
 }
 
 type GenericReducerOutput<ActionOut, ContextIn> =
