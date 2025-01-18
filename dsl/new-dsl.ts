@@ -17,12 +17,12 @@ export interface Event<
   error?: SerializedError,
   type: EventTypes,
   status: StatusOptions,
-  completedStep?: Step,
-  steps: Step[],
+  completedStep?: SerializedStep,
+  steps: SerializedStep[],
   options: Options,
 }
 
-export interface Step {
+export interface SerializedStep {
   title: string
   status: StatusOptions
   context: JsonObject
@@ -67,7 +67,7 @@ type GenericReducerOutput<ActionOut, ContextIn> =
 interface RunParams<WorkflowOptions extends JsonObject, InitialContext extends JsonObject> {
   initialContext?: InitialContext;
   options?: WorkflowOptions;
-  initialCompletedSteps?: Step[];
+  initialCompletedSteps?: SerializedStep[];
 }
 
 export interface Builder<
@@ -104,14 +104,26 @@ export type AddStep<
   ): ReturnType<
     Builder<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions>
   >;
-  };
+};
 
+type Merge<T> = T extends object ? {
+  [K in keyof T]: T[K]
+} & {} : T;
 
-function outputSteps(
+interface WorkflowConfig {
+  name: string;
+  description?: string;
+}
+
+function clone<T>(original: T): T {
+  return structuredClone(original) as T;
+}
+
+function serializedSteps(
   currentContext: JsonObject,
-  completedSteps: Step[],
+  completedSteps: SerializedStep[],
   stepBlocks: StepBlock<JsonObject, any, JsonObject, JsonObject>[]
-): Step[] {
+): SerializedStep[] {
   return stepBlocks.map((stepBlock, index) => {
     const completedStep = completedSteps[index];
     if (!completedStep) {
@@ -125,20 +137,6 @@ function outputSteps(
   });
 }
 
-type Merge<T> = T extends object ? {
-  [K in keyof T]: T[K]
-} & {} : T;
-
-// Add a type-safe clone helper
-function clone<T>(original: T): T {
-  return structuredClone(original) as T;
-}
-
-interface WorkflowConfig {
-  name: string;
-  description?: string;
-}
-
 export function createWorkflow<
   WorkflowOptions extends JsonObject = {},
   InitialContext extends JsonObject = {}
@@ -146,7 +144,6 @@ export function createWorkflow<
   const workflowName = typeof nameOrConfig === 'string' ? nameOrConfig : nameOrConfig.name;
   const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
 
-  // Actually define the function that adds steps
   function createBuilder<ContextIn extends JsonObject>(
     steps: StepBlock<JsonObject, WorkflowOptions, any, JsonObject>[]
   ) {
@@ -194,7 +191,7 @@ export function createWorkflow<
         initialCompletedSteps = [],
         options = {} as Options
       }: RunParams<Options, InitialContext> & {
-        initialCompletedSteps?: Step[]
+        initialCompletedSteps?: SerializedStep[]
       }): AsyncGenerator<
         | Event<InitialContext, InitialContext, Options>  // START event
         | Event<ContextIn, ContextIn, Options>  // UPDATE events
@@ -212,7 +209,7 @@ export function createWorkflow<
           previousContext: initialContext,
           newContext: initialContext,
           status: STATUS.RUNNING,
-          steps: outputSteps(newContext, completedSteps, steps),
+          steps: serializedSteps(newContext, completedSteps, steps),
           options,
         };
 
@@ -249,7 +246,7 @@ export function createWorkflow<
               error,
               completedStep,
               options,
-              steps: outputSteps(newContext, completedSteps, steps),
+              steps: serializedSteps(newContext, completedSteps, steps),
             };
             yield clone(errorEvent);
             return;
@@ -270,7 +267,7 @@ export function createWorkflow<
             completedStep,
             status: STATUS.RUNNING,
             options,
-            steps: outputSteps(newContext, completedSteps, steps),
+            steps: serializedSteps(newContext, completedSteps, steps),
           };
 
           yield clone(updateEvent);
@@ -283,7 +280,7 @@ export function createWorkflow<
           newContext: newContext as ContextIn,
           status: STATUS.COMPLETE,
           options,
-          steps: outputSteps(newContext, completedSteps, steps),
+          steps: serializedSteps(newContext, completedSteps, steps),
         };
 
         yield clone(completeEvent);
