@@ -84,7 +84,7 @@ export interface Builder<
   WorkflowOptions extends JsonObject,
 > {
   (steps: StepBlock<JsonObject, any, JsonObject, WorkflowOptions>[]): {
-    step: StepFunction<ContextIn, InitialContext, WorkflowOptions>;
+    step: AddStep<ContextIn, InitialContext, WorkflowOptions>;
     run<Options extends WorkflowOptions>(
       params: RunParams<Options, InitialContext>
     ): AsyncGenerator<
@@ -95,7 +95,7 @@ export interface Builder<
   };
 }
 
-export type StepFunction<
+export type AddStep<
   ContextIn extends JsonObject,
   InitialContext extends JsonObject,
   WorkflowOptions extends JsonObject,
@@ -196,7 +196,7 @@ export function createWorkflow<
 
         const newSteps = [...steps, newStep] as typeof steps;
         return createBuilder<ContextOut>(newSteps);
-      }) as StepFunction<ContextIn, InitialContext, WorkflowOptions>,
+      }) as AddStep<ContextIn, InitialContext, WorkflowOptions>,
 
       async *run<Options extends WorkflowOptions = WorkflowOptions>({
         initialContext = {} as InitialContext,
