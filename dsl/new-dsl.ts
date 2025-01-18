@@ -182,7 +182,7 @@ export function createWorkflow<
           reduce: reduce ?? genericReducer,
         } as StepBlock<JsonObject, WorkflowOptions, ActionOut, ContextOut>;
 
-        const newSteps = [...steps, newStep] as typeof steps;
+        const newSteps = [...steps, newStep];
         return createBuilder<ContextOut>(newSteps);
       }) as AddStep<ContextIn, InitialContext, WorkflowOptions>,
 
