@@ -1,5 +1,4 @@
 import { createWorkflow } from './new-dsl';
-import type { FileContext } from './new-dsl';
 
 // Original example showing type inference
 const myWorkflow = createWorkflow("workflow name")

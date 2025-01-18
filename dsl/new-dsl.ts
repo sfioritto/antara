@@ -1,13 +1,10 @@
 import { JsonObject } from "./types"
+import { filesExtension } from "../extensions/files";
 import type { SerializedError } from './types'
 import { WORKFLOW_EVENTS, STATUS } from './constants'
 
 export type EventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
 export type StatusOptions = typeof STATUS[keyof typeof STATUS];
-
-export type FileContext = {
-  files: Record<string, string>;
-}
 
 export interface Builder<
   ContextIn extends JsonObject,
@@ -115,6 +112,20 @@ interface WorkflowConfig {
   description?: string;
 }
 
+export interface Extension<
+  ContextIn extends JsonObject = JsonObject,
+  InitialContext extends JsonObject = JsonObject,
+  WorkflowOptions extends JsonObject = JsonObject,
+  ExtensionApi extends Record<string, any> = Record<string, any>
+> {
+  name: string;
+  create<T extends ContextIn>(args: {
+    workflowName: string;
+    description?: string;
+    builder: Builder<T, InitialContext, WorkflowOptions>;
+  }): ExtensionApi;
+}
+
 function clone<T>(original: T): T {
   return structuredClone(original) as T;
 }
@@ -137,61 +148,13 @@ function serializedSteps(
   });
 }
 
-export interface Extension<
-  ContextIn extends JsonObject = JsonObject,
-  InitialContext extends JsonObject = JsonObject,
-  WorkflowOptions extends JsonObject = JsonObject,
-  ExtensionApi extends Record<string, any> = Record<string, any>
-> {
-  name: string;
-  create<T extends ContextIn>(args: {
-    workflowName: string;
-    description?: string;
-    builder: Builder<T, InitialContext, WorkflowOptions>;
-  }): ExtensionApi;
-}
-
 const globalExtensions: Record<string, Extension> = {};
 export function registerExtension(extension: Extension) {
   globalExtensions[extension.name] = extension;
 }
 
-// Example of a file extension
-export const filesExtension: Extension<JsonObject, JsonObject, JsonObject, {
-  file(name: string, path: string): Builder<FileContext, any, any>
-}> = {
-  name: 'files',
-  create: ({ builder }) => ({
-    file(name: string, path: string) {
-      return builder.step(
-        `Reading file: ${name}`,
-        async ({ context }) => {
-          const ctx = context as Partial<FileContext>;
-          if (ctx.files && name in ctx.files) {
-            throw new Error(
-              `File name "${name}" already exists in this workflow run. Names must be unique within a workflow.`
-            );
-          }
-          return {
-            files: {
-              [name]: "File content will go here."
-            }
-          };
-        },
-        ({ result, context }) => ({
-          ...context,
-          files: {
-            ...(context as Partial<FileContext>).files,
-            ...result.files
-          }
-        })
-      );
-    }
-  })
-};
-
-// Register the files extension by default
-registerExtension(filesExtension);
+// register filesExtension by default
+registerExtension(filesExtension)
 
 export function createWorkflow<
   WorkflowOptions extends JsonObject = {},
