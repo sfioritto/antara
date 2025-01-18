@@ -107,3 +107,24 @@ const actionOnlyWorkflow = createWorkflow("actions only")
 
 // Note: These examples show different patterns of using the DSL
 // They're here for reference and aren't meant to be run directly
+
+
+// Example using the files extension
+const fileWorkflow = createWorkflow("file example")
+  .file("config", "config.json")
+  .step("Process config", ({ context }) => {
+    // context.files.config will contain the file content
+    console.log("Config file content:", context.files.config);
+    return {
+      processed: true
+    };
+  });
+
+// Run the file workflow
+(async () => {
+  const workflow = await fileWorkflow.run({});
+
+  for await (const event of workflow) {
+    console.log(`Step "${event.completedStep?.title}":`, event.newContext);
+  }
+})();

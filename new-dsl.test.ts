@@ -535,3 +535,128 @@ describe('workflow resumption', () => {
     ]);
   });
 });
+
+describe('file extension', () => {
+  it('should add files to context', async () => {
+    const workflow = createWorkflow('File Workflow')
+      .file('config', 'config.json')
+      .step(
+        "Process config",
+        ({ context }) => {
+          expect(context.files.config).toBe("File content will go here.");
+          return { processed: true };
+        }
+      );
+
+    const events: Event<any, any, any>[] = [];
+    const workflowRun = workflow.run({});
+
+    // Collect all events
+    for await (const event of workflowRun) {
+      events.push(event);
+    }
+
+    // Verify file was added to context
+    expect(events[1]).toEqual(expect.objectContaining({
+      type: WORKFLOW_EVENTS.UPDATE,
+      status: STATUS.RUNNING,
+      newContext: expect.objectContaining({
+        files: {
+          config: "File content will go here."
+        }
+      })
+    }));
+
+    // Verify subsequent step worked with file context
+    expect(events[2]).toEqual(expect.objectContaining({
+      type: WORKFLOW_EVENTS.UPDATE,
+      status: STATUS.RUNNING,
+      newContext: expect.objectContaining({
+        files: {
+          config: "File content will go here."
+        },
+        processed: true
+      })
+    }));
+  });
+
+  it('should prevent duplicate file names', async () => {
+    const workflow = createWorkflow('Duplicate Files Workflow')
+      .file('config', 'config1.json')
+      .file('config', 'config2.json');
+
+    const workflowRun = workflow.run({});
+
+    // Skip START event
+    await workflowRun.next();
+
+    // First file should succeed
+    const firstFileResult = await workflowRun.next();
+    expect(firstFileResult.value).toEqual(expect.objectContaining({
+      type: WORKFLOW_EVENTS.UPDATE,
+      status: STATUS.RUNNING,
+      newContext: expect.objectContaining({
+        files: {
+          config: "File content will go here."
+        }
+      })
+    }));
+
+    // Second file should fail
+    const secondFileResult = await workflowRun.next();
+    expect(secondFileResult.value).toEqual(expect.objectContaining({
+      type: WORKFLOW_EVENTS.ERROR,
+      status: STATUS.ERROR,
+      error: expect.objectContaining({
+        message: 'File name "config" already exists in this workflow run. Names must be unique within a workflow.'
+      })
+    }));
+  });
+
+  it('should accumulate multiple files', async () => {
+    const workflow = createWorkflow('Multiple Files Workflow')
+      .file('config1', 'config1.json')
+      .file('config2', 'config2.json')
+      .step(
+        "Process configs",
+        ({ context }) => {
+          expect(context.files.config1).toBe("File content will go here.");
+          expect(context.files.config2).toBe("File content will go here.");
+          return { processed: true };
+        }
+      );
+
+    const events: Event<any, any, any>[] = [];
+    const workflowRun = workflow.run({});
+
+    // Collect all events
+    for await (const event of workflowRun) {
+      events.push(event);
+    }
+
+    // Verify both files were added
+    expect(events[2]).toEqual(expect.objectContaining({
+      type: WORKFLOW_EVENTS.UPDATE,
+      status: STATUS.RUNNING,
+      newContext: expect.objectContaining({
+        files: {
+          config1: "File content will go here.",
+          config2: "File content will go here."
+        }
+      })
+    }));
+
+    // Verify final context has both files and processed flag
+    expect(events[3]).toEqual(expect.objectContaining({
+      type: WORKFLOW_EVENTS.UPDATE,
+      status: STATUS.RUNNING,
+      newContext: expect.objectContaining({
+        files: {
+          config1: "File content will go here.",
+          config2: "File content will go here."
+        },
+        processed: true
+      })
+    }));
+  });
+});

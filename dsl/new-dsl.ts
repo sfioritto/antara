@@ -5,6 +5,36 @@ import { WORKFLOW_EVENTS, STATUS } from './constants'
 export type EventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
 export type StatusOptions = typeof STATUS[keyof typeof STATUS];
 
+export type FileContext = {
+  files: Record<string, string>;
+}
+
+export type FileExtensionMethods<
+  InitialContext extends JsonObject,
+  WorkflowOptions extends JsonObject
+> = {
+  file(name: string, path: string): Builder<
+    Merge<FileContext>,
+    InitialContext,
+    WorkflowOptions
+  >
+}
+
+export interface Builder<
+  ContextIn extends JsonObject,
+  InitialContext extends JsonObject,
+  WorkflowOptions extends JsonObject
+> extends FileExtensionMethods<InitialContext, WorkflowOptions> {
+  step: AddStep<ContextIn, InitialContext, WorkflowOptions>;
+  run<Options extends WorkflowOptions>(
+    params: RunParams<Options, InitialContext>
+  ): AsyncGenerator<
+    | Event<InitialContext, InitialContext, Options>  // START event
+    | Event<ContextIn, ContextIn, Options>  // UPDATE events
+    | Event<InitialContext, ContextIn, Options>  // COMPLETE event
+    , void, unknown>;
+}
+
 export interface Event<
   ContextIn extends JsonObject,
   ContextOut extends JsonObject,
@@ -70,21 +100,6 @@ interface RunParams<WorkflowOptions extends JsonObject, InitialContext extends J
   initialCompletedSteps?: SerializedStep[];
 }
 
-interface Builder<
-  ContextIn extends JsonObject,
-  InitialContext extends JsonObject,
-  WorkflowOptions extends JsonObject
-> {
-  step: AddStep<ContextIn, InitialContext, WorkflowOptions>;
-  run<Options extends WorkflowOptions>(
-    params: RunParams<Options, InitialContext>
-  ): AsyncGenerator<
-    | Event<InitialContext, InitialContext, Options>  // START event
-    | Event<ContextIn, ContextIn, Options>  // UPDATE events
-    | Event<InitialContext, ContextIn, Options>  // COMPLETE event
-    , void, unknown>;
-}
-
 export type AddStep<
   ContextIn extends JsonObject,
   InitialContext extends JsonObject,
@@ -133,16 +148,17 @@ function serializedSteps(
   });
 }
 
-type Extension = {
-  name: string,
-  create<
-    ContextIn extends JsonObject,
-    InitialContext extends JsonObject
-  >(args: {
-    workflowName: string,
-    description?: string,
-    builder: Builder<ContextIn, InitialContext, any>,
-  }): Record<any, any>
+export interface Extension<
+  ContextIn extends JsonObject = JsonObject,
+  InitialContext extends JsonObject = JsonObject,
+  WorkflowOptions extends JsonObject = JsonObject
+> {
+  name: string;
+  create(args: {
+    workflowName: string;
+    description?: string;
+    builder: Builder<ContextIn, InitialContext, WorkflowOptions>;
+  }): Partial<Builder<ContextIn, InitialContext, WorkflowOptions>>;
 }
 
 const globalExtensions: Record<string, Extension> = {};
@@ -157,9 +173,11 @@ export function createWorkflow<
   const workflowName = typeof nameOrConfig === 'string' ? nameOrConfig : nameOrConfig.name;
   const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
 
-  function createBuilder<ContextIn extends JsonObject>(
+  function createBuilder<
+    ContextIn extends JsonObject
+  >(
     steps: StepBlock<JsonObject, WorkflowOptions, any, JsonObject>[]
-  ) {
+  ): Builder<ContextIn, InitialContext, WorkflowOptions> {
     const builder = {
       step: (<ActionOut, ContextOut extends JsonObject>(
         title: string,
@@ -199,16 +217,16 @@ export function createWorkflow<
         return createBuilder<ContextOut>(newSteps);
       }) as AddStep<ContextIn, InitialContext, WorkflowOptions>,
 
-      async *run<Options extends WorkflowOptions = WorkflowOptions>({
+      run: async function* <Options extends WorkflowOptions>({
         initialContext = {} as InitialContext,
         initialCompletedSteps = [],
         options = {} as Options
       }: RunParams<Options, InitialContext> & {
         initialCompletedSteps?: SerializedStep[]
       }): AsyncGenerator<
-        | Event<InitialContext, InitialContext, Options>  // START event
-        | Event<ContextIn, ContextIn, Options>  // UPDATE events
-        | Event<InitialContext, ContextIn, Options>  // COMPLETE event
+        | Event<InitialContext, InitialContext, Options>
+        | Event<ContextIn, ContextIn, Options>
+        | Event<InitialContext, ContextIn, Options>
         , void, unknown> {
         let newContext = initialCompletedSteps.length > 0
           ? clone(initialCompletedSteps[initialCompletedSteps.length - 1].context)
@@ -297,52 +315,40 @@ export function createWorkflow<
         };
 
         yield clone(completeEvent);
-      },
+      }
     };
 
-    type FileContext = {
-      files: Record<string, string>
-    } & JsonObject;
-
-    // apply globalExtensions to builder here
-    const filesExtension: Extension = {
-      name: 'files',
-      create: ({
-        builder,
-      }) => ({
-        file(name: string, path: string) {
-          return builder.step(
-            `Reading file: ${name}`,
-            async ({ context }) => {
-              if ((context as unknown as FileContext).files && name in (context as unknown as FileContext).files) {
-                throw new Error(
-                  `File name "${name}" already exists in this workflow run. Names must be unique within a workflow.`
-                );
-              }
-              // Note: fileStore and workflowDir will need to be passed in through options
-              // return await context.fileStore.readFile(path, context.workflowDir);
-              return "File content will go here."
-            },
-            ({ result, context }) => ({
+    // Create the files extension
+    const filesExtension = {
+      file(name: string, path: string) {
+        return builder.step(
+          `Reading file: ${name}`,
+          async ({ context }) => {
+            const ctx = context as Partial<FileContext>;
+            if (ctx.files && name in ctx.files) {
+              throw new Error(
+                `File name "${name}" already exists in this workflow run. Names must be unique within a workflow.`
+              );
+            }
+            // Note: fileStore and workflowDir will need to be passed in through options
+            // return await context.fileStore.readFile(path, context.workflowDir);
+            return "File content will go here."
+          },
+          ({ result, context }) => {
+            const ctx = context as Partial<FileContext>;
+            return {
               ...context,
               files: {
-                ...(context as unknown as FileContext).files,
+                ...ctx.files,
                 [name]: result
               }
-            })
-          );
-        }
-      })
-    }
+            } as Merge<FileContext>;
+          }
+        );
+      }
+    };
 
-    // Create the extension instance and merge with builder
-    const filesExtensionInstance = filesExtension.create({
-      workflowName,
-      description,
-      builder,
-    });
-
-    return { ...builder, ...filesExtensionInstance };
+    return { ...builder, ...filesExtension } as Builder<ContextIn, InitialContext, WorkflowOptions>;
   }
 
   return createBuilder<InitialContext>([]);
