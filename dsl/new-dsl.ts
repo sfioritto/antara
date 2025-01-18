@@ -214,9 +214,9 @@ export function createWorkflow<
       }: RunParams<Options, InitialContext> & {
         initialCompletedSteps?: SerializedStep[]
       }): AsyncGenerator<
-        | Event<InitialContext, InitialContext, Options>
-        | Event<ContextIn, ContextIn, Options>
-        | Event<InitialContext, ContextIn, Options>
+        | Event<InitialContext, InitialContext, Options> // START event
+        | Event<ContextIn, ContextIn, Options> // UPDATE event
+        | Event<InitialContext, ContextIn, Options> // COMPLETE event
         , void, unknown> {
         let newContext = initialCompletedSteps.length > 0
           ? clone(initialCompletedSteps[initialCompletedSteps.length - 1].context)
