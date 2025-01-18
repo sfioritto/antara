@@ -78,7 +78,7 @@ interface RunParams<WorkflowOptions extends JsonObject, InitialContext extends J
   initialCompletedSteps?: Step[];
 }
 
-export interface AddSteps<
+export interface Builder<
   ContextIn extends JsonObject,
   InitialContext extends JsonObject,
   WorkflowOptions extends JsonObject,
@@ -104,15 +104,16 @@ export type StepFunction<
     title: string,
     action: ActionHandler<ContextIn, WorkflowOptions, ActionOut>,
     reduce: ReduceHandler<ActionOut, ContextIn, WorkflowOptions, ContextOut>
-  ): ReturnType<AddSteps<Merge<ContextOut>, InitialContext, WorkflowOptions>>;
+  ): ReturnType<Builder<Merge<ContextOut>, InitialContext, WorkflowOptions>>;
 
   <ActionOut>(
     title: string,
     action: ActionHandler<ContextIn, WorkflowOptions, ActionOut>
   ): ReturnType<
-    AddSteps<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions>
+    Builder<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions>
   >;
-};
+  };
+
 
 function outputSteps(
   currentContext: JsonObject,
@@ -155,10 +156,10 @@ export function createWorkflow<
   const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
 
   // Actually define the function that adds steps
-  function addSteps<ContextIn extends JsonObject>(
+  function createBuilder<ContextIn extends JsonObject>(
     steps: StepBlock<JsonObject, WorkflowOptions, any, JsonObject>[]
   ) {
-    return {
+    const builder = {
       step: (<ActionOut, ContextOut extends JsonObject>(
         title: string,
         action: ActionHandler<ContextIn, WorkflowOptions, ActionOut>,
@@ -194,7 +195,7 @@ export function createWorkflow<
         } as StepBlock<JsonObject, WorkflowOptions, ActionOut, ContextOut>;
 
         const newSteps = [...steps, newStep] as typeof steps;
-        return addSteps<ContextOut>(newSteps);
+        return createBuilder<ContextOut>(newSteps);
       }) as StepFunction<ContextIn, InitialContext, WorkflowOptions>,
 
       async *run<Options extends WorkflowOptions = WorkflowOptions>({
@@ -297,9 +298,11 @@ export function createWorkflow<
         yield cloneEvent(completeEvent);
       },
     };
+
+    return builder;
   }
 
   // 4. Return the "addSteps" result with a blank array to start
-  return addSteps<InitialContext>([]);
+  return createBuilder<InitialContext>([]);
 }
 
