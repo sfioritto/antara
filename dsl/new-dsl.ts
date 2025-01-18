@@ -43,13 +43,13 @@ type ReduceHandlerParams<
   options: WorkflowOptions;
 }
 
-type ActionHandler<
+type Action<
   ContextIn extends JsonObject,
   WorkflowOptions extends JsonObject,
   ActionOut
 > = (params: ActionHandlerParams<ContextIn, WorkflowOptions>) => ActionOut | Promise<ActionOut>
 
-type ReduceHandler<
+type Reduce<
   ActionOut,
   ContextIn extends JsonObject,
   WorkflowOptions extends JsonObject,
@@ -102,13 +102,13 @@ export type AddStep<
 > = {
   <ActionOut, ContextOut extends JsonObject>(
     title: string,
-    action: ActionHandler<ContextIn, WorkflowOptions, ActionOut>,
-    reduce: ReduceHandler<ActionOut, ContextIn, WorkflowOptions, ContextOut>
+    action: Action<ContextIn, WorkflowOptions, ActionOut>,
+    reduce: Reduce<ActionOut, ContextIn, WorkflowOptions, ContextOut>
   ): ReturnType<Builder<Merge<ContextOut>, InitialContext, WorkflowOptions>>;
 
   <ActionOut>(
     title: string,
-    action: ActionHandler<ContextIn, WorkflowOptions, ActionOut>
+    action: Action<ContextIn, WorkflowOptions, ActionOut>
   ): ReturnType<
     Builder<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions>
   >;
@@ -162,10 +162,10 @@ export function createWorkflow<
     const builder = {
       step: (<ActionOut, ContextOut extends JsonObject>(
         title: string,
-        action: ActionHandler<ContextIn, WorkflowOptions, ActionOut>,
-        reduce?: ReduceHandler<ActionOut, ContextIn, WorkflowOptions, ContextOut>
+        action: Action<ContextIn, WorkflowOptions, ActionOut>,
+        reduce?: Reduce<ActionOut, ContextIn, WorkflowOptions, ContextOut>
       ) => {
-        const genericReducer: ReduceHandler<
+        const genericReducer: Reduce<
           ActionOut,
           ContextIn,
           WorkflowOptions,
