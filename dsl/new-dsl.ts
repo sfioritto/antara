@@ -125,14 +125,13 @@ function outputSteps(
   });
 }
 
-// Add this type utility near your other type definitions
 type Merge<T> = T extends object ? {
   [K in keyof T]: T[K]
 } & {} : T;
 
 // Add a type-safe clone helper
-function cloneEvent<EventType extends Event<any, any, any>>(event: EventType): EventType {
-  return structuredClone(event);
+function clone<T>(original: T): T {
+  return structuredClone(original) as T;
 }
 
 interface WorkflowConfig {
@@ -202,8 +201,8 @@ export function createWorkflow<
         | Event<InitialContext, ContextIn, Options>  // COMPLETE event
         , void, unknown> {
         let newContext = initialCompletedSteps.length > 0
-          ? structuredClone(initialCompletedSteps[initialCompletedSteps.length - 1].context)
-          : structuredClone(initialContext);
+          ? clone(initialCompletedSteps[initialCompletedSteps.length - 1].context)
+          : clone(initialContext);
         const completedSteps = [...initialCompletedSteps];
 
         const startEvent: Event<InitialContext, InitialContext, Options> = {
@@ -217,18 +216,18 @@ export function createWorkflow<
           options,
         };
 
-        yield cloneEvent(startEvent);
+        yield clone(startEvent);
 
         // Skip already completed steps
         const remainingSteps = steps.slice(initialCompletedSteps.length);
 
         for (const step of remainingSteps) {
-          const previousContext = structuredClone(newContext);
+          const previousContext = clone(newContext);
 
           try {
-            const result = await step.action({ context: structuredClone(newContext), options });
+            const result = await step.action({ context: clone(newContext), options });
             newContext = step.reduce
-              ? await step.reduce({ result, context: structuredClone(newContext), options })
+              ? await step.reduce({ result, context: clone(newContext), options })
               : newContext;
           } catch (stepError) {
             const error = stepError as Error;
@@ -252,7 +251,7 @@ export function createWorkflow<
               options,
               steps: outputSteps(newContext, completedSteps, steps),
             };
-            yield cloneEvent(errorEvent);
+            yield clone(errorEvent);
             return;
           }
 
@@ -274,7 +273,7 @@ export function createWorkflow<
             steps: outputSteps(newContext, completedSteps, steps),
           };
 
-          yield cloneEvent(updateEvent);
+          yield clone(updateEvent);
         }
 
         const completeEvent: Event<InitialContext, ContextIn, Options> = {
@@ -287,7 +286,7 @@ export function createWorkflow<
           steps: outputSteps(newContext, completedSteps, steps),
         };
 
-        yield cloneEvent(completeEvent);
+        yield clone(completeEvent);
       },
     };
 
