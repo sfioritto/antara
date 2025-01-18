@@ -70,21 +70,19 @@ interface RunParams<WorkflowOptions extends JsonObject, InitialContext extends J
   initialCompletedSteps?: SerializedStep[];
 }
 
-export interface Builder<
+interface Builder<
   ContextIn extends JsonObject,
   InitialContext extends JsonObject,
-  WorkflowOptions extends JsonObject,
+  WorkflowOptions extends JsonObject
 > {
-  (steps: StepBlock<JsonObject, any, JsonObject, WorkflowOptions>[]): {
-    step: AddStep<ContextIn, InitialContext, WorkflowOptions>;
-    run<Options extends WorkflowOptions>(
-      params: RunParams<Options, InitialContext>
-    ): AsyncGenerator<
-      | Event<InitialContext, InitialContext, Options>  // START event
-      | Event<ContextIn, ContextIn, Options>  // UPDATE events
-      | Event<InitialContext, ContextIn, Options>  // COMPLETE event
-      , void, unknown>;
-  };
+  step: AddStep<ContextIn, InitialContext, WorkflowOptions>;
+  run<Options extends WorkflowOptions>(
+    params: RunParams<Options, InitialContext>
+  ): AsyncGenerator<
+    | Event<InitialContext, InitialContext, Options>  // START event
+    | Event<ContextIn, ContextIn, Options>  // UPDATE events
+    | Event<InitialContext, ContextIn, Options>  // COMPLETE event
+    , void, unknown>;
 }
 
 export type AddStep<
@@ -96,14 +94,12 @@ export type AddStep<
     title: string,
     action: Action<ContextIn, WorkflowOptions, ActionOut>,
     reduce: Reduce<ActionOut, ContextIn, WorkflowOptions, ContextOut>
-  ): ReturnType<Builder<Merge<ContextOut>, InitialContext, WorkflowOptions>>;
+  ): Builder<Merge<ContextOut>, InitialContext, WorkflowOptions>;
 
   <ActionOut>(
     title: string,
     action: Action<ContextIn, WorkflowOptions, ActionOut>
-  ): ReturnType<
-    Builder<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions>
-  >;
+  ): Builder<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions>;
 };
 
 type Merge<T> = T extends object ? {
@@ -135,6 +131,23 @@ function serializedSteps(
     }
     return completedStep;
   });
+}
+
+type Extension = {
+  name: string,
+  create<
+    ContextIn extends JsonObject,
+    InitialContext extends JsonObject
+  >(args: {
+    workflowName: string,
+    description?: string,
+    builder: Builder<ContextIn, InitialContext, any>,
+  }): Record<any, any>
+}
+
+const globalExtensions: Record<string, Extension> = {};
+export function registerExtension(extension: Extension) {
+  globalExtensions[extension.name] = extension;
 }
 
 export function createWorkflow<
@@ -287,10 +300,51 @@ export function createWorkflow<
       },
     };
 
-    return builder;
+    type FileContext = {
+      files: Record<string, string>
+    } & JsonObject;
+
+    // apply globalExtensions to builder here
+    const filesExtension: Extension = {
+      name: 'files',
+      create: ({
+        builder,
+      }) => ({
+        file(name: string, path: string) {
+          return builder.step(
+            `Reading file: ${name}`,
+            async ({ context }) => {
+              if ((context as unknown as FileContext).files && name in (context as unknown as FileContext).files) {
+                throw new Error(
+                  `File name "${name}" already exists in this workflow run. Names must be unique within a workflow.`
+                );
+              }
+              // Note: fileStore and workflowDir will need to be passed in through options
+              // return await context.fileStore.readFile(path, context.workflowDir);
+              return "File content will go here."
+            },
+            ({ result, context }) => ({
+              ...context,
+              files: {
+                ...(context as unknown as FileContext).files,
+                [name]: result
+              }
+            })
+          );
+        }
+      })
+    }
+
+    // Create the extension instance and merge with builder
+    const filesExtensionInstance = filesExtension.create({
+      workflowName,
+      description,
+      builder,
+    });
+
+    return { ...builder, ...filesExtensionInstance };
   }
 
-  // 4. Return the "addSteps" result with a blank array to start
   return createBuilder<InitialContext>([]);
 }
 
