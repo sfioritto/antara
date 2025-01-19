@@ -286,7 +286,29 @@ export function createWorkflow<
     return builder;
   }
 
-  return withFiles(createBuilder<InitialContext>([]));
+  return passThrough(createBuilder<InitialContext>([]));
+}
+
+const fileExtension = <TBuilder extends Builder<JsonObject, JsonObject, JsonObject>>(builder: TBuilder) => {
+  return {
+    file: (title: string, path: string) => builder.step(
+      'first step',
+      () => ({ files: { config: path }, addedToContext: "it worked!" })),
+  }
+}
+
+function passThrough<
+  ContextIn extends JsonObject,
+  InitialContext extends JsonObject,
+  WorkflowOptions extends JsonObject
+  >(
+    builder: Builder<ContextIn, InitialContext, WorkflowOptions>
+) {
+  const extension = fileExtension(builder);
+  return {
+    ...builder,
+    ...extension,
+  };
 }
 
 // Higher-order function to add file capabilities
