@@ -112,7 +112,7 @@ const actionOnlyWorkflow = createWorkflow("actions only")
 // Example using the files extension
 const fileWorkflow = createWorkflow("file example")
   .file("config", "config.json")
-  .step("Process config", ({ context }: { context: { files: Record<string, string> } }) => {
+  .step("Process config", ({ context }) => {
     // TypeScript should infer that context has files.config
     console.log("Config file content:", context.files.config);
     return {

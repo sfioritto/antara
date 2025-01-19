@@ -1,5 +1,4 @@
-import type { Extension, Builder } from "../dsl/new-dsl";
-import type { JsonObject } from "../dsl/types";
+import type { Extension } from "../dsl/new-dsl";
 
 export type FileContext = {
   files: Record<string, string>;

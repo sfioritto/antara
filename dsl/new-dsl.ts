@@ -114,15 +114,16 @@ interface WorkflowConfig {
 
 export interface Extension<
   ExtensionApi extends Record<string, any> = Record<string, any>,
-  ContextIn extends JsonObject = JsonObject,
-  InitialContext extends JsonObject = JsonObject,
-  WorkflowOptions extends JsonObject = JsonObject,
 > {
   name: string;
-  create<T extends ContextIn>(args: {
+  create<
+    ContextIn extends JsonObject,
+    InitialContext extends JsonObject = JsonObject,
+    WorkflowOptions extends JsonObject = JsonObject,
+  >(args: {
     workflowName: string;
     description?: string;
-    builder: Builder<T, InitialContext, WorkflowOptions>;
+    builder: Builder<ContextIn, InitialContext, WorkflowOptions>;
   }): ExtensionApi;
 }
 
@@ -310,7 +311,7 @@ export function createWorkflow<
 
     // Apply all registered extensions
     const extensions = Object.values(globalExtensions).map(extension =>
-      extension.create({
+      extension.create<ContextIn, InitialContext, WorkflowOptions>({
         workflowName,
         description,
         builder: builder as Builder<ContextIn, InitialContext, WorkflowOptions>
