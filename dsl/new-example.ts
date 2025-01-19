@@ -1,4 +1,4 @@
-import { createWorkflow } from './new-dsl';
+import { createWorkflow, withFiles } from './new-dsl';
 
 // Original example showing type inference
 const myWorkflow = createWorkflow("workflow name")
@@ -105,12 +105,8 @@ const actionOnlyWorkflow = createWorkflow("actions only")
   .step("First step", () => ({ firstStep: "first" }))
   .step("Second step", ({ context }) => ({ secondStep: context.firstStep }))
 
-// Note: These examples show different patterns of using the DSL
-// They're here for reference and aren't meant to be run directly
-
-
 // Example using the files extension
-const fileWorkflow = createWorkflow("file example")
+const fileWorkflow = withFiles(createWorkflow("file example"))
   .file("config", "config.json")
   .step("Process config", ({ context }) => {
     // TypeScript should infer that context has files.config

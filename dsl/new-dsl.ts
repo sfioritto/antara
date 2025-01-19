@@ -1,5 +1,4 @@
 import { JsonObject } from "./types"
-import { filesExtension } from "../extensions/files";
 import type { SerializedError } from './types'
 import { WORKFLOW_EVENTS, STATUS } from './constants'
 import { readJsonConfigFile } from "typescript";
@@ -113,21 +112,6 @@ interface WorkflowConfig {
   description?: string;
 }
 
-export interface Extension {
-  name: string;
-  steps: <
-    ContextIn extends JsonObject,
-    InitialContext extends JsonObject,
-    WorkflowOptions extends JsonObject,
-    >({ builder, workflowName, description }: {
-      builder: Builder<ContextIn, InitialContext, WorkflowOptions>,
-      workflowName: string,
-      description?: string
-    }) => {
-    [key: string]: (...args: any) => Builder<JsonObject, InitialContext, WorkflowOptions>
-  };
-}
-
 function clone<T>(original: T): T {
   return structuredClone(original) as T;
 }
@@ -150,14 +134,6 @@ function serializedSteps(
   });
 }
 
-const globalExtensions: Record<string, Extension> = {};
-export function registerExtension(extension: Extension) {
-  globalExtensions[extension.name] = extension;
-}
-
-// register filesExtension by default
-registerExtension(filesExtension)
-
 export function createWorkflow<
   WorkflowOptions extends JsonObject = {},
   InitialContext extends JsonObject = {}
@@ -169,7 +145,7 @@ export function createWorkflow<
     ContextIn extends JsonObject
   >(
     steps: StepBlock<JsonObject, WorkflowOptions, any, JsonObject>[]
-  ): Builder<ContextIn, InitialContext, WorkflowOptions> & Record<string, any> {
+  ): Builder<ContextIn, InitialContext, WorkflowOptions> {
     const builder = {
       step: (<ActionOut, ContextOut extends JsonObject>(
         title: string,
@@ -213,12 +189,10 @@ export function createWorkflow<
         initialContext = {} as InitialContext,
         initialCompletedSteps = [],
         options = {} as Options
-      }: RunParams<Options, InitialContext> & {
-        initialCompletedSteps?: SerializedStep[]
-      }): AsyncGenerator<
-        | Event<InitialContext, InitialContext, Options> // START event
-        | Event<ContextIn, ContextIn, Options> // UPDATE event
-        | Event<InitialContext, ContextIn, Options> // COMPLETE event
+      }: RunParams<Options, InitialContext>): AsyncGenerator<
+        | Event<InitialContext, InitialContext, Options>
+        | Event<ContextIn, ContextIn, Options>
+        | Event<InitialContext, ContextIn, Options>
         , void, unknown> {
         let newContext = initialCompletedSteps.length > 0
           ? clone(initialCompletedSteps[initialCompletedSteps.length - 1].context)
@@ -310,18 +284,46 @@ export function createWorkflow<
       }
     };
 
-    // Apply all registered extensions
-    const extensions = Object.values(globalExtensions).map(extension =>
-      extension.steps<ContextIn, InitialContext, WorkflowOptions>({
-        workflowName,
-        description,
-        builder,
-      })
-    );
-
-    return Object.assign(builder, ...extensions);
+    return builder;
   }
 
   return createBuilder<InitialContext>([]);
+}
+
+// Higher-order function to add file capabilities
+export function withFiles<
+  ContextIn extends JsonObject,
+  InitialContext extends JsonObject,
+  WorkflowOptions extends JsonObject
+>(
+  builder: Builder<ContextIn, InitialContext, WorkflowOptions>
+): Builder<ContextIn, InitialContext, WorkflowOptions> & {
+  file: (name: string, path: string) => Builder<
+    Merge<ContextIn & { files: Record<string, string> }>,
+    InitialContext,
+    WorkflowOptions
+  >
+} {
+  return {
+    ...builder,
+    file: (name: string, path: string) => {
+      return builder.step(
+        `Reading file: ${name}`,
+        async ({ context }) => {
+          const files = (context as any).files || {};
+          if (name in files) {
+            throw new Error(
+              `File name "${name}" already exists in this workflow run. Names must be unique within a workflow.`
+            );
+          }
+          return {
+            files: {
+              [name]: "File content will go here."
+            }
+          };
+        }
+      );
+    }
+  };
 }
 
