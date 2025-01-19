@@ -1,7 +1,6 @@
 import { JsonObject } from "./types"
 import type { SerializedError } from './types'
 import { WORKFLOW_EVENTS, STATUS } from './constants'
-import { readJsonConfigFile } from "typescript";
 
 export type EventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
 export type StatusOptions = typeof STATUS[keyof typeof STATUS];
@@ -16,7 +15,7 @@ export interface Builder<
     params: RunParams<Options, InitialContext>
   ): AsyncGenerator<
     | Event<InitialContext, InitialContext, Options>  // START event
-    | Event<ContextIn, ContextIn, Options>  // UPDATE events
+    | Event<ContextIn, JsonObject, Options>  // UPDATE events
     | Event<InitialContext, ContextIn, Options>  // COMPLETE event
     , void, unknown>;
 }
