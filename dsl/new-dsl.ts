@@ -190,9 +190,9 @@ export function createWorkflow<
         initialCompletedSteps = [],
         options = {} as Options
       }: RunParams<Options, InitialContext>): AsyncGenerator<
-        | Event<InitialContext, InitialContext, Options>
-        | Event<ContextIn, ContextIn, Options>
-        | Event<InitialContext, ContextIn, Options>
+        | Event<InitialContext, InitialContext, Options> // START event
+        | Event<ContextIn, ContextIn, Options> // Update Event
+        | Event<InitialContext, ContextIn, Options> // Complete Event
         , void, unknown> {
         let newContext = initialCompletedSteps.length > 0
           ? clone(initialCompletedSteps[initialCompletedSteps.length - 1].context)
@@ -294,7 +294,7 @@ export function createWorkflow<
 export function withFiles<
   ContextIn extends JsonObject,
   InitialContext extends JsonObject,
-  WorkflowOptions extends JsonObject
+  WorkflowOptions extends JsonObject,
 >(
   builder: Builder<ContextIn, InitialContext, WorkflowOptions>
 ): Builder<ContextIn, InitialContext, WorkflowOptions> & {
