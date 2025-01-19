@@ -1,4 +1,4 @@
-import type { Extension } from "../dsl/new-dsl";
+import type { Extension, Builder } from "../dsl/new-dsl";
 
 export type FileContext = {
   files: Record<string, string>;
@@ -7,7 +7,9 @@ export type FileContext = {
 // Example of a file extension
 export const filesExtension: Extension = {
   name: 'files',
-  create: ({ builder }) => ({
+  steps: ({
+    builder,
+  }) => ({
     file(name: string, path: string) {
       return builder.step(
         `Reading file: ${name}`,

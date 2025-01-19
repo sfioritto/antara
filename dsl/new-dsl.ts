@@ -2,6 +2,7 @@ import { JsonObject } from "./types"
 import { filesExtension } from "../extensions/files";
 import type { SerializedError } from './types'
 import { WORKFLOW_EVENTS, STATUS } from './constants'
+import { readJsonConfigFile } from "typescript";
 
 export type EventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
 export type StatusOptions = typeof STATUS[keyof typeof STATUS];
@@ -112,19 +113,19 @@ interface WorkflowConfig {
   description?: string;
 }
 
-export interface Extension<
-  ExtensionApi extends Record<string, any> = Record<string, any>,
-> {
+export interface Extension {
   name: string;
-  create<
+  steps: <
     ContextIn extends JsonObject,
-    InitialContext extends JsonObject = JsonObject,
-    WorkflowOptions extends JsonObject = JsonObject,
-  >(args: {
-    workflowName: string;
-    description?: string;
-    builder: Builder<ContextIn, InitialContext, WorkflowOptions>;
-  }): ExtensionApi;
+    InitialContext extends JsonObject,
+    WorkflowOptions extends JsonObject,
+    >({ builder, workflowName, description }: {
+      builder: Builder<ContextIn, InitialContext, WorkflowOptions>,
+      workflowName: string,
+      description?: string
+    }) => {
+    [key: string]: (...args: any) => Builder<JsonObject, InitialContext, WorkflowOptions>
+  };
 }
 
 function clone<T>(original: T): T {
@@ -311,10 +312,10 @@ export function createWorkflow<
 
     // Apply all registered extensions
     const extensions = Object.values(globalExtensions).map(extension =>
-      extension.create<ContextIn, InitialContext, WorkflowOptions>({
+      extension.steps<ContextIn, InitialContext, WorkflowOptions>({
         workflowName,
         description,
-        builder: builder as Builder<ContextIn, InitialContext, WorkflowOptions>
+        builder,
       })
     );
 
