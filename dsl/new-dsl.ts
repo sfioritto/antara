@@ -286,7 +286,7 @@ export function createWorkflow<
     return builder;
   }
 
-  return createBuilder<InitialContext>([]);
+  return withFiles(createBuilder<InitialContext>([]));
 }
 
 // Higher-order function to add file capabilities

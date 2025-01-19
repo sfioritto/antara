@@ -106,7 +106,7 @@ const actionOnlyWorkflow = createWorkflow("actions only")
   .step("Second step", ({ context }) => ({ secondStep: context.firstStep }))
 
 // Example using the files extension
-const fileWorkflow = withFiles(createWorkflow("file example"))
+const fileWorkflow = createWorkflow("file example")
   .file("config", "config.json")
   .step("Process config", ({ context }) => {
     // TypeScript should infer that context has files.config
