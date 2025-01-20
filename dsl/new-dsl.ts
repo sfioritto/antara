@@ -5,20 +5,21 @@ import { WORKFLOW_EVENTS, STATUS } from './constants'
 export type EventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
 export type StatusOptions = typeof STATUS[keyof typeof STATUS];
 
-export interface Builder<
+export type Builder<
   ContextIn extends JsonObject,
   InitialContext extends JsonObject,
-  WorkflowOptions extends JsonObject
-> {
-  step: AddStep<ContextIn, InitialContext, WorkflowOptions>;
+  WorkflowOptions extends JsonObject,
+  ExtensionBlock extends Record<string, any>
+> = Merge<ExtensionBlock & {
+  step: AddStep<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock>;
   run<Options extends WorkflowOptions>(
     params: RunParams<Options, InitialContext>
   ): AsyncGenerator<
-    | Event<InitialContext, InitialContext, Options>  // START event
-    | Event<ContextIn, JsonObject, Options>  // UPDATE events
-    | Event<InitialContext, ContextIn, Options>  // COMPLETE event
+    | Event<InitialContext, InitialContext, Options>
+    | Event<ContextIn, JsonObject, Options>
+    | Event<InitialContext, ContextIn, Options>
     , void, unknown>;
-}
+}>;
 
 export interface Event<
   ContextIn extends JsonObject,
@@ -89,26 +90,24 @@ export type AddStep<
   ContextIn extends JsonObject,
   InitialContext extends JsonObject,
   WorkflowOptions extends JsonObject,
+  ExtensionBlock extends Record<string, any>,
 > = {
   <ActionOut, ContextOut extends JsonObject>(
     title: string,
     action: Action<ContextIn, WorkflowOptions, ActionOut>,
     reduce: Reduce<ActionOut, ContextIn, WorkflowOptions, ContextOut>
-  ): Builder<Merge<ContextOut>, InitialContext, WorkflowOptions>;
+  ): Builder<Merge<ContextOut>, InitialContext, WorkflowOptions, ExtensionBlock>;
 
   <ActionOut>(
     title: string,
     action: Action<ContextIn, WorkflowOptions, ActionOut>
-  ): Builder<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions>;
+  ): Builder<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions, ExtensionBlock>;
 };
 
-export type ExtensionBuilder = Builder<JsonObject, JsonObject, JsonObject>
-
 export type Extension<
-  ContextIn extends JsonObject = JsonObject,
-  InitialContext extends JsonObject = JsonObject,
-  WorkflowOptions extends JsonObject = JsonObject
-> = (builder: Builder<ContextIn, InitialContext, WorkflowOptions>) => Record<string, any>
+  ExtensionBlock extends Record<string, any>,
+  ExtensionBuilder = Builder<JsonObject, JsonObject, JsonObject, ExtensionBlock>
+> = (builder: ExtensionBuilder) => Record<string, any>
 
 
 type Merge<T> = T extends object ? {
@@ -144,10 +143,11 @@ function serializedSteps(
 
 export function createWorkflow<
   WorkflowOptions extends JsonObject = {},
+  ExtensionBlock extends Record<string, any> = {},
   InitialContext extends JsonObject = {}
 >(
   nameOrConfig: string | WorkflowConfig,
-  extensions: Extension[] = []
+  extensions: Extension<ExtensionBlock>[] = []
 ) {
   const workflowName = typeof nameOrConfig === 'string' ? nameOrConfig : nameOrConfig.name;
   const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
@@ -156,7 +156,7 @@ export function createWorkflow<
     ContextIn extends JsonObject
   >(
     steps: StepBlock<JsonObject, WorkflowOptions, any, JsonObject>[]
-  ): Builder<ContextIn, InitialContext, WorkflowOptions> {
+  ): Builder<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock> {
     const builderBase = {
       step: (<ActionOut, ContextOut extends JsonObject>(
         title: string,
@@ -194,7 +194,7 @@ export function createWorkflow<
 
         const newSteps = [...steps, newStep];
         return createBuilder<ContextOut>(newSteps);
-      }) as AddStep<ContextIn, InitialContext, WorkflowOptions>,
+      }) as AddStep<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock>,
 
       run: async function* <Options extends WorkflowOptions>({
         initialContext = {} as InitialContext,
@@ -299,14 +299,14 @@ export function createWorkflow<
     for (const extension of extensions) {
       extensionBlock = {
         ...extensionBlock,
-        ...extension(builderBase as Builder<ContextIn, InitialContext, WorkflowOptions>)
+        ...extension(builderBase as Builder<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock>)
       }
     }
 
     return {
       ...extensionBlock,
       ...builderBase
-    };
+    } as Builder<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock>;
   }
 
   return createBuilder<InitialContext>([]);

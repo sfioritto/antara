@@ -1,6 +1,11 @@
-import type { Extension } from "../dsl/new-dsl";
+import type { Extension, Builder } from "../dsl/new-dsl";
+import { JsonObject } from "../dsl/types";
 
-export const fileExtension: Extension = (
+export type FileExtension = {
+  file: (title: string, path: string) => Builder<JsonObject, JsonObject, JsonObject, FileExtension>
+}
+
+export const fileExtension: Extension<FileExtension> = (
   builder,
 ) => {
   return {

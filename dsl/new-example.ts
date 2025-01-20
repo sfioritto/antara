@@ -1,4 +1,5 @@
 import { createWorkflow } from './new-dsl';
+import { fileExtension, type FileContext } from '../extensions/files';
 
 // Original example showing type inference
 const myWorkflow = createWorkflow("workflow name")
@@ -106,7 +107,7 @@ const actionOnlyWorkflow = createWorkflow("actions only")
   .step("Second step", ({ context }) => ({ secondStep: context.firstStep }))
 
 // Example using the files extension
-const fileWorkflow = createWorkflow("file example");
+const fileWorkflow = createWorkflow<{}, FileContext>("file example");
 fileWorkflow.file('', '').file('', '');
 
 // Run the file workflow
