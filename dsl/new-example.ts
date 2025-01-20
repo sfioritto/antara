@@ -108,7 +108,7 @@ const actionOnlyWorkflow = createWorkflow("actions only")
 
 // Example using the files extension
 const fileWorkflow = createWorkflow<{}, FileExtension>("file example", [fileExtension]);
-fileWorkflow.file('', '').file('', '');
+fileWorkflow.file('', '').file('', '').step('', ({ context }) => console.log(context.files));
 
 // Run the file workflow
 (async () => {
