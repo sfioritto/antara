@@ -1,16 +1,18 @@
 import type { Extension, Builder } from "../dsl/new-dsl";
 import { JsonObject } from "../dsl/types";
 
-export type FileExtension = {
-  file: (title: string, path: string) => Builder<JsonObject, JsonObject, JsonObject, FileExtension>
+export interface FileContext extends JsonObject {
+  files?: Record<string, string>;
 }
 
-export const fileExtension: Extension<FileExtension> = (
-  builder,
-) => {
-  return {
-    file: (title: string, path: string) => builder.step(
-      'first step',
-      () => ({ files: { config: path }, addedToContext: "it worked!" })),
-  }
+export type FileExtension = {
+  file: (title: string, path: string) => Builder<FileContext, JsonObject, JsonObject, FileExtension>;
 }
+
+export const fileExtension: Extension<{}, FileExtension> = (builder) => ({
+  file: (title: string, path: string) =>
+    builder.step(
+      title,
+      () => ({ files: { [title]: path } })
+    ) as Builder<FileContext, JsonObject, JsonObject, FileExtension>
+});

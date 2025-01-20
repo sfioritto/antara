@@ -10,7 +10,7 @@ export type Builder<
   InitialContext extends JsonObject,
   WorkflowOptions extends JsonObject,
   ExtensionBlock extends Record<string, any>
-> = Merge<ExtensionBlock & {
+> = {
   step: AddStep<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock>;
   run<Options extends WorkflowOptions>(
     params: RunParams<Options, InitialContext>
@@ -19,7 +19,7 @@ export type Builder<
     | Event<ContextIn, JsonObject, Options>
     | Event<InitialContext, ContextIn, Options>
     , void, unknown>;
-}>;
+} & ExtensionBlock;
 
 export interface Event<
   ContextIn extends JsonObject,
@@ -105,10 +105,11 @@ export type AddStep<
 };
 
 export type Extension<
-  ExtensionBlock extends Record<string, any>,
-  ExtensionBuilder = Builder<JsonObject, JsonObject, JsonObject, ExtensionBlock>
-> = (builder: ExtensionBuilder) => Record<string, (...args: any) => ExtensionBuilder>
-
+  TBase extends Record<string, any> = {},
+  TExtension extends Record<string, (...args: any[]) => any> = {}
+> = (builder: Builder<JsonObject, JsonObject, JsonObject, TBase>) => {
+  [K in keyof TExtension]: (...args: Parameters<TExtension[K]>) => ReturnType<TExtension[K]>
+};
 
 type Merge<T> = T extends object ? {
   [K in keyof T]: T[K]
@@ -295,12 +296,13 @@ export function createWorkflow<
       }
     };
 
-    let extensionBlock = {};
+    // Apply extensions in sequence, composing their types
+    let extensionBlock = {} as ExtensionBlock;
     for (const extension of extensions) {
       extensionBlock = {
         ...extensionBlock,
         ...extension(builderBase as Builder<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock>)
-      }
+      } as ExtensionBlock;
     }
 
     return {
