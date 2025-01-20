@@ -1,6 +1,7 @@
 import { JsonObject } from "./types"
 import type { SerializedError } from './types'
 import { WORKFLOW_EVENTS, STATUS } from './constants'
+import { unknown } from "zod";
 
 export type EventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
 export type StatusOptions = typeof STATUS[keyof typeof STATUS];
@@ -286,10 +287,22 @@ export function createWorkflow<
     return builder;
   }
 
-  return passThrough(createBuilder<InitialContext>([]));
+  return addExtension(createBuilder<InitialContext>([]));
 }
 
-const fileExtension = <TBuilder extends Builder<JsonObject, JsonObject, JsonObject>>(builder: TBuilder) => {
+type Extension = <
+  ContextIn extends JsonObject,
+  InitialContext extends JsonObject,
+  WorkflowOptions extends JsonObject
+>(
+  builder: Builder<ContextIn, InitialContext, WorkflowOptions>
+) => Record<string, (
+  ...args: any[]
+) => Builder<any, InitialContext, WorkflowOptions>>;
+
+type BaseBuilder = Builder<JsonObject, JsonObject, JsonObject>
+
+const fileExtension = <ContextIn extends JsonObject>(builder: Builder<ContextIn, JsonObject, JsonObject>) => {
   return {
     file: (title: string, path: string) => builder.step(
       'first step',
@@ -297,7 +310,7 @@ const fileExtension = <TBuilder extends Builder<JsonObject, JsonObject, JsonObje
   }
 }
 
-function passThrough<
+function addExtension<
   ContextIn extends JsonObject,
   InitialContext extends JsonObject,
   WorkflowOptions extends JsonObject

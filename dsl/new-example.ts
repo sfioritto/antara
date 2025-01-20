@@ -114,7 +114,8 @@ const fileWorkflow = createWorkflow("file example")
     return {
       processed: true
     };
-  });
+  }).step("title", () => ({ cool: "thing" }))
+  .step("check context", ({ context }) => console.log(context.cool));
 
 // Run the file workflow
 (async () => {
