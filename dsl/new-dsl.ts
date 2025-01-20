@@ -1,7 +1,6 @@
 import { JsonObject } from "./types"
 import type { SerializedError } from './types'
 import { WORKFLOW_EVENTS, STATUS } from './constants'
-import { fileExtension } from "../extensions/files";
 
 export type EventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
 export type StatusOptions = typeof STATUS[keyof typeof STATUS];
@@ -103,6 +102,15 @@ export type AddStep<
   ): Builder<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions>;
 };
 
+export type ExtensionBuilder = Builder<JsonObject, JsonObject, JsonObject>
+
+export type Extension<
+  ContextIn extends JsonObject = JsonObject,
+  InitialContext extends JsonObject = JsonObject,
+  WorkflowOptions extends JsonObject = JsonObject
+> = (builder: Builder<ContextIn, InitialContext, WorkflowOptions>) => Record<string, any>
+
+
 type Merge<T> = T extends object ? {
   [K in keyof T]: T[K]
 } & {} : T;
@@ -137,7 +145,10 @@ function serializedSteps(
 export function createWorkflow<
   WorkflowOptions extends JsonObject = {},
   InitialContext extends JsonObject = {}
->(nameOrConfig: string | WorkflowConfig) {
+>(
+  nameOrConfig: string | WorkflowConfig,
+  extensions: Extension[] = []
+) {
   const workflowName = typeof nameOrConfig === 'string' ? nameOrConfig : nameOrConfig.name;
   const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
 
@@ -146,7 +157,7 @@ export function createWorkflow<
   >(
     steps: StepBlock<JsonObject, WorkflowOptions, any, JsonObject>[]
   ): Builder<ContextIn, InitialContext, WorkflowOptions> {
-    const builder = {
+    const builderBase = {
       step: (<ActionOut, ContextOut extends JsonObject>(
         title: string,
         action: Action<ContextIn, WorkflowOptions, ActionOut>,
@@ -284,17 +295,20 @@ export function createWorkflow<
       }
     };
 
-    return builder;
+    let extensionBlock = {};
+    for (const extension of extensions) {
+      extensionBlock = {
+        ...extensionBlock,
+        ...extension(builderBase as Builder<ContextIn, InitialContext, WorkflowOptions>)
+      }
+    }
+
+    return {
+      ...extensionBlock,
+      ...builderBase
+    };
   }
 
-  return fileExtension(createBuilder<InitialContext>([]));
+  return createBuilder<InitialContext>([]);
 }
-
-export type ExtensionBuilder = Builder<JsonObject, JsonObject, JsonObject>
-
-export type Extension<CurrentBuilder> = <
-  ContextIn extends JsonObject,
-  InitialContext extends JsonObject,
-  WorkflowOptions extends JsonObject
->(builder: CurrentBuilder) => Builder<JsonObject, JsonObject, JsonObject>
 
