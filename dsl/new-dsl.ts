@@ -290,6 +290,8 @@ export function createWorkflow<
   return fileExtension(createBuilder<InitialContext>([]));
 }
 
+export type ExtensionBuilder = Builder<JsonObject, JsonObject, JsonObject>
+
 export type Extension<CurrentBuilder> = <
   ContextIn extends JsonObject,
   InitialContext extends JsonObject,
