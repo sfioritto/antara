@@ -1,10 +1,13 @@
-import type { JsonObject } from "../dsl/types";
-import type { Builder } from "../dsl/new-dsl";
+import type { Extension, Builder } from "../dsl/new-dsl";
+import { JsonObject } from "../dsl/types";
 
-export const fileExtension = <ContextIn extends JsonObject>(
-  builder: Builder<ContextIn, JsonObject, JsonObject>
+export const fileExtension = <
+  CurrentBuilder extends Builder<JsonObject, JsonObject, JsonObject>
+>(
+  builder: CurrentBuilder,
 ) => {
   return {
+    ...builder,
     file: (title: string, path: string) => builder.step(
       'first step',
       () => ({ files: { config: path }, addedToContext: "it worked!" })),

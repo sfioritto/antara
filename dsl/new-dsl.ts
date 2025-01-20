@@ -287,20 +287,12 @@ export function createWorkflow<
     return builder;
   }
 
-  return addExtension(createBuilder<InitialContext>([]));
+  return fileExtension(createBuilder<InitialContext>([]));
 }
 
-function addExtension<
+export type Extension<CurrentBuilder> = <
   ContextIn extends JsonObject,
   InitialContext extends JsonObject,
   WorkflowOptions extends JsonObject
-  >(
-    builder: Builder<ContextIn, InitialContext, WorkflowOptions>
-) {
-  const extension = fileExtension(builder);
-  return {
-    ...builder,
-    ...extension,
-  };
-}
+>(builder: CurrentBuilder) => Builder<JsonObject, JsonObject, JsonObject>
 
