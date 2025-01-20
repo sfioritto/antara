@@ -1,4 +1,4 @@
-import { createWorkflow, withFiles } from './new-dsl';
+import { createWorkflow } from './new-dsl';
 
 // Original example showing type inference
 const myWorkflow = createWorkflow("workflow name")

@@ -1,7 +1,7 @@
 import { JsonObject } from "./types"
 import type { SerializedError } from './types'
 import { WORKFLOW_EVENTS, STATUS } from './constants'
-import { unknown } from "zod";
+import { fileExtension } from "../extensions/files";
 
 export type EventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
 export type StatusOptions = typeof STATUS[keyof typeof STATUS];
@@ -288,26 +288,6 @@ export function createWorkflow<
   }
 
   return addExtension(createBuilder<InitialContext>([]));
-}
-
-type Extension = <
-  ContextIn extends JsonObject,
-  InitialContext extends JsonObject,
-  WorkflowOptions extends JsonObject
->(
-  builder: Builder<ContextIn, InitialContext, WorkflowOptions>
-) => Record<string, (
-  ...args: any[]
-) => Builder<any, InitialContext, WorkflowOptions>>;
-
-type BaseBuilder = Builder<JsonObject, JsonObject, JsonObject>
-
-const fileExtension = <ContextIn extends JsonObject>(builder: Builder<ContextIn, JsonObject, JsonObject>) => {
-  return {
-    file: (title: string, path: string) => builder.step(
-      'first step',
-      () => ({ files: { config: path }, addedToContext: "it worked!" })),
-  }
 }
 
 function addExtension<
