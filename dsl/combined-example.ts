@@ -1,7 +1,6 @@
-import { createWorkflow, type Extension, type Builder } from './new-dsl';
+import { createWorkflow } from './new-dsl';
 import { fileExtension, type FileContext, type FileExtension } from '../extensions/files';
 import { loggerExtension, type LoggerContext, type LoggerExtension } from '../extensions/logger';
-import { JsonObject } from './types';
 
 // Create a type that combines both extension contexts
 type CombinedContext = FileContext & LoggerContext;
