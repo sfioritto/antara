@@ -107,7 +107,7 @@ export type AddStep<
 export type Extension<
   ExtensionBlock extends Record<string, any>,
   ExtensionBuilder = Builder<JsonObject, JsonObject, JsonObject, ExtensionBlock>
-> = (builder: ExtensionBuilder) => Record<string, any>
+> = (builder: ExtensionBuilder) => Record<string, (...args: any) => ExtensionBuilder>
 
 
 type Merge<T> = T extends object ? {
