@@ -26,25 +26,21 @@ interface StepBlock<
 }
 
 type Extension<
-  TBuilder extends Builder<Context>,
-  TExtensionsBlock extends ExtensionsBlock<TBuilder, any>
-  > = (builder: TBuilder) => TExtensionsBlock & {
-    [KEY: string]: (...args: any) => TBuilder
+  TExtensionsBlock extends ExtensionsBlock<any>
+  > = (builder: Builder<Context>) => TExtensionsBlock & {
+    [KEY: string]: (...args: any) => Builder<Context>
   };
 
 type ExtensionsBlock<
-  TBuilder extends Builder<Context>,
-  Extensions extends Extension<TBuilder, any>[]
+  Extensions extends Extension<any>[]
 > =
   Extensions[number] extends (...args: any) => infer ReturnType ? ReturnType : never;
 
-// function createBuilder<EBlock extends ExtensionsBlock>() {
-
-// }
-
-function createWorkflow<ContextIn extends Context>(
-  steps: StepBlock<Action<any>, Context, Context>[] = [],
-  extensions: Extension<any, any>[] = [],
+function createBuilder<
+  TExtensionsBlock extends ExtensionsBlock<Extension<unknown>[]>,
+  ContextIn extends Context,
+  >(steps: StepBlock<Action<any>, Context, Context>[] = [],
+  extensions: Extension<unknown>[] = [],
 ): Builder<ContextIn> {
   return {
     step(title: string, action, reduce) {
@@ -54,7 +50,7 @@ function createWorkflow<ContextIn extends Context>(
         reduce
       };
       type ContextOut = ReturnType<typeof reduce>;
-      return createWorkflow<ContextOut>(
+      return createBuilder<TExtensionsBlock, ContextOut>(
         [...steps, stepBlock] as StepBlock<Action<any>, Context, Context>[],
       );
     },
@@ -67,6 +63,14 @@ function createWorkflow<ContextIn extends Context>(
       }
     }
   }
+}
+
+function createWorkflow<ContextIn extends Context>(
+  steps: StepBlock<Action<any>, Context, Context>[] = [],
+  extensions: Extension<unknown>[] = [],
+): Builder<ContextIn> {
+  type TExtensionsBlock = ExtensionsBlock<typeof extensions>
+  return createBuilder<TExtensionsBlock, ContextIn>(steps, extensions);
 }
 
 const workflow = createWorkflow();
