@@ -110,10 +110,13 @@ function createExtensions<ContextIn extends Context>(
 
 function createWorkflow<
   ContextIn extends Context,
->(
-  steps: StepBlock<Action<any>, Context, Context>[] = [],
-  extensions: Extension[] = [],
-): ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>> {
+>({
+  steps = [],
+  extensions = [],
+}: {
+  steps?: StepBlock<Action<any>, Context, Context>[];
+  extensions?: Extension[];
+} = {}): ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>> {
   // type InferredExtensionsBlock = ExtensionsBlock<typeof extensions>
   const builder: Builder<ContextIn> = {
     step(title: string, action, reduce) {
@@ -123,10 +126,10 @@ function createWorkflow<
         reduce
       };
       type ContextOut = ReturnType<typeof reduce>;
-      return createWorkflow<ContextOut>(
-        [...steps, stepBlock] as StepBlock<Action<any>, Context, Context>[],
+      return createWorkflow<ContextOut>({
+        steps: [...steps, stepBlock] as StepBlock<Action<any>, Context, Context>[],
         extensions,
-      );
+      });
     },
     run() {
       let context = {};
@@ -159,7 +162,7 @@ function createWorkflow<
   // return builderBase;
 }
 
-const workflow = createWorkflow();
+const workflow = createWorkflow({ extensions: [fileExtension, loggerExtension]});
 workflow
   .log()
   .file.write()
