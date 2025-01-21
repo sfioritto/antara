@@ -1,6 +1,9 @@
-import { JsonObject, Step } from "./types";
+import { JsonObject } from "./types";
+
 type Context = JsonObject;
+
 type Action<ActionResult> = () => ActionResult;
+
 type Reducer<
   ActionResult,
   ContextIn extends Context,
@@ -30,10 +33,17 @@ interface StepBlock<
   reduce: Reducer<ActionResult, ContextIn, ContextOut>,
 }
 
+type BuilderReturningFunction<T extends Context> = (...args: any[]) => ExtendedBuilder<T, any>;
+
+type ExtensionMethod<T extends Context> = BuilderReturningFunction<T> | {
+  [key: string]: ExtensionMethod<T>;
+}
+
 type Extension = <
-  ExtensionsBlock extends object & Record<string, any>
->(builder: ExtendedBuilder<Context, ExtensionsBlock>) => ExtensionsBlock & {
-  [KEY: string]: (...args: any) => ExtendedBuilder<Context, ExtensionsBlock>
+  ContextIn extends Context,
+  ExtensionsBlock extends { [key: string]: ExtensionMethod<ContextIn> }
+>(builder: ExtendedBuilder<ContextIn, ExtensionsBlock>) => {
+  [KEY: string]: ExtensionMethod<ContextIn>
 };
 
 type ExtensionsBlock<
@@ -41,20 +51,10 @@ type ExtensionsBlock<
 > =
   Extensions[number] extends (...args: any) => infer ReturnType ? ReturnType : never;
 
-
-// const fileExtension: Extension = (builder) => {
-//   return {
-//     file: (name: string, path: string) => {
-//       console.log(`${name}: ${path}`);
-//       return builder;
-//     }
-//   }
-// }
-
-
-
 type BasicExtensions<ContextIn extends Context> = {
-  file: () => ExtendedBuilder<ContextIn & { file: string }, BasicExtensions<ContextIn & { file: string }>>,
+  file: {
+    write: () => ExtendedBuilder<ContextIn & { file: string }, BasicExtensions<ContextIn & { file: string }>>,
+  },
   log: () => ExtendedBuilder<ContextIn & { logger: string }, BasicExtensions<ContextIn & { logger: string }>>,
 }
 
@@ -62,17 +62,19 @@ function createExtensions<ContextIn extends Context>(
   builder: Builder<ContextIn>
 ): BasicExtensions<ContextIn> {
   return {
-    file() {
-      return builder.step(
-        "file step", () => console.log("file action"),
-        (result, context) => {
-          console.log('context in file', context)
-          return {
-            ...context,
-            file: "file content",
-          };
-        }
-      )
+    file: {
+      write() {
+        return builder.step(
+          "file step", () => console.log("file action"),
+          (result, context) => {
+            console.log('context in file', context)
+            return {
+              ...context,
+              file: "file content",
+            };
+          }
+        )
+      }
     },
     log() {
       return builder.step(
@@ -142,7 +144,7 @@ function createWorkflow<
 const workflow = createWorkflow();
 workflow
   .log()
-  .file()
+  .file.write()
   .step('first', () => 'first step action', (result, context) => ({ ...context, step1: result }))
   .step('second', () => 'second step action', (result, context) => ({ ...context, step2: result }))
   .step('third', () => 'third step action', (result, context) => ({ ...context, step3: result })).run();
