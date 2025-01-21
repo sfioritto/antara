@@ -1,5 +1,9 @@
 interface Builder {
-  step(title: string, action: () => void): Builder,
+  step<TAction>(
+    title: string,
+    action: () => TAction,
+    reduce: (result: TAction) => void,
+  ): Builder,
   run(): void,
 }
 
@@ -22,5 +26,5 @@ function createWorkflow() {
 const workflow = createWorkflow();
 
 workflow
-  .step('first', () => console.log('first step action'))
-  .step('step', () => console.log('second step action')).run();
+  .step('first', () => 'first step action', (result) => console.log(result))
+  .step('step', () => 'second step action', (result) => console.log(result)).run();
