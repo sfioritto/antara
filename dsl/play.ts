@@ -1,9 +1,12 @@
-import { JsonObject } from "./types";
+import { JsonObject, Step } from "./types";
 type Context = JsonObject;
 type Action<ActionResult> = () => ActionResult;
-type Reducer<ActionResult, ContextIn, ContextOut extends object> = (result: ActionResult, context: ContextIn) => ContextOut;
+type Reducer<
+  ActionResult,
+  ContextIn extends Context,
+  ContextOut extends Context> = (result: ActionResult, context: ContextIn) => ContextOut;
 
-interface Builder<ContextIn = {}> {
+interface Builder<ContextIn extends Context> {
   step<ActionResult, ContextOut extends object>(
     title: string,
     action: Action<ActionResult>,
@@ -12,17 +15,37 @@ interface Builder<ContextIn = {}> {
   run(): void,
 }
 
-interface StepBlock<ActionResult, ContextIn, ContextOut extends object> {
+interface StepBlock<
+  ActionResult,
+  ContextIn extends Context,
+  ContextOut extends Context
+> {
   title: string,
   action: Action<ActionResult>,
   reduce: Reducer<ActionResult, ContextIn, ContextOut>,
 }
 
+type Extension<
+  TBuilder extends Builder<Context>,
+  TExtensionsBlock extends ExtensionsBlock<TBuilder, any>
+  > = (builder: TBuilder) => TExtensionsBlock & {
+    [KEY: string]: (...args: any) => TBuilder
+  };
 
-function createBuilder<ContextIn>(
-  steps: StepBlock<any, any, any>[] = [],
+type ExtensionsBlock<
+  TBuilder extends Builder<Context>,
+  Extensions extends Extension<TBuilder, any>[]
+> =
+  Extensions[number] extends (...args: any) => infer ReturnType ? ReturnType : never;
+
+// function createBuilder<EBlock extends ExtensionsBlock>() {
+
+// }
+
+function createWorkflow<ContextIn extends Context>(
+  steps: StepBlock<Action<any>, Context, Context>[] = [],
+  extensions: Extension<any, any>[] = [],
 ): Builder<ContextIn> {
-
   return {
     step(title: string, action, reduce) {
       const stepBlock = {
@@ -31,10 +54,12 @@ function createBuilder<ContextIn>(
         reduce
       };
       type ContextOut = ReturnType<typeof reduce>;
-      return createBuilder<ContextOut>([...steps, stepBlock]);
+      return createWorkflow<ContextOut>(
+        [...steps, stepBlock] as StepBlock<Action<any>, Context, Context>[],
+      );
     },
     run() {
-      let context;
+      let context = {};
       for (const { title, action, reduce } of steps) {
         const result = action();
         context = reduce(result, context);
@@ -42,10 +67,6 @@ function createBuilder<ContextIn>(
       }
     }
   }
-}
-
-function createWorkflow() {
-  return createBuilder();
 }
 
 const workflow = createWorkflow();
