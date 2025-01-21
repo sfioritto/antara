@@ -1,5 +1,6 @@
 import { createWorkflow } from './new-dsl';
 import { fileExtension, type FileExtension } from '../extensions/files';
+import { LoggerExtension, loggerExtension, type LoggerContext } from '../extensions/logger';
 
 // Original example showing type inference
 const myWorkflow = createWorkflow("workflow name")
@@ -107,8 +108,8 @@ const actionOnlyWorkflow = createWorkflow("actions only")
   .step("Second step", ({ context }) => ({ secondStep: context.firstStep }))
 
 // Example using the files extension
-const fileWorkflow = createWorkflow<{}, FileExtension>("file example", [fileExtension]);
-fileWorkflow.file('', '').file('', '').step('', ({ context }) => console.log(context.files));
+const fileWorkflow = createWorkflow<{}, FileExtension & LoggerExtension>("file example", [fileExtension, loggerExtension]);
+fileWorkflow.log("message").file('', '').step('', ({ context }) => console.log(context.logs.length));
 
 // Run the file workflow
 (async () => {
