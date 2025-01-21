@@ -18,14 +18,7 @@ type Builder<ContextIn extends Context> = {
 type ExtendedBuilder<
   ContextIn extends Context,
   TExtensionsBlock extends ExtensionsBlock<Extension[]>,
-> = TExtensionsBlock & {
-  step<ActionResult, ContextOut extends object>(
-    title: string,
-    action: Action<ActionResult>,
-    reduce: Reducer<ActionResult, ContextIn, ContextOut>,
-  ): ExtendedBuilder<ContextOut, TExtensionsBlock>,
-  run(): void,
-}
+> = TExtensionsBlock & Builder<ContextIn>
 
 interface StepBlock<
   ActionResult,
@@ -70,7 +63,7 @@ function createWorkflow<
   extensions: Extension[] = [],
 ): ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>> {
   // type InferredExtensionsBlock = ExtensionsBlock<typeof extensions>
-  return {
+  const builder: Builder<ContextIn> = {
     step(title: string, action, reduce) {
       const stepBlock = {
         title,
@@ -90,7 +83,11 @@ function createWorkflow<
         context = reduce(result, context);
         console.log(JSON.stringify(context, null, 2));
       }
-    },
+    }
+  };
+
+  return {
+    ...builder,
     file(builder: ExtendedBuilder<Context, any>) {
       return builder.step(
         "file step", () => console.log("file action"),
