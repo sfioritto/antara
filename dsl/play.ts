@@ -7,7 +7,7 @@ type Reducer<
   ContextOut extends Context> = (result: ActionResult, context: ContextIn) => ContextOut;
 
 type Builder<ContextIn extends Context> = {
-  step<ActionResult, ContextOut extends object>(
+  step<ContextOut extends Context, ActionResult = any>(
     title: string,
     action: Action<ActionResult>,
     reduce: Reducer<ActionResult, ContextIn, ContextOut>,
@@ -51,9 +51,11 @@ type ExtensionsBlock<
 //   }
 // }
 
+
+
 type BasicExtensions<ContextIn extends Context> = {
-  file: () => ExtendedBuilder<ContextIn, BasicExtensions<Context>>,
-  log: () => ExtendedBuilder<ContextIn, BasicExtensions<Context>>,
+  file: () => ExtendedBuilder<ContextIn & { file: string }, BasicExtensions<ContextIn & { file: string }>>,
+  log: () => ExtendedBuilder<ContextIn & { logger: string }, BasicExtensions<ContextIn & { logger: string }>>,
 }
 
 function createExtensions<ContextIn extends Context>(
@@ -68,7 +70,7 @@ function createExtensions<ContextIn extends Context>(
           return {
             ...context,
             file: "file content",
-          }
+          } as ContextIn & { file: string };
         }
       )
     },
