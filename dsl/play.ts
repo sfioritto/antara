@@ -120,7 +120,7 @@ function createWorkflow<
 
   return {
     ...builder,
-    ...createExtensions<ContextIn>(builder)
+    ...createExtensions(builder)
   }
 
   // let extensionBlock = {};
