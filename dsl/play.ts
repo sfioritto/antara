@@ -11,7 +11,7 @@ type Builder<ContextIn extends Context> = {
     title: string,
     action: Action<ActionResult>,
     reduce: Reducer<ActionResult, ContextIn, ContextOut>,
-  ): Builder<ContextOut>,
+  ): ExtendedBuilder<ContextOut, BasicExtensions<ContextOut>>,
   run(): void,
 }
 
@@ -52,8 +52,38 @@ type ExtensionsBlock<
 // }
 
 type BasicExtensions<ContextIn extends Context> = {
-  file: (builder: ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>>) => ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>>,
-  log: (builder: ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>>) => ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>>,
+  file: () => ExtendedBuilder<ContextIn, BasicExtensions<Context>>,
+  log: () => ExtendedBuilder<ContextIn, BasicExtensions<Context>>,
+}
+
+function createExtensions<ContextIn extends Context>(
+  builder: Builder<ContextIn>
+): BasicExtensions<ContextIn> {
+  return {
+    file() {
+      return builder.step(
+        "file step", () => console.log("file action"),
+        (result: any, context) => {
+          console.log('context in file', context)
+          return {
+            ...context,
+            file: "file content",
+          }
+        }
+      )
+    },
+    log() {
+      return builder.step(
+        "Log step", () => console.log("logging action"),
+        (result: any, context) => {
+          return {
+            ...context,
+            logger: "log step",
+          }
+        }
+      );
+    }
+  };
 }
 
 function createWorkflow<
@@ -88,29 +118,7 @@ function createWorkflow<
 
   return {
     ...builder,
-    file(builder: ExtendedBuilder<Context, any>) {
-      return builder.step(
-        "file step", () => console.log("file action"),
-        (result: any, context: Context) => {
-          console.log('context in file', context)
-          return {
-            ...context,
-            file: "file content",
-          }
-        }
-      )
-    },
-    log(builder: ExtendedBuilder<Context, any>) {
-      return builder.step(
-        "Log step", () => console.log("logging action"),
-        (result: any, context: Context) => {
-          return {
-            ...context,
-            logger: "log step",
-          }
-        }
-      );
-    }
+    ...createExtensions<ContextIn>(builder)
   }
 
   // let extensionBlock = {};
@@ -131,8 +139,8 @@ function createWorkflow<
 
 const workflow = createWorkflow();
 workflow
-  .log(workflow)
-  .file(workflow)
+  .log()
+  .file()
   .step('first', () => 'first step action', (result, context) => ({ ...context, step1: result }))
   .step('second', () => 'second step action', (result, context) => ({ ...context, step2: result }))
   .step('third', () => 'third step action', (result, context) => ({ ...context, step3: result })).run();
