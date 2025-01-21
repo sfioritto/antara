@@ -65,12 +65,12 @@ function createExtensions<ContextIn extends Context>(
     file() {
       return builder.step(
         "file step", () => console.log("file action"),
-        (result: any, context) => {
+        (result, context) => {
           console.log('context in file', context)
           return {
             ...context,
             file: "file content",
-          } as ContextIn & { file: string };
+          };
         }
       )
     },
