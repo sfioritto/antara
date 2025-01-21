@@ -1,5 +1,7 @@
-type Action<ActionResult> = () => ActionResult
-type Reducer<ActionResult, ContextIn, ContextOut extends object> = (result: ActionResult, context: ContextIn) => ContextOut
+import { JsonObject } from "./types";
+type Context = JsonObject;
+type Action<ActionResult> = () => ActionResult;
+type Reducer<ActionResult, ContextIn, ContextOut extends object> = (result: ActionResult, context: ContextIn) => ContextOut;
 
 interface Builder<ContextIn = {}> {
   step<ActionResult, ContextOut extends object>(
@@ -16,8 +18,9 @@ interface StepBlock<ActionResult, ContextIn, ContextOut extends object> {
   reduce: Reducer<ActionResult, ContextIn, ContextOut>,
 }
 
+
 function createBuilder<ContextIn>(
-  steps: StepBlock<any, any, any>[] = []
+  steps: StepBlock<any, any, any>[] = [],
 ): Builder<ContextIn> {
 
   return {
@@ -49,4 +52,5 @@ const workflow = createWorkflow();
 
 workflow
   .step('first', () => 'first step action', (result) => ({ step1: result }))
-  .step('step', () => 'second step action', (result, context) => ({ ...context, step2: result })).run();
+  .step('second', () => 'second step action', (result, context) => ({ ...context, step2: result }))
+  .step('third', () => 'third step action', (result, context) => ({ ...context, step3: result })).run();
