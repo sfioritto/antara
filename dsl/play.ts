@@ -9,19 +9,22 @@ type Reducer<
   ContextIn extends Context,
   ContextOut extends Context> = (result: ActionResult, context: ContextIn) => ContextOut;
 
-type Builder<ContextIn extends Context> = {
+type Builder<
+  ContextIn extends Context,
+  TExtensionsBlock extends ExtensionsBlock<Extension[]>,
+> = {
   step<ContextOut extends Context, ActionResult = any>(
     title: string,
     action: Action<ActionResult>,
     reduce: Reducer<ActionResult, ContextIn, ContextOut>,
-  ): ExtendedBuilder<ContextOut, BasicExtensions<ContextOut>>,
+  ): ExtendedBuilder<ContextOut, TExtensionsBlock>,
   run(): void,
 }
 
 type ExtendedBuilder<
   ContextIn extends Context,
   TExtensionsBlock extends ExtensionsBlock<Extension[]>,
-> = TExtensionsBlock & Builder<ContextIn>
+> = TExtensionsBlock & Builder<ContextIn, TExtensionsBlock>
 
 interface StepBlock<
   ActionResult,
@@ -42,14 +45,17 @@ type ExtensionMethod<T extends Context> = BuilderReturningFunction<T> | {
 type Extension = <
   ContextIn extends Context,
   ExtensionsBlock extends { [key: string]: ExtensionMethod<ContextIn> }
->(builder: ExtendedBuilder<ContextIn, ExtensionsBlock>) => {
+>(builder: Builder<ContextIn, ExtensionsBlock>) => {
   [KEY: string]: ExtensionMethod<ContextIn>
 };
 
 type ExtensionsBlock<
   Extensions extends Extension[]
-> =
-  Extensions[number] extends (...args: any) => infer ReturnType ? ReturnType : never;
+> = Extensions extends Array<infer E>
+  ? E extends Extension
+    ? ReturnType<E>
+    : never
+  : never;
 
 type BasicExtensions<ContextIn extends Context> = {
   file: {
@@ -76,49 +82,49 @@ const loggerExtension: Extension = (builder) => ({
   )
 });
 
-function createExtensions<ContextIn extends Context>(
-  builder: Builder<ContextIn>
-): BasicExtensions<ContextIn> {
-  return {
-    file: {
-      write() {
-        return builder.step(
-          "file step", () => console.log("file action"),
-          (result, context) => {
-            console.log('context in file', context)
-            return {
-              ...context,
-              file: "file content",
-            };
-          }
-        )
-      }
-    },
-    log() {
-      return builder.step(
-        "Log step", () => console.log("logging action"),
-        (result: any, context) => {
-          return {
-            ...context,
-            logger: "log step",
-          }
-        }
-      );
-    }
-  };
-}
+// function createExtensions<ContextIn extends Context>(
+//   builder: Builder<ContextIn, BasicExtensions<ContextIn>>
+// ): BasicExtensions<ContextIn> {
+//   return {
+//     file: {
+//       write() {
+//         return builder.step(
+//           "file step", () => console.log("file action"),
+//           (result, context) => {
+//             console.log('context in file', context)
+//             return {
+//               ...context,
+//               file: "file content",
+//             };
+//           }
+//         )
+//       }
+//     },
+//     log() {
+//       return builder.step(
+//         "Log step", () => console.log("logging action"),
+//         (result: any, context) => {
+//           return {
+//             ...context,
+//             logger: "log step",
+//           }
+//         }
+//       );
+//     }
+//   };
+// }
 
-function createWorkflow<
+function createBuilder<
   ContextIn extends Context,
+  TExtensionsBlock extends ExtensionsBlock<Extension[]>,
 >({
   steps = [],
   extensions = [],
 }: {
   steps?: StepBlock<Action<any>, Context, Context>[];
   extensions?: Extension[];
-} = {}): ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>> {
-  // type InferredExtensionsBlock = ExtensionsBlock<typeof extensions>
-  const builder: Builder<ContextIn> = {
+}): ExtendedBuilder<ContextIn, TExtensionsBlock> {
+  const builder: Builder<ContextIn, TExtensionsBlock> = {
     step(title: string, action, reduce) {
       const stepBlock = {
         title,
@@ -126,7 +132,7 @@ function createWorkflow<
         reduce
       };
       type ContextOut = ReturnType<typeof reduce>;
-      return createWorkflow<ContextOut>({
+      return createBuilder<ContextOut, TExtensionsBlock>({
         steps: [...steps, stepBlock] as StepBlock<Action<any>, Context, Context>[],
         extensions,
       });
@@ -141,11 +147,34 @@ function createWorkflow<
     }
   };
 
-  return {
-    ...builder,
-    ...createExtensions(builder)
+  let extensionsBlock = {};
+  for (const extension of extensions) {
+    extensionsBlock = {
+      ...extensionsBlock,
+      ...extension(builder)
+    }
   }
 
+  return {
+    ...builder,
+    ...extensionsBlock,
+  } as ExtendedBuilder<ContextIn, TExtensionsBlock>
+
+}
+
+function createWorkflow<
+  ContextIn extends Context,
+  TExtensions extends Extension[] | []
+>({
+  steps = [],
+  extensions = [] as TExtensions,
+}: {
+  steps?: StepBlock<Action<any>, Context, Context>[];
+  extensions?: TExtensions;
+}): ExtendedBuilder<ContextIn, ExtensionsBlock<Extension[]>> {
+  type InferredExtensionsBlock = ExtensionsBlock<typeof extensions>
+
+  return createBuilder<ContextIn, InferredExtensionsBlock>({ steps, extensions });
   // let extensionBlock = {};
   // for (const extension of extensions) {
   //   extensionBlock = {
