@@ -1,21 +1,42 @@
-interface Builder {
-  step<TAction>(
+type Action<ActionResult> = () => ActionResult
+type Reducer<ActionResult, ContextIn, ContextOut extends object> = (result: ActionResult, context: ContextIn) => ContextOut
+
+interface Builder<ContextIn = {}> {
+  step<ActionResult, ContextOut extends object>(
     title: string,
-    action: () => TAction,
-    reduce: (result: TAction) => void,
-  ): Builder,
+    action: Action<ActionResult>,
+    reduce: Reducer<ActionResult, ContextIn, ContextOut>,
+  ): Builder<ContextOut>,
   run(): void,
 }
 
-function createBuilder(steps: string[] = []): Builder {
+interface StepBlock<ActionResult, ContextIn, ContextOut extends object> {
+  title: string,
+  action: Action<ActionResult>,
+  reduce: Reducer<ActionResult, ContextIn, ContextOut>,
+}
+
+function createBuilder<ContextIn>(
+  steps: StepBlock<any, any, any>[] = []
+): Builder<ContextIn> {
+
   return {
     step(title: string, action, reduce) {
-      const result = action();
-      reduce(result);
-      return createBuilder([...steps, title]);
+      const stepBlock = {
+        title,
+        action,
+        reduce
+      };
+      type ContextOut = ReturnType<typeof reduce>;
+      return createBuilder<ContextOut>([...steps, stepBlock]);
     },
     run() {
-      console.log(steps.join(' '))
+      let context;
+      for (const { title, action, reduce } of steps) {
+        const result = action();
+        context = reduce(result, context);
+        console.log(JSON.stringify(context, null, 2));
+      }
     }
   }
 }
@@ -27,5 +48,5 @@ function createWorkflow() {
 const workflow = createWorkflow();
 
 workflow
-  .step('first', () => 'first step action', (result) => console.log(result))
-  .step('step', () => 'second step action', (result) => console.log(result)).run();
+  .step('first', () => 'first step action', (result) => ({ step1: result }))
+  .step('step', () => 'second step action', (result, context) => ({ ...context, step2: result })).run();
