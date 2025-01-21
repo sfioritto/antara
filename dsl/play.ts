@@ -9,8 +9,9 @@ interface Builder {
 
 function createBuilder(steps: string[] = []): Builder {
   return {
-    step(title: string, action) {
-      action();
+    step(title: string, action, reduce) {
+      const result = action();
+      reduce(result);
       return createBuilder([...steps, title]);
     },
     run() {
