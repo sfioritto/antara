@@ -52,8 +52,8 @@ type ExtensionsBlock<
 // }
 
 type BasicExtensions<ContextIn extends Context> = {
-  file: <TBuilder extends ExtendedBuilder<ContextIn, any>>(builder: TBuilder) => TBuilder,
-  log: <TBuilder extends ExtendedBuilder<ContextIn, any>>(builder: TBuilder) => TBuilder,
+  file: (builder: ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>>) => ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>>,
+  log: (builder: ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>>) => ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>>,
 }
 
 function createWorkflow<
@@ -74,7 +74,7 @@ function createWorkflow<
       return createWorkflow<ContextOut>(
         [...steps, stepBlock] as StepBlock<Action<any>, Context, Context>[],
         extensions,
-      ) as ExtendedBuilder<ContextOut, BasicExtensions<ContextIn>>;
+      );
     },
     run() {
       let context = {};
