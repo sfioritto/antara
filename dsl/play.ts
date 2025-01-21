@@ -175,20 +175,6 @@ function createWorkflow<
   type InferredExtensionsBlock = ExtensionsBlock<typeof extensions>
 
   return createBuilder<ContextIn, InferredExtensionsBlock>({ steps, extensions });
-  // let extensionBlock = {};
-  // for (const extension of extensions) {
-  //   extensionBlock = {
-  //     ...extensionBlock,
-  //     ...extension(builderBase),
-  //   }
-  // }
-
-  // const builder = {
-  //   ...extensionBlock,
-  //   ...builderBase,
-  // } as Builder<ContextIn, InferredExtensionsBlock>;
-
-  // return builderBase;
 }
 
 const workflow = createWorkflow({ extensions: [fileExtension, loggerExtension]});
