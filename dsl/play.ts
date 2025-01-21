@@ -59,7 +59,8 @@ type ExtensionsBlock<
 // }
 
 type BasicExtensions<ContextIn extends Context> = {
-  file: <TBuilder extends ExtendedBuilder<ContextIn, any>>(builder: TBuilder) => TBuilder
+  file: <TBuilder extends ExtendedBuilder<ContextIn, any>>(builder: TBuilder) => TBuilder,
+  log: <TBuilder extends ExtendedBuilder<ContextIn, any>>(builder: TBuilder) => TBuilder,
 }
 
 function createWorkflow<
@@ -94,12 +95,24 @@ function createWorkflow<
       return builder.step(
         "file step", () => console.log("file action"),
         (result: any, context: Context) => {
+          console.log('context in file', context)
           return {
             ...context,
             file: "file content",
           }
         }
       )
+    },
+    log(builder: ExtendedBuilder<Context, any>) {
+      return builder.step(
+        "Log step", () => console.log("logging action"),
+        (result: any, context: Context) => {
+          return {
+            ...context,
+            logger: "log step",
+          }
+        }
+      );
     }
   }
 
@@ -121,8 +134,8 @@ function createWorkflow<
 
 const workflow = createWorkflow();
 workflow
+  .log(workflow)
   .file(workflow)
-  .step('first', () => 'first step action', (result) => ({ step1: result }))
-  .file(workflow)
+  .step('first', () => 'first step action', (result, context) => ({ ...context, step1: result }))
   .step('second', () => 'second step action', (result, context) => ({ ...context, step2: result }))
   .step('third', () => 'third step action', (result, context) => ({ ...context, step3: result })).run();
