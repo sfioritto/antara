@@ -145,6 +145,6 @@ const workflow = createWorkflow();
 workflow
   .log()
   .file.write()
-  .step('first', () => 'first step action', (result, context) => ({ ...context, step1: result }))
-  .step('second', () => 'second step action', (result, context) => ({ ...context, step2: result }))
-  .step('third', () => 'third step action', (result, context) => ({ ...context, step3: result })).run();
+  .step('first', () => 'first step action', (result, context) => ({ ...context, step1: result + context.logger }))
+  .step('second', () => 'second step action', (result, context) => ({ ...context, step2: result + context.step1 }))
+  .step('third', () => 'third step action', (result, context) => ({ ...context, step3: result + context.step2 })).run();
