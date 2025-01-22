@@ -1,6 +1,10 @@
 import { FileExtension } from "../extensions/files";
 import { JsonObject } from "./types";
 
+type Debug<T> = {
+  [P in keyof T]: T[P]
+};
+
 type Context = JsonObject;
 
 type Action<ActionResult> = () => ActionResult;
@@ -141,6 +145,9 @@ function createWorkflow<
 }
 
 const workflow = createWorkflow({ extensions: [fileExtension, loggerExtension] });
+
+type WorkflowFull = Debug<typeof workflow>;
+type LogFunction = Debug<typeof workflow.log>
 const logger = workflow.log();
 type Logger = typeof logger;
 workflow
