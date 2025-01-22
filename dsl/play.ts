@@ -97,21 +97,24 @@ type NewExtension = <ContextIn extends Context>(builder: Builder<ContextIn>) => 
 
 function createExtensions<ContextIn extends Context>(
   builder: Builder<ContextIn>,
-  extension: NewExtension,
+  extensions: NewExtension[],
 ): FileExtensionReturn<ContextIn> & LoggerExtensionReturn<ContextIn> {
-  return {
-    ...extension<ContextIn>(builder),
-    ...loggerExtension(builder)
-  };
+  return extensions.reduce((acc, extension) => ({
+    ...acc,
+    ...extension<ContextIn>(builder)
+  }), {} as any);
 }
 
 function createWorkflow<
   ContextIn extends Context,
 >(
-  steps: StepBlock<Action<any>, Context, Context>[] = [],
-  extensions: Extension[] = [],
+  options: {
+    steps?: StepBlock<Action<any>, Context, Context>[];
+    extensions?: Extension[];
+  } = {}
 ): ExtendedBuilder<ContextIn, FileExtensionReturn<ContextIn> & LoggerExtensionReturn<ContextIn>> {
-  // type InferredExtensionsBlock = ExtensionsBlock<typeof extensions>
+  const { steps = [], extensions = [] } = options;
+
   const builder: Builder<ContextIn> = {
     step(title: string, action, reduce) {
       const stepBlock = {
@@ -120,10 +123,10 @@ function createWorkflow<
         reduce
       };
       type ContextOut = ReturnType<typeof reduce>;
-      return createWorkflow<ContextOut>(
-        [...steps, stepBlock] as StepBlock<Action<any>, Context, Context>[],
-        extensions,
-      );
+      return createWorkflow<ContextOut>({
+        steps: [...steps, stepBlock] as StepBlock<Action<any>, Context, Context>[],
+        extensions
+      });
     },
     run() {
       let context = {};
@@ -137,26 +140,11 @@ function createWorkflow<
 
   return {
     ...builder,
-    ...createExtensions(builder, fileExtension)
+    ...createExtensions(builder, extensions)
   }
-
-  // let extensionBlock = {};
-  // for (const extension of extensions) {
-  //   extensionBlock = {
-  //     ...extensionBlock,
-  //     ...extension(builderBase),
-  //   }
-  // }
-
-  // const builder = {
-  //   ...extensionBlock,
-  //   ...builderBase,
-  // } as Builder<ContextIn, InferredExtensionsBlock>;
-
-  // return builderBase;
 }
 
-const workflow = createWorkflow();
+const workflow = createWorkflow({ extensions: [fileExtension, loggerExtension] });
 workflow
   .log()
   .file.write()
