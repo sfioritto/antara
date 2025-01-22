@@ -58,9 +58,9 @@ type BasicExtensions<ContextIn extends Context> = {
   log: () => ExtendedBuilder<ContextIn & { logger: string }, BasicExtensions<ContextIn & { logger: string }>>,
 }
 
-function createExtensions<ContextIn extends Context>(
+function fileExtension<ContextIn extends Context> (
   builder: Builder<ContextIn>
-): BasicExtensions<ContextIn> {
+) {
   return {
     file: {
       write() {
@@ -76,6 +76,17 @@ function createExtensions<ContextIn extends Context>(
         )
       }
     },
+  };
+}
+
+type NewExtension = <ContextIn extends Context>(builder: Builder<ContextIn>) => any
+
+function createExtensions<ContextIn extends Context>(
+  builder: Builder<ContextIn>,
+  extension: NewExtension,
+): BasicExtensions<ContextIn> {
+  return {
+    ...extension<ContextIn>(builder),
     log() {
       return builder.step(
         "Log step", () => console.log("logging action"),
@@ -122,7 +133,7 @@ function createWorkflow<
 
   return {
     ...builder,
-    ...createExtensions(builder)
+    ...createExtensions(builder, fileExtension)
   }
 
   // let extensionBlock = {};
