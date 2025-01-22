@@ -20,7 +20,7 @@ type Builder<ContextIn extends Context> = {
 
 type ExtendedBuilder<
   ContextIn extends Context,
-  TExtensionsBlock extends ExtensionsBlock<Extension[]>,
+  TExtensionsBlock,
 > = TExtensionsBlock & Builder<ContextIn>
 
 interface StepBlock<
@@ -32,24 +32,6 @@ interface StepBlock<
   action: Action<ActionResult>,
   reduce: Reducer<ActionResult, ContextIn, ContextOut>,
 }
-
-type BuilderReturningFunction<T extends Context> = (...args: any[]) => ExtendedBuilder<T, any>;
-
-type ExtensionMethod<T extends Context> = BuilderReturningFunction<T> | {
-  [key: string]: ExtensionMethod<T>;
-}
-
-type Extension = <
-  ContextIn extends Context,
-  ExtensionsBlock extends { [key: string]: ExtensionMethod<ContextIn> }
->(builder: ExtendedBuilder<ContextIn, ExtensionsBlock>) => {
-  [KEY: string]: ExtensionMethod<ContextIn>
-};
-
-type ExtensionsBlock<
-  Extensions extends Extension[]
-> =
-  Extensions[number] extends (...args: any) => infer ReturnType ? ReturnType : never;
 
 type FileExtensionReturn<ContextIn extends Context> = ReturnType<typeof fileExtension<ContextIn>>;
 type LoggerExtensionReturn<ContextIn extends Context> = ReturnType<typeof loggerExtension<ContextIn>>;
@@ -93,11 +75,11 @@ function loggerExtension<ContextIn extends Context>(
   };
 }
 
-type NewExtension = <ContextIn extends Context>(builder: Builder<ContextIn>) => any
+type Extension = <ContextIn extends Context>(builder: Builder<ContextIn>) => any
 
 function createExtensions<ContextIn extends Context>(
   builder: Builder<ContextIn>,
-  extensions: NewExtension[],
+  extensions: Extension[],
 ): FileExtensionReturn<ContextIn> & LoggerExtensionReturn<ContextIn> {
   return extensions.reduce((acc, extension) => ({
     ...acc,
