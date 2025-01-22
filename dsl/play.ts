@@ -57,13 +57,6 @@ type ExtensionsBlock<
     : never
   : never;
 
-type BasicExtensions<ContextIn extends Context> = {
-  file: {
-    write: () => ExtendedBuilder<ContextIn & { file: string }, BasicExtensions<ContextIn & { file: string }>>,
-  },
-  log: () => ExtendedBuilder<ContextIn & { logger: string }, BasicExtensions<ContextIn & { logger: string }>>,
-}
-
 const fileExtension: Extension = (builder) => ({
   file: {
     write: () => builder.step(
@@ -81,38 +74,6 @@ const loggerExtension: Extension = (builder) => ({
     (result, context) => ({ ...context, logger: "log step" })
   )
 });
-
-// function createExtensions<ContextIn extends Context>(
-//   builder: Builder<ContextIn, BasicExtensions<ContextIn>>
-// ): BasicExtensions<ContextIn> {
-//   return {
-//     file: {
-//       write() {
-//         return builder.step(
-//           "file step", () => console.log("file action"),
-//           (result, context) => {
-//             console.log('context in file', context)
-//             return {
-//               ...context,
-//               file: "file content",
-//             };
-//           }
-//         )
-//       }
-//     },
-//     log() {
-//       return builder.step(
-//         "Log step", () => console.log("logging action"),
-//         (result: any, context) => {
-//           return {
-//             ...context,
-//             logger: "log step",
-//           }
-//         }
-//       );
-//     }
-//   };
-// }
 
 function createBuilder<
   ContextIn extends Context,
