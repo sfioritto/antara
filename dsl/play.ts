@@ -14,7 +14,9 @@ type Builder<ContextIn extends Context> = {
     title: string,
     action: Action<ActionResult>,
     reduce: Reducer<ActionResult, ContextIn, ContextOut>,
-  ): ExtendedBuilder<ContextOut, BasicExtensions<ContextOut>>,
+  ): ExtendedBuilder<ContextOut, FileExtensionReturn<ContextOut> & {
+    log: () => ExtendedBuilder<ContextOut & { logger: string }, FileExtensionReturn<ContextOut & { logger: string }>>
+  }>,
   run(): void,
 }
 
@@ -51,12 +53,7 @@ type ExtensionsBlock<
 > =
   Extensions[number] extends (...args: any) => infer ReturnType ? ReturnType : never;
 
-type BasicExtensions<ContextIn extends Context> = {
-  file: {
-    write: () => ExtendedBuilder<ContextIn & { file: string }, BasicExtensions<ContextIn & { file: string }>>,
-  },
-  log: () => ExtendedBuilder<ContextIn & { logger: string }, BasicExtensions<ContextIn & { logger: string }>>,
-}
+type FileExtensionReturn<ContextIn extends Context> = ReturnType<typeof fileExtension<ContextIn>>;
 
 function fileExtension<ContextIn extends Context> (
   builder: Builder<ContextIn>
@@ -84,7 +81,9 @@ type NewExtension = <ContextIn extends Context>(builder: Builder<ContextIn>) => 
 function createExtensions<ContextIn extends Context>(
   builder: Builder<ContextIn>,
   extension: NewExtension,
-): BasicExtensions<ContextIn> {
+): FileExtensionReturn<ContextIn> & {
+  log: () => ExtendedBuilder<ContextIn & { logger: string }, FileExtensionReturn<ContextIn & { logger: string }>>
+} {
   return {
     ...extension<ContextIn>(builder),
     log() {
@@ -106,7 +105,9 @@ function createWorkflow<
 >(
   steps: StepBlock<Action<any>, Context, Context>[] = [],
   extensions: Extension[] = [],
-): ExtendedBuilder<ContextIn, BasicExtensions<ContextIn>> {
+): ExtendedBuilder<ContextIn, FileExtensionReturn<ContextIn> & {
+  log: () => ExtendedBuilder<ContextIn & { logger: string }, FileExtensionReturn<ContextIn & { logger: string }>>
+}> {
   // type InferredExtensionsBlock = ExtensionsBlock<typeof extensions>
   const builder: Builder<ContextIn> = {
     step(title: string, action, reduce) {
@@ -158,4 +159,5 @@ workflow
   .file.write()
   .step('first', () => 'first step action', (result, context) => ({ ...context, step1: result + context.logger }))
   .step('second', () => 'second step action', (result, context) => ({ ...context, step2: result + context.step1 }))
-  .step('third', () => 'third step action', (result, context) => ({ ...context, step3: result + context.step2 })).run();
+  .step('third', () => 'third step action', (result, context) => ({ ...context, step3: result + context.step2 }))
+  .run();
