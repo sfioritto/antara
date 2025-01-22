@@ -58,7 +58,7 @@ type ExtensionsBlock = {
 //     : never
 //   : never;
 
-type Extension = <ContextIn extends Context, TExtensionsBlock extends ExtensionsBlock>(builder: Builder<ContextIn, TExtensionsBlock>) => ExtensionsBlock;
+type Extension = <TExtensionsBlock extends ExtensionsBlock>(builder: Builder<Context, TExtensionsBlock>) => ExtensionsBlock;
 
 const fileExtension = createExtension(builder => ({
   file: () => builder.step(
@@ -124,6 +124,15 @@ function createBuilder<
 
 }
 
+// Add this type helper to infer combined extension types
+type InferExtensionsBlock<T extends Extension[]> = T extends Array<infer E>
+  ? E extends Extension
+    ? ReturnType<E> extends ExtensionsBlock
+      ? ReturnType<E> & ExtensionsBlock
+      : never
+    : never
+  : never;
+
 function createWorkflow<
   ContextIn extends Context,
   TExtensions extends Extension[] | []
@@ -133,10 +142,11 @@ function createWorkflow<
 }: {
   steps?: StepBlock<Action<any>, Context, Context>[];
   extensions?: TExtensions;
-}): ExtendedBuilder<ContextIn, ExtensionsBlock> {
-
-
-  return createBuilder<ContextIn, any>({ steps, extensions });
+}) {
+  return createBuilder<ContextIn, InferExtensionsBlock<TExtensions>>({
+    steps,
+    extensions
+  });
 }
 
 const workflow = createWorkflow({ extensions: [fileExtension, loggerExtension]});
