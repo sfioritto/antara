@@ -141,7 +141,9 @@ function createWorkflow<
   });
 }
 
-const workflow = createWorkflow({ extensions: [fileExtension, loggerExtension]});
+const workflow = createWorkflow({ extensions: [fileExtension, loggerExtension] });
+const logger = workflow.log();
+type Logger = typeof logger;
 workflow
   .log()
   .file()
