@@ -14,9 +14,7 @@ type Builder<ContextIn extends Context> = {
     title: string,
     action: Action<ActionResult>,
     reduce: Reducer<ActionResult, ContextIn, ContextOut>,
-  ): ExtendedBuilder<ContextOut, FileExtensionReturn<ContextOut> & {
-    log: () => ExtendedBuilder<ContextOut & { logger: string }, FileExtensionReturn<ContextOut & { logger: string }>>
-  }>,
+  ): ExtendedBuilder<ContextOut, FileExtensionReturn<ContextOut> & LoggerExtensionReturn<ContextOut>>,
   run(): void,
 }
 
@@ -54,6 +52,7 @@ type ExtensionsBlock<
   Extensions[number] extends (...args: any) => infer ReturnType ? ReturnType : never;
 
 type FileExtensionReturn<ContextIn extends Context> = ReturnType<typeof fileExtension<ContextIn>>;
+type LoggerExtensionReturn<ContextIn extends Context> = ReturnType<typeof loggerExtension<ContextIn>>;
 
 function fileExtension<ContextIn extends Context> (
   builder: Builder<ContextIn>
@@ -76,16 +75,10 @@ function fileExtension<ContextIn extends Context> (
   };
 }
 
-type NewExtension = <ContextIn extends Context>(builder: Builder<ContextIn>) => any
-
-function createExtensions<ContextIn extends Context>(
-  builder: Builder<ContextIn>,
-  extension: NewExtension,
-): FileExtensionReturn<ContextIn> & {
-  log: () => ExtendedBuilder<ContextIn & { logger: string }, FileExtensionReturn<ContextIn & { logger: string }>>
-} {
+function loggerExtension<ContextIn extends Context>(
+  builder: Builder<ContextIn>
+) {
   return {
-    ...extension<ContextIn>(builder),
     log() {
       return builder.step(
         "Log step", () => console.log("logging action"),
@@ -100,14 +93,24 @@ function createExtensions<ContextIn extends Context>(
   };
 }
 
+type NewExtension = <ContextIn extends Context>(builder: Builder<ContextIn>) => any
+
+function createExtensions<ContextIn extends Context>(
+  builder: Builder<ContextIn>,
+  extension: NewExtension,
+): FileExtensionReturn<ContextIn> & LoggerExtensionReturn<ContextIn> {
+  return {
+    ...extension<ContextIn>(builder),
+    ...loggerExtension(builder)
+  };
+}
+
 function createWorkflow<
   ContextIn extends Context,
 >(
   steps: StepBlock<Action<any>, Context, Context>[] = [],
   extensions: Extension[] = [],
-): ExtendedBuilder<ContextIn, FileExtensionReturn<ContextIn> & {
-  log: () => ExtendedBuilder<ContextIn & { logger: string }, FileExtensionReturn<ContextIn & { logger: string }>>
-}> {
+): ExtendedBuilder<ContextIn, FileExtensionReturn<ContextIn> & LoggerExtensionReturn<ContextIn>> {
   // type InferredExtensionsBlock = ExtensionsBlock<typeof extensions>
   const builder: Builder<ContextIn> = {
     step(title: string, action, reduce) {
