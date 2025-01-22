@@ -1,3 +1,4 @@
+import { FileExtension } from "../extensions/files";
 import { JsonObject } from "./types";
 
 type Context = JsonObject;
@@ -11,7 +12,7 @@ type Reducer<
 
 type Builder<
   ContextIn extends Context,
-  TExtensionsBlock extends ExtensionsBlock<Extension[]>,
+  TExtensionsBlock extends ExtensionsBlock,
 > = {
   step<ContextOut extends Context, ActionResult = any>(
     title: string,
@@ -23,7 +24,7 @@ type Builder<
 
 type ExtendedBuilder<
   ContextIn extends Context,
-  TExtensionsBlock extends ExtensionsBlock<Extension[]>,
+  TExtensionsBlock extends ExtensionsBlock,
 > = TExtensionsBlock & Builder<ContextIn, TExtensionsBlock>
 
 interface StepBlock<
@@ -36,48 +37,48 @@ interface StepBlock<
   reduce: Reducer<ActionResult, ContextIn, ContextOut>,
 }
 
-type BuilderReturningFunction<T extends Context> = (...args: any[]) => ExtendedBuilder<T, any>;
-
-type ExtensionMethod<T extends Context> = BuilderReturningFunction<T> | {
-  [key: string]: ExtensionMethod<T>;
-}
-
-type Extension = <
+type ExtensionCreator = <
   ContextIn extends Context,
-  ExtensionsBlock extends { [key: string]: ExtensionMethod<ContextIn> }
->(builder: Builder<ContextIn, ExtensionsBlock>) => {
-  [KEY: string]: ExtensionMethod<ContextIn>
+  TExtensionsBlock extends ExtensionsBlock,
+>(builder: Builder<ContextIn, TExtensionsBlock>) => {
+  [key: string]: (...args: any[]) => ExtendedBuilder<Context, ExtensionsBlock>
 };
 
-type ExtensionsBlock<
-  Extensions extends Extension[]
-> = Extensions extends Array<infer E>
-  ? E extends Extension
-    ? ReturnType<E>
-    : never
-  : never;
+const createExtension = <T extends ExtensionCreator>(fn: T): T => fn;
 
-const fileExtension: Extension = (builder) => ({
-  file: {
-    write: () => builder.step(
-      "file step",
-      () => console.log("file action"),
-      (result, context) => ({ ...context, file: "file content" })
-    )
-  }
-});
+type ExtensionsBlock = {
+  [KEY: string]: (...args: any[]) => ExtendedBuilder<Context, ExtensionsBlock>
+};
 
-const loggerExtension: Extension = (builder) => ({
+// type InferredExtensionsBlock<
+//   Extensions extends Extension[]
+// > = Extensions extends Array<infer E>
+//   ? E extends Extension
+//     ? ReturnType<E>
+//     : never
+//   : never;
+
+type Extension = <ContextIn extends Context, TExtensionsBlock extends ExtensionsBlock>(builder: Builder<ContextIn, TExtensionsBlock>) => ExtensionsBlock;
+
+const fileExtension = createExtension(builder => ({
+  file: () => builder.step(
+    "file step",
+    () => console.log("file action"),
+    (result, context) => ({ ...context, file: "file content" })
+  )
+}));
+
+const loggerExtension = createExtension(builder => ({
   log: () => builder.step(
     "Log step",
     () => console.log("logging action"),
     (result, context) => ({ ...context, logger: "log step" })
   )
-});
+}));
 
 function createBuilder<
   ContextIn extends Context,
-  TExtensionsBlock extends ExtensionsBlock<Extension[]>,
+  TExtensionsBlock extends ExtensionsBlock,
 >({
   steps = [],
   extensions = [],
@@ -132,16 +133,17 @@ function createWorkflow<
 }: {
   steps?: StepBlock<Action<any>, Context, Context>[];
   extensions?: TExtensions;
-}): ExtendedBuilder<ContextIn, ExtensionsBlock<Extension[]>> {
-  type InferredExtensionsBlock = ExtensionsBlock<typeof extensions>
+}): ExtendedBuilder<ContextIn, ExtensionsBlock> {
 
-  return createBuilder<ContextIn, InferredExtensionsBlock>({ steps, extensions });
+
+  return createBuilder<ContextIn, any>({ steps, extensions });
 }
 
 const workflow = createWorkflow({ extensions: [fileExtension, loggerExtension]});
 workflow
   .log()
-  .file.write()
+  .file()
   .step('first', () => 'first step action', (result, context) => ({ ...context, step1: result + context.logger }))
   .step('second', () => 'second step action', (result, context) => ({ ...context, step2: result + context.step1 }))
   .step('third', () => 'third step action', (result, context) => ({ ...context, step3: result + context.step2 })).run();
+
