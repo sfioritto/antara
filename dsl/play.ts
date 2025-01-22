@@ -50,14 +50,6 @@ type ExtensionsBlock = {
   [KEY: string]: (...args: any[]) => ExtendedBuilder<Context, ExtensionsBlock>
 };
 
-// type InferredExtensionsBlock<
-//   Extensions extends Extension[]
-// > = Extensions extends Array<infer E>
-//   ? E extends Extension
-//     ? ReturnType<E>
-//     : never
-//   : never;
-
 type Extension = <TExtensionsBlock extends ExtensionsBlock>(builder: Builder<Context, TExtensionsBlock>) => ExtensionsBlock;
 
 const fileExtension = createExtension(builder => ({
