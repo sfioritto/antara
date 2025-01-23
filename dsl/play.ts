@@ -59,33 +59,31 @@ class Workflow {
   }
 }
 
-type WorkflowInstance = {
-  step: (toAdd: Context) => WorkflowInstance;
-  [key: string]: any;
-}
-
-function createExtension(fn: Extension<Workflow>): Extension<Workflow> {
-  return fn;
-}
+const createExtension = <T extends Extension>(fn: T): T => fn;
 
 const firstExtension = createExtension((builder) => ({
   first: () => builder.step
     ({ first: 'first' })
 }));
 
-const secondExtension: Extension = (builder) => ({ second: () => builder.step({ second: 'second' }) })
+const secondExtension = createExtension(
+  (builder) => ({
+    second: () => builder.step({
+      second: 'second'
+    })
+  })
+);
 
-function createWorkflow() {
+function createWorkflow(): Builder<Workflow> & ReturnType<typeof firstExtension> & ReturnType<typeof secondExtension> {
   const extensions = [firstExtension, secondExtension]
-  type Test = ReturnType<typeof firstExtension>
   const workflow = new Workflow({ extensions, initialContext: {} })
-  return workflow as unknown as Builder<Workflow> & ReturnType<typeof firstExtension>
+  return workflow as unknown as Builder<Workflow> & ReturnType<typeof firstExtension> & ReturnType<typeof secondExtension>
 }
 
-const workflow = new Workflow() as unknown as WorkflowInstance;
-workflow.step({ cool: 1 }).step({ step: 'two' })
 
-// const workflow = new Workflow(extensions=[simpleExtension])
+const workflow = createWorkflow();
+
+workflow.first()
 
 // workflow.step({ baseStep: 'base' }).first().second().step({ finalStep: "final" })
 
