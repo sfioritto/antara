@@ -83,7 +83,7 @@ function createWorkflow(): Builder<Workflow> & ReturnType<typeof firstExtension>
 
 const workflow = createWorkflow();
 
-workflow.first()
+const firstStep = workflow.first()
 
 // workflow.step({ baseStep: 'base' }).first().second().step({ finalStep: "final" })
 
