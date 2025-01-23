@@ -14,7 +14,7 @@ type Builder<ContextIn extends Context> = {
     title: string,
     action: Action<ActionResult>,
     reduce: Reducer<ActionResult, ContextIn, ContextOut>,
-  ): ExtendedBuilder<ContextOut, FileExtensionReturn<ContextOut> & LoggerExtensionReturn<ContextOut>>,
+  ): ExtendedBuilder<ContextOut,  FileExtensionReturn<ContextOut> & LoggerExtensionReturn<ContextOut>>,
   run(): void,
 }
 
@@ -75,12 +75,39 @@ function loggerExtension<ContextIn extends Context>(
   };
 }
 
+// const extensions = [fileExtension, loggerExtension] as const;
+
+
+// type ExtensionReturnType<E> = E extends (builder: Builder<infer ContextIn>) => infer ReturnType
+//   ? ReturnType
+//   : never;
+
+// // ... existing code ...
+
+// type CombinedExtensionReturn<
+//   ContextIn,
+//   Extensions extends readonly any[]
+// > = Extensions extends readonly [(builder: Builder<any>) => infer R, ...infer Rest]
+//   ? R & (Rest extends ((builder: Builder<any>) => any)[]
+//       ? CombinedExtensionReturn<ContextIn, Rest>
+//       : {})
+//   : {};
+
+// Remove ExtensionReturnType since we're now inferring R directly
+// type ExtensionReturn<ContextIn extends Context> = CombinedExtensionReturn<ContextIn, typeof extensions>;
+
+// type DirectReturn = ReturnType<typeof fileExtension<{file: string}>>;
+// type TEST = ExtensionReturnType<typeof fileExtension>
+// type ExtensionReturn<ContextIn extends Context> = CombinedExtensionReturn<ContextIn, typeof extensions>;
+// type Original = FileExtensionReturn<{ file: string }> & LoggerExtensionReturn<{ file: string }>;
+// type NEW = ExtensionReturn<{file: string}>
+
 type Extension = <ContextIn extends Context>(builder: Builder<ContextIn>) => any
 
 function createExtensions<ContextIn extends Context>(
   builder: Builder<ContextIn>,
   extensions: Extension[],
-): FileExtensionReturn<ContextIn> & LoggerExtensionReturn<ContextIn> {
+) {
   return extensions.reduce((acc, extension) => ({
     ...acc,
     ...extension<ContextIn>(builder)
