@@ -102,7 +102,7 @@ function loggerExtension<ContextIn extends Context>(
 // type Original = FileExtensionReturn<{ file: string }> & LoggerExtensionReturn<{ file: string }>;
 // type NEW = ExtensionReturn<{file: string}>
 
-type Extension = <ContextIn extends Context>(builder: Builder<ContextIn>) => any
+type Extension = <ContextIn extends Context>(builder: Builder<ContextIn>) => {[key: string]: any;}
 
 function createExtensions<ContextIn extends Context>(
   builder: Builder<ContextIn>,
