@@ -1,14 +1,14 @@
 // Use recursive type alias with proper fixed point
-type Builder<TExtensionRecord, TSelf> = {
-  step: () => TSelf
+type Builder<TExtensionRecord, TBuilder> = {
+  step: () => TBuilder
 } & TExtensionRecord
 
 // Helper type to define what extension methods look like
-type ExtensionMethod<TSelf> = () => TSelf
+type ExtensionMethod<TBuilder> = () => TBuilder
 
 // Extension factory type - takes a builder and returns an extension record
-type Extension<TSelf> = (builder: TSelf) => {
-  [key: string]: ExtensionMethod<TSelf>
+type Extension<TBuilder> = (builder: TBuilder) => {
+  [key: string]: ExtensionMethod<TBuilder>
 }
 
 function createBuilder<
@@ -27,14 +27,14 @@ function createBuilder<
 
 const createExtension = <
   TExtensionRecord,
-  TSelf extends Builder<TExtensionRecord, TSelf>
->(fn: Extension<TSelf>): Extension<TSelf> => fn;
+  TBuilder extends Builder<TExtensionRecord, TBuilder>
+>(fn: Extension<TBuilder>): Extension<TBuilder> => fn;
 
 type ExtensionType = {
   first: () => Builder<ExtensionType, Builder<ExtensionType, any>>
 };
 
-const extension = createExtension(<TExtensionRecord, TSelf extends Builder<TExtensionRecord, TSelf>>(builder: TSelf) => ({
+const extension = createExtension((builder) => ({
   first: () => builder.step()
 })) as Extension<Builder<ExtensionType, any>>;
 
