@@ -1,39 +1,42 @@
 import { JsonObject } from "./types";
 
 
-class Extendable {
-  extend<T extends object>(extension: T): this & T {
-    Object.assign(this, extension);
-    return this as this & T;
+type UnionToIntersection<U> = (
+  U extends unknown ? (arg: U) => void : never
+) extends (arg: infer I) => void
+  ? I
+  : never;
+
+type Chainable<T> = {
+  [K in keyof T]: T[K] extends (...args: infer A) => any
+    ? (this: Chainable<T>, ...args: A) => Chainable<T>
+    : T[K];
+};
+
+class Extendable<Extensions extends object> {
+  constructor(extensions: Extensions) {
+    Object.assign(this, extensions);
+  }
+
+  static create<T extends object>(extensions: T) {
+    // Create an instance, but pretend it’s an intersection
+    const instance = new Extendable<T>(extensions);
+    return instance as Extendable<T> & T;
   }
 }
 
-// Usage
-const base = new Extendable();
+function mergeAll<T extends object[]>(...objs: T): Chainable<UnionToIntersection<T[number]>> {
+  const merged = Object.assign({}, ...objs) as UnionToIntersection<T[number]>;
+  // No actual rewriting at runtime, just a type assertion
+  return merged as Chainable<UnionToIntersection<T[number]>>;
+}
 
-// This is still just an Extendable, so no new methods
-// base.newMethod1(); // Error in TS
+const extensions = [
+  { method1() { return this; } },
+  { method2() { return this; } }
+] as const;
 
-const extended1 = base.extend({
-  newMethod1() {
-    return this;
-  },
-  newMethod2() {
-    return this;
-  }
-});
+const reducedExtensions = mergeAll(...extensions);
 
-// `extended1` now knows `newMethod1` exists
-extended1.newMethod1(); // works
-// You can chain calls:
-const extended3 = extended1.extend({
-  newMethod3() {
-    return this;
-  }
-});
-
-extended3.newMethod1().newMethod2() // works
-extended3.newMethod2().newMethod1(); // works as well
-extended3.newMethod1().newMethod3(); // does not work
-extended3.newMethod3().newMethod3(); // works
-extended3.newMethod3().newMethod1(); // does not work
+const extended = Extendable.create(reducedExtensions);
+extended.method2().method1()
