@@ -33,25 +33,27 @@ function createBuilder<
 // >(fn: Extension<TBuilder>): Extension<TBuilder> => fn;
 
 const createExtension = <T extends Extension<any>>(fn: T): T => fn;
-
-type ExtensionType = {
-  first: () => Builder<ExtensionType, any>,
+// Example of adding another extension
+type ExtensionsType = {
+  first: () => Builder<ExtensionsType, any>,
   cool: { thing: 'thing' },
   nested: {
-    second: () => Builder<ExtensionType, any>
+    second: () => Builder<ExtensionsType, any>
   }
+  third: () => Builder<ExtensionsType, any>
 };
 
 const extension = createExtension((builder) => ({
   first: () => builder.step(),
   nested: {
     second: () => builder.step()
-  }
+  },
+  third: () => builder.step() // New extension method
 }));
 
 type TExtensionType = ReturnType<typeof extension>;
 
-const base = createBuilder<ExtensionType>(extension);
-base.step().nested.second().first()
+const base = createBuilder<ExtensionsType>(extension);
+base.step().nested.second().first().third()
 
 // Now this should work with proper typing
