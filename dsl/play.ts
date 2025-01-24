@@ -11,12 +11,14 @@ type Extension<TBuilder> = (builder: TBuilder) => {
   [key: string]: ExtensionMethod<TBuilder>
 }
 
+type ExtensionsRecord<TExtensionRecord> = {
+  [K in keyof TExtensionRecord]: ExtensionMethod<Builder<TExtensionRecord, Builder<TExtensionRecord, any>>>
+}
+
 function createBuilder<
-  TExtensionRecord extends {
-    [K in keyof TExtensionRecord]: ExtensionMethod<Builder<TExtensionRecord, Builder<TExtensionRecord, any>>>
-  }>(
-  extension: Extension<Builder<TExtensionRecord, Builder<TExtensionRecord, any>>>
-): Builder<TExtensionRecord, Builder<TExtensionRecord, any>> {
+  TExtensionRecord extends ExtensionsRecord<any>>(
+  extension: Extension<Builder<TExtensionRecord, any>>
+): Builder<TExtensionRecord, any> {
   const builder = {
     step: () => createBuilder<TExtensionRecord>(extension),
   } as Builder<TExtensionRecord, Builder<TExtensionRecord, any>>
