@@ -27,10 +27,12 @@ function createBuilder<
   return { ...builder, ...extensionMethod }
 }
 
-const createExtension = <
-  TExtensionRecord,
-  TBuilder extends Builder<TExtensionRecord, TBuilder>
->(fn: Extension<TBuilder>): Extension<TBuilder> => fn;
+// const createExtension = <
+//   TExtensionRecord,
+//   TBuilder extends Builder<TExtensionRecord, TBuilder>
+// >(fn: Extension<TBuilder>): Extension<TBuilder> => fn;
+
+const createExtension = <T extends Extension<any>>(fn: T): T => fn;
 
 type ExtensionType = {
   first: () => Builder<ExtensionType, Builder<ExtensionType, any>>,
@@ -45,8 +47,11 @@ const extension = createExtension((builder) => ({
   nested: {
     second: () => builder.step()
   }
-})) as Extension<Builder<ExtensionType, any>>;
+}));
+
+type TExtensionType = ReturnType<typeof extension>;
 
 const base = createBuilder<ExtensionType>(extension);
+base.first().nested.second().first().step()
 
 // Now this should work with proper typing
