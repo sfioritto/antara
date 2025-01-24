@@ -1,5 +1,10 @@
 import { JsonObject } from "./types"
 
+type Builder<TExtensionRecord> = {
+  step: () => Builder<TExtensionRecord>
+}
+type Extension<TExtensionRecord> = (builder: Builder<TExtensionRecord>) => object
+
 function createBuilder(...extensions: any[]) {
   const builder = {
     step: () => {
@@ -17,19 +22,23 @@ function createBuilder(...extensions: any[]) {
   );
 }
 
-const oneExtension = (builder: any) => ({
+const createExtension = <
+  TExtensionRecord, T extends Extension<TExtensionRecord>
+>(fn: T): T => fn;
+
+const oneExtension = createExtension((builder) => ({
   one: () => {
     console.log('one');
     return builder.step();
   }
-});
+}));
 
-const twoExtension = (builder: any) => ({
+const twoExtension = createExtension((builder) => ({
   two: () => {
     console.log('two')
     return builder.step();
   }
-});
+}));
 
 // Usage
 const builder = createBuilder(oneExtension, twoExtension);
