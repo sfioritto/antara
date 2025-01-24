@@ -1,41 +1,44 @@
-// Define the base Builder type that includes both the step method and the extensions
-type Builder<TExtensionRecord> = {
-  step: () => Builder<TExtensionRecord>
+// Use recursive type alias with proper fixed point
+type Builder<TExtensionRecord, TSelf> = {
+  step: () => TSelf
 } & TExtensionRecord
 
 // Helper type to define what extension methods look like
-type ExtensionMethod<TExtensionRecord> = (builder: Builder<TExtensionRecord>) => Builder<TExtensionRecord>
+type ExtensionMethod<TSelf> = () => TSelf
 
 // Extension factory type - takes a builder and returns an extension record
-type Extension<TExtensionRecord> = (builder: Builder<TExtensionRecord>) => TExtensionRecord
-
+type Extension<TSelf> = (builder: TSelf) => {
+  [key: string]: ExtensionMethod<TSelf>
+}
 
 function createBuilder<
   TExtensionRecord extends {
-    [K in keyof TExtensionRecord]: ExtensionMethod<TExtensionRecord>
+    [K in keyof TExtensionRecord]: ExtensionMethod<Builder<TExtensionRecord, Builder<TExtensionRecord, any>>>
   }>(
-  extension: Extension<TExtensionRecord>
-): Builder<TExtensionRecord> {
-  const builder: Builder<TExtensionRecord> = {
+  extension: Extension<Builder<TExtensionRecord, Builder<TExtensionRecord, any>>>
+): Builder<TExtensionRecord, Builder<TExtensionRecord, any>> {
+  const builder = {
     step: () => createBuilder<TExtensionRecord>(extension),
-  } as Builder<TExtensionRecord>
+  } as Builder<TExtensionRecord, Builder<TExtensionRecord, any>>
 
-  // Initialize extensions by calling the factory with the builder
   const extensionMethod = extension(builder)
-
   return { ...builder, ...extensionMethod }
 }
 
-const createExtension = <TExtensionRecord, T extends Extension<TExtensionRecord>>(fn: T): T => fn;
+const createExtension = <
+  TExtensionRecord,
+  TSelf extends Builder<TExtensionRecord, TSelf>
+>(fn: Extension<TSelf>): Extension<TSelf> => fn;
 
+type ExtensionType = {
+  first: () => Builder<ExtensionType, Builder<ExtensionType, any>>
+};
 
-const extension = createExtension(<TExtensionRecord>(builder: Builder<TExtensionRecord>) => ({
+const extension = createExtension(<TExtensionRecord, TSelf extends Builder<TExtensionRecord, TSelf>>(builder: TSelf) => ({
   first: () => builder.step()
-}));
+})) as Extension<Builder<ExtensionType, any>>;
 
-type ExtensionRecord = ReturnType<typeof extension>
-// Create the base builder with the ExtensionType
-const base = createBuilder<ExtensionRecord>(extension);
+const base = createBuilder<ExtensionType>(extension);
 
-// Now these should all work with proper typing
-base.step().first().step().first()
+// Now this should work with proper typing
+const first = base.first().step().first()
