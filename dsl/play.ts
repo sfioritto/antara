@@ -12,7 +12,7 @@ type Extension<TBuilder> = (builder: TBuilder) => {
 }
 
 type ExtensionsRecord<TExtensionRecord> = {
-  [K in keyof TExtensionRecord]: ExtensionMethod<Builder<TExtensionRecord, Builder<TExtensionRecord, any>>>
+  [K in keyof TExtensionRecord]: ExtensionMethod<Builder<TExtensionRecord, any>> | object
 }
 
 function createBuilder<
@@ -33,7 +33,8 @@ const createExtension = <
 >(fn: Extension<TBuilder>): Extension<TBuilder> => fn;
 
 type ExtensionType = {
-  first: () => Builder<ExtensionType, Builder<ExtensionType, any>>
+  first: () => Builder<ExtensionType, Builder<ExtensionType, any>>,
+  cool: { thing: 'thing' }
 };
 
 const extension = createExtension((builder) => ({
