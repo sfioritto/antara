@@ -8,11 +8,11 @@ type ExtensionMethod<TBuilder> = () => TBuilder
 
 // Extension factory type - takes a builder and returns an extension record
 type Extension<TBuilder> = (builder: TBuilder) => {
-  [key: string]: ExtensionMethod<TBuilder>
+  [key: string]: ExtensionMethod<TBuilder> | Record<string, any> | { [key: string]: ExtensionMethod<TBuilder> }
 }
 
 type ExtensionsRecord<TExtensionRecord> = {
-  [K in keyof TExtensionRecord]: ExtensionMethod<Builder<TExtensionRecord, any>> | object
+  [K in keyof TExtensionRecord]: ExtensionMethod<Builder<TExtensionRecord, any>> | Record<string, any> | ExtensionsRecord<TExtensionRecord>
 }
 
 function createBuilder<
@@ -34,14 +34,19 @@ const createExtension = <
 
 type ExtensionType = {
   first: () => Builder<ExtensionType, Builder<ExtensionType, any>>,
-  cool: { thing: 'thing' }
+  cool: { thing: 'thing' },
+  nested: {
+    second: () => Builder<ExtensionType, Builder<ExtensionType, any>>
+  }
 };
 
 const extension = createExtension((builder) => ({
-  first: () => builder.step()
+  first: () => builder.step(),
+  nested: {
+    second: () => builder.step()
+  }
 })) as Extension<Builder<ExtensionType, any>>;
 
 const base = createBuilder<ExtensionType>(extension);
 
 // Now this should work with proper typing
-const first = base.first().step().first()
