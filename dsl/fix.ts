@@ -17,12 +17,10 @@ class ExtendableBase {
   step() {
     this.context.value += 1;
     console.log(this.context.value);
-    return this; // returns `this`, but not chainified by default
+    return this;
   }
 }
 
-// Merge all extensions into the class instance, then cast the
-// final result to a chainified intersection of "ExtendableBase plus the extensions"
 function createExtendable<T extends object[]>(...extensions: T) {
   // 1. Make an instance of the base class
   const instance = new ExtendableBase();
@@ -42,6 +40,11 @@ const extensions = [
   {
     method1() {
       return (this as unknown as ExtendableBase).step();
+    },
+    nested: {
+      nestedMethod() {
+        return (this as unknown as ExtendableBase).step();
+      }
     }
   },
   {
@@ -53,4 +56,4 @@ const extensions = [
 
 const extended = createExtendable(...extensions);
 // Now we can chain everything
-extended.method1().method2().step().method1().method2();
+extended.method1().method2().step().method1().method2()
