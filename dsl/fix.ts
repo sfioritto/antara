@@ -1,57 +1,56 @@
-import { JsonObject } from "./types";
-
-
 type UnionToIntersection<U> = (
   U extends unknown ? (arg: U) => void : never
 ) extends (arg: infer I) => void
   ? I
   : never;
 
+// Rewrites *every* function property so it returns the *entire* final object
 type Chainable<T> = {
   [K in keyof T]: T[K] extends (...args: infer A) => any
     ? (this: Chainable<T>, ...args: A) => Chainable<T>
     : T[K];
 };
 
-class Extendable<Extensions extends object> {
-  private context: {value: number} = { value: 0 };
-  constructor(extensions: Extensions) {
-    Object.assign(this, extensions);
-  }
-
-  static create<T extends object>(extensions: T) {
-    // Create an instance, but pretend it’s an intersection
-    const instance = new Extendable<T>(extensions);
-    return instance as Extendable<T> & T;
-  }
+class ExtendableBase {
+  private context = { value: 0 };
 
   step() {
-    this.context.value = this.context.value + 1
-    console.log(this.context.value)
-    return this;
+    this.context.value += 1;
+    console.log(this.context.value);
+    return this; // returns `this`, but not chainified by default
   }
 }
 
-function mergeAll<T extends object[]>(...objs: T): Chainable<UnionToIntersection<T[number]>> {
-  const merged = Object.assign({}, ...objs) as UnionToIntersection<T[number]>;
-  // No actual rewriting at runtime, just a type assertion
-  return merged as Chainable<UnionToIntersection<T[number]>>;
+// Merge all extensions into the class instance, then cast the
+// final result to a chainified intersection of "ExtendableBase plus the extensions"
+function createExtendable<T extends object[]>(...extensions: T) {
+  // 1. Make an instance of the base class
+  const instance = new ExtendableBase();
+
+  // 2. Merge in all extension props
+  Object.assign(instance, ...extensions);
+
+  // 3. Build a type that includes the base class *and* the extension objects
+  //    then pass it through `Chainable<>` so that all methods in *both* are chainified
+  type FinalType = Chainable<ExtendableBase & UnionToIntersection<T[number]>>;
+
+  // 4. Return that instance as FinalType
+  return instance as FinalType;
 }
 
 const extensions = [
   {
     method1() {
-      return (this as unknown as Extendable<any>).step()
+      return (this as unknown as ExtendableBase).step();
     }
   },
   {
     method2() {
-      return (this as unknown as Extendable<any>).step()
+      return (this as unknown as ExtendableBase).step();
     }
   }
 ] as const;
 
-const reducedExtensions = mergeAll(...extensions);
-
-const extended = Extendable.create(reducedExtensions);
-extended.method2().method1()
+const extended = createExtendable(...extensions);
+// Now we can chain everything
+extended.method1().method2().step().method1().method2();
