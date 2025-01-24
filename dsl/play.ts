@@ -1,6 +1,6 @@
 // Use recursive type alias with proper fixed point
 type Builder<TExtensionRecord, TBuilder> = {
-  step: () => TBuilder
+  step: () => Builder<TExtensionRecord, TBuilder>
 } & TExtensionRecord
 
 // Helper type to define what extension methods look like
@@ -35,10 +35,10 @@ function createBuilder<
 const createExtension = <T extends Extension<any>>(fn: T): T => fn;
 
 type ExtensionType = {
-  first: () => Builder<ExtensionType, Builder<ExtensionType, any>>,
+  first: () => Builder<ExtensionType, any>,
   cool: { thing: 'thing' },
   nested: {
-    second: () => Builder<ExtensionType, Builder<ExtensionType, any>>
+    second: () => Builder<ExtensionType, any>
   }
 };
 
@@ -52,6 +52,6 @@ const extension = createExtension((builder) => ({
 type TExtensionType = ReturnType<typeof extension>;
 
 const base = createBuilder<ExtensionType>(extension);
-base.first().nested.second().first().step()
+base.step().nested.second().first()
 
 // Now this should work with proper typing
