@@ -14,6 +14,7 @@ type Chainable<T> = {
 };
 
 class Extendable<Extensions extends object> {
+  private context: {value: number} = { value: 0 };
   constructor(extensions: Extensions) {
     Object.assign(this, extensions);
   }
@@ -22,6 +23,12 @@ class Extendable<Extensions extends object> {
     // Create an instance, but pretend it’s an intersection
     const instance = new Extendable<T>(extensions);
     return instance as Extendable<T> & T;
+  }
+
+  step() {
+    this.context.value = this.context.value + 1
+    console.log(this.context.value)
+    return this;
   }
 }
 
@@ -32,8 +39,16 @@ function mergeAll<T extends object[]>(...objs: T): Chainable<UnionToIntersection
 }
 
 const extensions = [
-  { method1() { return this; } },
-  { method2() { return this; } }
+  {
+    method1() {
+      return (this as unknown as Extendable<any>).step()
+    }
+  },
+  {
+    method2() {
+      return (this as unknown as Extendable<any>).step()
+    }
+  }
 ] as const;
 
 const reducedExtensions = mergeAll(...extensions);
