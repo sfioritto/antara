@@ -1,32 +1,36 @@
 import { JsonObject } from "./types";
 
-// Define the shape of what will be added when extended
-interface ExtendedMethods {
-    extended(): void;
-}
-
-// Base class with the extend functionality
 class Extendable {
-    // The extend method returns 'this & ExtendedMethods' to indicate
-    // the return type is the original object plus the new methods
-    extend(extended: any): this & ExtendedMethods {
-        // Add the new method to the instance
-      (this as any).extended = extended;
-
-      return this as this & ExtendedMethods;
-    }
+  extend<T extends object>(extension: T): this & T {
+    Object.assign(this, extension);
+    return this as this & T;
+  }
 }
 
-const extendedMethod = () => console.log('extended');
-// Example usage with type checking
-const obj = new Extendable();
+// Usage
+const base = new Extendable();
 
-// This would cause a TypeScript error because 'extended' doesn't exist yet
-// obj.extended();  // Error: Property 'extended' does not exist
+// This is still just an Extendable, so no new methods
+// base.newMethod1(); // Error in TS
 
-// After calling extend(), TypeScript knows the method exists
-const extended = obj.extend(extendedMethod)
-extended.extended();  // Works fine
+const extended1 = base.extend({
+  newMethod1() {
+    return this;
+  },
+  newMethod2() {
+    console.log("method 2")
+  }
+});
 
-// You can also chain it
-new Extendable().extend(extendedMethod).extended();
+// `extended1` now knows `newMethod1` exists
+extended1.newMethod1(); // works
+// You can chain calls:
+const extended3 = extended1.extend({
+  newMethod3() {
+    console.log("method3");
+  }
+});
+
+extended3.newMethod1(); // still works
+extended3.newMethod2(); // works as well
+extended3.newMethod3();
