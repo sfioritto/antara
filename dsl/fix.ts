@@ -11,11 +11,16 @@ type Builder<TExtensionBlock extends ExtensionBlock> = {
 
 type Extension = (builder: Builder<ExtensionBlock>) => ExtensionBlock;
 
-type CombinedBlockFromArray<T extends Extension[]> = T extends (infer U)[]
-  ? U extends Extension
-    ? ReturnType<U>
+type UnionToIntersection<U> =
+  (U extends any ? (k: U) => void : never) extends (k: infer I) => void ? I : never;
+
+type CombinedBlockFromArray<T extends Extension[]> = UnionToIntersection<
+  T extends (infer U)[]
+    ? U extends Extension
+      ? ReturnType<U>
+      : never
     : never
-  : never;
+>;
 
 const createExtension = <T extends Extension>(fn: T): T => fn;
 
@@ -24,7 +29,7 @@ function createBuilder<TExtensionBlock extends ExtensionBlock>(...extensions: Ex
     extend(extension: Extension) {
       const newExtensions = [extension, ...extensions]
       type ExtendedBlock = CombinedBlockFromArray<typeof newExtensions>
-      return createBuilder<TExtensionBlock & ExtendedBlock>(...[extension, ...extensions]);
+      return createBuilder<ExtendedBlock>(...newExtensions);
     },
     step() {
       console.log('base step')
@@ -36,7 +41,7 @@ function createBuilder<TExtensionBlock extends ExtensionBlock>(...extensions: Ex
   for (const extension of extensions) {
     extendedBuilder = {
       ...extendedBuilder,
-      ...extension(builder),
+      ...extension(extendedBuilder),
     }
   }
   return extendedBuilder;
@@ -61,8 +66,7 @@ type FirstBlock = ReturnType<typeof firstExtension>;
 type SecondBlock = ReturnType<typeof secondExtension>;
 const extensions = [firstExtension, secondExtension];
 type CombinedBlock = CombinedBlockFromArray<typeof extensions>
-const testBuilder = createBuilder<CombinedBlock>(firstExtension, secondExtension);
-testBuilder.first()
+const testBuilder = createBuilder().extend(firstExtension);
 
 type TestBuilder = typeof testBuilder;
 
