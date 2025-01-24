@@ -1,55 +1,71 @@
-import { JsonObject } from "./types"
+import { JsonObject } from "./types";
 
-type Builder<TExtensionRecord> = {
-  step: () => Builder<TExtensionRecord>
+type ExtensionBlock = {
+  [key: string]: (...args: any[]) => Builder<ExtensionBlock> | object | ExtensionBlock
 };
 
-type Extension<TExtensionRecord> = (builder: Builder<TExtensionRecord>) => any;
+type Builder<TExtensionBlock extends ExtensionBlock> = {
+  extend: (extension: Extension) => Builder<TExtensionBlock & ExtensionBlock>,
+  step: () => Builder<TExtensionBlock>,
+} & TExtensionBlock;
 
-type StepFunction<TExtensionRecord> = () => Builder<TExtensionRecord>;
+type Extension = (builder: Builder<ExtensionBlock>) => ExtensionBlock;
 
-type ExtensionRecord<TExtensionRecord extends ExtensionRecord<any>> = {
-  [name: string]: StepFunction<TExtensionRecord> | object | ExtensionRecord<TExtensionRecord>
-}
+type CombinedBlockFromArray<T extends Extension[]> = T extends (infer U)[]
+  ? U extends Extension
+    ? ReturnType<U>
+    : never
+  : never;
 
-function createBuilder(...extensions: Extension<any>[]) {
-  type ExtensionRecord = ReturnType<typeof extensions[number]>
+const createExtension = <T extends Extension>(fn: T): T => fn;
+
+function createBuilder<TExtensionBlock extends ExtensionBlock>(...extensions: Extension[]): Builder<TExtensionBlock> {
   const builder = {
-    step: () => {
-      console.log('base step')
-      return createBuilder(...extensions);
+    extend(extension: Extension) {
+      const newExtensions = [extension, ...extensions]
+      type ExtendedBlock = CombinedBlockFromArray<typeof newExtensions>
+      return createBuilder<TExtensionBlock & ExtendedBlock>(...[extension, ...extensions]);
     },
-  };
+    step() {
+      console.log('base step')
+      return createBuilder<TExtensionBlock>(...extensions);
+    }
+  }
 
-  return extensions.reduce(
-    (acc, ext) => ({
-      ...acc,
-      ...(ext as Extension<ExtensionRecord>)(builder)
-    }),
-    builder
-  ) as Builder<ExtensionRecord>;
+  let extendedBuilder = builder as Builder<TExtensionBlock>;
+  for (const extension of extensions) {
+    extendedBuilder = {
+      ...extendedBuilder,
+      ...extension(builder),
+    }
+  }
+  return extendedBuilder;
 }
 
-const createExtension = <
-  TExtensionRecord extends ExtensionRecord<any>, T extends (builder: Builder<TExtensionRecord>) => ExtensionRecord<TExtensionRecord>
->(fn: T): Extension<TExtensionRecord> => {
-  return (builder: Builder<TExtensionRecord>): ExtensionRecord<any> => fn(builder);
-};
-
-const oneExtension = createExtension((builder) => ({
-  one: () => {
-    console.log('one');
+const firstExtension = createExtension((builder) => ({
+  first: () => {
+    console.log('first');
     return builder.step();
   }
 }));
 
-const twoExtension = createExtension((builder) => ({
-  two: () => {
-    console.log('two')
+const secondExtension = createExtension((builder) => ({
+  second: () => {
+    console.log('second');
     return builder.step();
   }
 }));
 
-const extensions = [oneExtension, twoExtension]
-type TExtensionRecord = ReturnType<typeof extensions[number]>
-const builder = createBuilder(oneExtension, twoExtension);
+
+type FirstBlock = ReturnType<typeof firstExtension>;
+type SecondBlock = ReturnType<typeof secondExtension>;
+const extensions = [firstExtension, secondExtension];
+type CombinedBlock = CombinedBlockFromArray<typeof extensions>
+const testBuilder = createBuilder<CombinedBlock>(firstExtension, secondExtension);
+testBuilder.first()
+
+type TestBuilder = typeof testBuilder;
+
+const builder = createBuilder();
+type BuilderExtended = typeof builder;
+builder.extend(firstExtension).extend(secondExtension).first().first().second().step().second()
