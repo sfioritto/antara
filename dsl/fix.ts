@@ -1,5 +1,6 @@
 import { JsonObject } from "./types";
 
+
 class Extendable {
   extend<T extends object>(extension: T): this & T {
     Object.assign(this, extension);
@@ -18,7 +19,7 @@ const extended1 = base.extend({
     return this;
   },
   newMethod2() {
-    console.log("method 2")
+    return this;
   }
 });
 
@@ -27,10 +28,12 @@ extended1.newMethod1(); // works
 // You can chain calls:
 const extended3 = extended1.extend({
   newMethod3() {
-    console.log("method3");
+    return this;
   }
 });
 
-extended3.newMethod1(); // still works
-extended3.newMethod2(); // works as well
-extended3.newMethod3();
+extended3.newMethod1().newMethod2() // works
+extended3.newMethod2().newMethod1(); // works as well
+extended3.newMethod1().newMethod3(); // does not work
+extended3.newMethod3().newMethod3(); // works
+extended3.newMethod3().newMethod1(); // does not work
