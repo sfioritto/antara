@@ -28,17 +28,14 @@ function createBuilder<
 
 const createExtension = <TExtensionRecord, T extends Extension<TExtensionRecord>>(fn: T): T => fn;
 
-// Define the extension record type
-type ExtensionType = {
-  first: () => Builder<ExtensionType>
-}
 
-const extension = createExtension(<TExtensionType>(builder: Builder<TExtensionType>) => ({
+const extension = createExtension(<TExtensionRecord>(builder: Builder<TExtensionRecord>) => ({
   first: () => builder.step()
 }));
 
+type ExtensionRecord = ReturnType<typeof extension>
 // Create the base builder with the ExtensionType
-const base = createBuilder<ExtensionType>(extension);
+const base = createBuilder<ExtensionRecord>(extension);
 
 // Now these should all work with proper typing
 base.step().first().step().first()
