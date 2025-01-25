@@ -39,21 +39,37 @@ class Builder<TExtensions extends Extension<ExtensionMethods<Builder>>[] = []> {
     this[PrivateMethods] = {};
     this.namespaces = new Set();
 
-    for ( const extension of extensions ) {
+    for (const extension of extensions) {
       if (extension.namespace !== undefined) {
         this.namespaces.add(extension.namespace);
-        Object.assign(this[PrivateMethods], extension.methods);
-        this.createNamespaceProxy(extension.namespace);
+        console.log('Storing methods:', extension.methods);
+        const namespacedMethods = Object.fromEntries(
+          Object.entries(extension.methods).map(([key, value]) => [
+            `${extension.namespace}${key}`,
+            value
+          ])
+        );
+        Object.assign(this[PrivateMethods], namespacedMethods);
+        Object.defineProperty(this, extension.namespace, {
+          value: this.createNamespaceProxy(extension.namespace),
+          enumerable: true
+        });
       }
     }
+
+    // Move the assignment of non-namespaced methods here
+    Object.assign(this, ...extensions.filter(e => !e.namespace).map(e => e.methods));
   }
 
   private createNamespaceProxy(namespace: string) {
     return new Proxy({}, {
       get: (target, methodName: string) => {
+        console.log('called');
         const namespacedMethod = `${namespace}${methodName}`;
-        // Access from our private storage instead of 'this'
-        return this[PrivateMethods][namespacedMethod].bind(this);
+        console.log('Looking for method:', namespacedMethod);
+        console.log('Available methods:', this[PrivateMethods]);
+        const method = this[PrivateMethods][namespacedMethod];
+        return method.bind(this);
       }
     });
   }
@@ -72,7 +88,7 @@ function createWorkflow<
   // Simplify extension handling since we no longer need to handle functions
   Object.assign(builder, ...extensions.filter(e => !!e.namespace).map(e => e.methods));
 
-  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<TExtensions[number]['methods']>>;
+  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<TExtensions[number]['namespace']>>;
 
   return builder as ExtendedBuilder;
 }
@@ -121,6 +137,8 @@ type TEST2 = typeof test2;
 // Update test3 to be non-recursive
 const test3 = createExtension('nested', {
   nestedTest() {
+    console.log('nestedTest')
+    console.log(this);
     return this.step();
   },
 });
@@ -133,6 +151,7 @@ const customExtensions = [
   test3,
   createExtension({
     method1() {
+      console.log('method 1')
       return this.step();
     },
   }),
@@ -144,4 +163,14 @@ type CUSTOM = UnionToIntersection<typeof customExtensions[number]>
 
 const extended = workflow({ extensions: customExtensions });
 // Now we can chain everything
-const final = extended
+const final = extended;
+
+
+const builder = new Builder({}, customExtensions);
+
+  // Simplify extension handling since we no longer need to handle functions
+Object.assign(builder, ...customExtensions.filter(e => !!e.namespace).map(e => e.methods));
+
+type ExtendedBuilder = Chainable<Builder & UnionToIntersection<typeof customExtensions[number]['methods']>>;
+
+console.log((builder as any).nested.nestedTest().method1())
