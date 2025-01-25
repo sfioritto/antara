@@ -21,7 +21,9 @@ type ExtensionObject<TBuilder extends Builder<any>> = {
 
 type ExtensionFunction<TBuilder extends Builder<any>> = (builder: TBuilder) => ExtensionObject<TBuilder>;
 
-type Extension<TBuilder extends Builder<any>> = ExtensionObject<TBuilder> | ExtensionFunction<TBuilder>;
+type Extension<TBuilder extends Builder<any>> =
+  | ExtensionObject<TBuilder>
+  | ExtensionFunction<TBuilder>;
 
 class Builder<TExtensions extends Extension<Builder>[] = []> {
   constructor(
@@ -55,7 +57,16 @@ function createWorkflow<
   return builder as ExtendedBuilder;
 }
 
-const createExtension = <TExtension extends Extension<Builder<any>>>(extension: TExtension): TExtension => extension;
+type InferExtension<T> = T extends ExtensionFunction<any>
+  ? ReturnType<T>
+  : T;
+
+const createExtension = <
+  TBuilder extends Builder<any>,
+  TExtension extends ExtensionObject<TBuilder> | ExtensionFunction<TBuilder>
+>(
+  extension: TExtension
+): InferExtension<TExtension> => extension as InferExtension<TExtension>;
 
 const workflow = <TExtensions extends Extension<Builder<any>>[]>(params: { extensions: TExtensions, context?: Context}) => {
   return createWorkflow(params);
@@ -66,7 +77,7 @@ const test = createExtension((builder) => ({
     return builder.step()
   },
 }))
-type Test = ReturnType<typeof test>;
+type Test = typeof test;
 
 const test2 = createExtension({
   method1() {
@@ -95,4 +106,4 @@ const customExtensions = [
 
 const extended = workflow({ extensions: customExtensions });
 // Now we can chain everything
-extended.method1().method2().step().method1()
+extended.method1().method2().step().method1().method3()
