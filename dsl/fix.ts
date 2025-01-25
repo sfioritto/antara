@@ -36,7 +36,7 @@ type ExtensionObject<TBuilder extends Builder<any>> = {
 
 type ExtensionFunction<TBuilder extends Builder<any>> = (builder: TBuilder) => ExtensionObject<TBuilder>;
 
-type ObjectExtensions<T> = T extends ExtensionFunction<any>
+type InferExtension<T> = T extends ExtensionFunction<any>
   ? ReturnType<T>
   : T;
 
@@ -67,14 +67,10 @@ function createWorkflow<
 
   Object.assign(builder, ...objectExtensions);
 
-  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<ObjectExtensions<TExtensions[number]>>>;
+  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<InferExtension<TExtensions[number]>>>;
 
   return builder as ExtendedBuilder;
 }
-
-type InferExtension<T> = T extends ExtensionFunction<any>
-  ? ReturnType<T>
-  : T;
 
 const createExtension = <
   TBuilder extends Builder<any>,
@@ -124,20 +120,10 @@ const customExtensions = [
       return this.step();
     },
   }),
-  createExtension((builder) => ({
-    method3() {
-      return builder.step();
-    }
-  })),
-  createExtension({
-    method2() {
-      return this.step();
-    },
-  })
 ];
 
 type CUSTOM = UnionToIntersection<typeof customExtensions[number]>
 
 const extended = workflow({ extensions: customExtensions });
 // Now we can chain everything
-extended.method1().method2().step().method1().method3()
+extended.method1().step().nested
