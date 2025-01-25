@@ -15,12 +15,16 @@ type Chainable<T> = {
     : T[K];
 };
 
-// Update the Extension type to only handle non-recursive structures
-type Extension<TBuilder extends Builder<any>> = {
+type ExtensionMethods<TBuilder extends Builder<any>> = {
   [name: string]: (this: Chainable<TBuilder>) => Chainable<TBuilder>;
 };
 
-class Builder<TExtensions extends Extension<Builder>[] = []> {
+type Extension<TExtension> = {
+  namespace?: string;
+  extension: TExtension;
+};
+
+class Builder<TExtensions extends Extension<ExtensionMethods<Builder>>[] = []> {
   constructor(
     private context: Context,
     private extensions: TExtensions,
@@ -33,26 +37,37 @@ class Builder<TExtensions extends Extension<Builder>[] = []> {
 }
 
 function createWorkflow<
-  TExtensions extends Extension<any>[]
+  TExtensions extends Extension<ExtensionMethods<any>>[]
 >({ extensions, context = {} }: { extensions: TExtensions, context?: Context }) {
   const builder = new Builder<TExtensions>(context, extensions);
 
   // Simplify extension handling since we no longer need to handle functions
-  Object.assign(builder, ...extensions);
+  Object.assign(builder, ...extensions.map(e => e.extension));
 
-  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<TExtensions[number]>>;
+  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<TExtensions[number]['extension']>>;
 
   return builder as ExtendedBuilder;
 }
 
 const createExtension = <
-  TExtension extends Extension<Builder<any>>
+  TExtension extends ExtensionMethods<Builder<any>>
 >(
-  extension: TExtension
-): TExtension => extension;
+  namespaceOrExtension: string | TExtension,
+  maybeExtension?: TExtension
+): Extension<TExtension> => {
+  if (typeof namespaceOrExtension === 'string') {
+    return {
+      namespace: namespaceOrExtension,
+      extension: maybeExtension!
+    };
+  }
+  return {
+    extension: namespaceOrExtension
+  };
+};
 
 const workflow = <
-  TExtensions extends Extension<Builder<any>>[]
+  TExtensions extends Extension<ExtensionMethods<Builder<any>>>[]
 >(params: { extensions: TExtensions, context?: Context }) => {
   return createWorkflow(params);
 };
@@ -92,7 +107,7 @@ const customExtensions = [
   }),
 ];
 
-type CUSTOM = UnionToIntersection<typeof customExtensions[number]>
+type CUSTOM = UnionToIntersection<typeof customExtensions[number]['extension']>
 
 const extended = workflow({ extensions: customExtensions });
 // Now we can chain everything
