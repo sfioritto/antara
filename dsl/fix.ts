@@ -1,3 +1,5 @@
+import { JsonObject } from "./types";
+
 type UnionToIntersection<U> = (
   U extends unknown ? (arg: U) => void : never
 ) extends (arg: infer I) => void
@@ -36,24 +38,25 @@ function createExtendable<T extends object[]>(...extensions: T) {
   return instance as FinalType;
 }
 
+type Extension = {
+  [name: string]: (this: Chainable<ExtendableBase>) => Chainable<ExtendableBase>;
+}
+
+const createExtension = <T extends Extension>(extension: T): T => extension;
+
 const extensions = [
-  {
+  createExtension({
     method1() {
-      return (this as unknown as ExtendableBase).step();
+      return this.step();
     },
-    nested: {
-      nestedMethod() {
-        return (this as unknown as ExtendableBase).step();
-      }
-    }
-  },
-  {
+  }),
+  createExtension({
     method2() {
-      return (this as unknown as ExtendableBase).step();
-    }
-  }
+      return this.step();
+    },
+  })
 ] as const;
 
 const extended = createExtendable(...extensions);
 // Now we can chain everything
-extended.method1().method2().step().method1().method2()
+extended.method1().method1().method2()
