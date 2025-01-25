@@ -15,27 +15,10 @@ type Chainable<T> = {
     : T[K];
 };
 
-// Recursive type for extension objects created via extension functions
-type RecursiveExtensionObject<TBuilder extends Builder<any>> = {
-  [name: string]: (() => Chainable<TBuilder>) | RecursiveExtensionObject<TBuilder>;
-};
-
-// Non-recursive type for direct extension objects
-type NonRecursiveExtensionObject<TBuilder extends Builder<any>> = {
+// Update the Extension type to only handle non-recursive structures
+type Extension<TBuilder extends Builder<any>> = {
   [name: string]: (this: Chainable<TBuilder>) => Chainable<TBuilder>;
 };
-
-// Update the Extension type to handle recursive structures
-type Extension<TBuilder extends Builder<any>> =
-  | NonRecursiveExtensionObject<TBuilder>
-  | ((builder: TBuilder) => RecursiveExtensionObject<TBuilder>);
-
-type ExtensionFunction<TBuilder extends Builder<any>> = (builder: TBuilder) =>
-  | RecursiveExtensionObject<TBuilder>
-
-type InferExtension<T> = T extends ExtensionFunction<any>
-  ? ReturnType<T>
-  : T;
 
 class Builder<TExtensions extends Extension<Builder>[] = []> {
   constructor(
@@ -54,17 +37,10 @@ function createWorkflow<
 >({ extensions, context = {} }: { extensions: TExtensions, context?: Context }) {
   const builder = new Builder<TExtensions>(context, extensions);
 
-  const objectExtensions = extensions.map((extension: Extension<Builder<TExtensions>>) => {
-    if (typeof extension === 'function') {
-      return extension(builder);
-    }
+  // Simplify extension handling since we no longer need to handle functions
+  Object.assign(builder, ...extensions);
 
-    return extension;
-  })
-
-  Object.assign(builder, ...objectExtensions);
-
-  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<InferExtension<TExtensions[number]>>>;
+  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<TExtensions[number]>>;
 
   return builder as ExtendedBuilder;
 }
@@ -81,14 +57,15 @@ const workflow = <
   return createWorkflow(params);
 };
 
-const test = createExtension((builder) => ({
+// Update test examples to use only object extensions
+const test = createExtension({
   test() {
-    return builder.step();
+    return this.step();
   },
-}));
+});
 
 type TEST = typeof test;
-// Example of a non-recursive extension object
+
 const test2 = createExtension({
   method1() {
     return this.step();
@@ -96,14 +73,13 @@ const test2 = createExtension({
 });
 
 type TEST2 = typeof test2;
-// Example of a recursive extension function
-const test3 = createExtension((builder) => ({
-  nested: {
-    test() {
-      return builder.step();
-    },
-  }
-}));
+
+// Update test3 to be non-recursive
+const test3 = createExtension({
+  nestedTest() {
+    return this.step();
+  },
+});
 
 type TEST3 = typeof test3;
 
@@ -120,4 +96,4 @@ type CUSTOM = UnionToIntersection<typeof customExtensions[number]>
 
 const extended = workflow({ extensions: customExtensions });
 // Now we can chain everything
-const final = extended.method1().step().nested.test()
+const final = extended.method1().step().nestedTest()
