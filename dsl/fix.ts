@@ -19,13 +19,13 @@ type ExtensionMethods<TBuilder extends Builder<any>> = {
   [name: string]: (this: Chainable<TBuilder>) => Chainable<TBuilder>;
 };
 
-type Extension<TExtension> = {
-  namespace?: string;
-  methods: TExtension;
+type Extension<
+  TExtensionMethods,
+  TNamespace = string,
+> = {
+  namespace?: TNamespace;
+  methods: TExtensionMethods;
 };
-
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
 
 const PrivateMethods = Symbol('PrivateMethods');
 class Builder<TExtensions extends Extension<ExtensionMethods<Builder>>[] = []> {
@@ -78,11 +78,12 @@ function createWorkflow<
 }
 
 const createExtension = <
-  TExtension extends ExtensionMethods<Builder<any>>
+  TNamespace extends string,
+  TExtensionMethods extends ExtensionMethods<Builder<any>>
 >(
-  namespaceOrExtension: string | TExtension,
-  maybeExtension?: TExtension
-): Extension<TExtension> => {
+  namespaceOrExtension: TNamespace | TExtensionMethods,
+  maybeExtension?: TExtensionMethods
+): Extension<TExtensionMethods, TNamespace > => {
   if (typeof namespaceOrExtension === 'string') {
     return {
       namespace: namespaceOrExtension,
@@ -124,6 +125,8 @@ const test3 = createExtension('nested', {
   },
 });
 
+console.log(test3);
+
 type TEST3 = typeof test3;
 
 const customExtensions = [
@@ -135,8 +138,10 @@ const customExtensions = [
   }),
 ];
 
-type CUSTOM = UnionToIntersection<typeof customExtensions[number]['methods']>
+type EXT = typeof customExtensions[number];
+
+type CUSTOM = UnionToIntersection<typeof customExtensions[number]>
 
 const extended = workflow({ extensions: customExtensions });
 // Now we can chain everything
-const final = extended.nestedTest
+const final = extended
