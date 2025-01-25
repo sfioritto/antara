@@ -13,7 +13,11 @@ type Chainable<T> = {
     : T[K];
 };
 
-class ExtendableBase {
+type Extension = {
+  [name: string]: (this: Chainable<Builder>) => Chainable<Builder>;
+}
+
+class Builder {
   private context = { value: 0 };
 
   step() {
@@ -23,23 +27,19 @@ class ExtendableBase {
   }
 }
 
-function createExtendable<T extends object[]>(...extensions: T) {
+function createWorkflow<T extends object[]>(...extensions: T) {
   // 1. Make an instance of the base class
-  const instance = new ExtendableBase();
+  const builder = new Builder();
 
   // 2. Merge in all extension props
-  Object.assign(instance, ...extensions);
+  Object.assign(builder, ...extensions);
 
   // 3. Build a type that includes the base class *and* the extension objects
   //    then pass it through `Chainable<>` so that all methods in *both* are chainified
-  type FinalType = Chainable<ExtendableBase & UnionToIntersection<T[number]>>;
+  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<T[number]>>;
 
   // 4. Return that instance as FinalType
-  return instance as FinalType;
-}
-
-type Extension = {
-  [name: string]: (this: Chainable<ExtendableBase>) => Chainable<ExtendableBase>;
+  return builder as ExtendedBuilder;
 }
 
 const createExtension = <T extends Extension>(extension: T): T => extension;
@@ -57,6 +57,6 @@ const extensions = [
   })
 ] as const;
 
-const extended = createExtendable(...extensions);
+const extended = createWorkflow(...extensions);
 // Now we can chain everything
 extended.method1().method1().method2()
