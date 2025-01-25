@@ -27,7 +27,7 @@ class Builder {
   }
 }
 
-function createWorkflow<T extends object[]>(...extensions: T) {
+function createWorkflow<T extends Extension[]>(...extensions: T) {
   // 1. Make an instance of the base class
   const builder = new Builder();
 
