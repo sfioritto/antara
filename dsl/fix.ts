@@ -25,16 +25,13 @@ type NonRecursiveExtensionObject<TBuilder extends Builder<any>> = {
   [name: string]: (this: Chainable<TBuilder>) => Chainable<TBuilder>;
 };
 
-// Update the Extension type to differentiate between the two
+// Update the Extension type to handle recursive structures
 type Extension<TBuilder extends Builder<any>> =
   | NonRecursiveExtensionObject<TBuilder>
   | ((builder: TBuilder) => RecursiveExtensionObject<TBuilder>);
 
-type ExtensionObject<TBuilder extends Builder<any>> = {
-  [name: string]: (this: Chainable<TBuilder>) => Chainable<TBuilder>;
-}
-
-type ExtensionFunction<TBuilder extends Builder<any>> = (builder: TBuilder) => ExtensionObject<TBuilder>;
+type ExtensionFunction<TBuilder extends Builder<any>> = (builder: TBuilder) =>
+  | RecursiveExtensionObject<TBuilder>
 
 type InferExtension<T> = T extends ExtensionFunction<any>
   ? ReturnType<T>
@@ -73,11 +70,10 @@ function createWorkflow<
 }
 
 const createExtension = <
-  TBuilder extends Builder<any>,
-  TExtension extends Extension<TBuilder>
+  TExtension extends Extension<Builder<any>>
 >(
   extension: TExtension
-): InferExtension<TExtension> => extension as InferExtension<TExtension>;
+): TExtension => extension;
 
 const workflow = <
   TExtensions extends Extension<Builder<any>>[]
@@ -103,10 +99,8 @@ type TEST2 = typeof test2;
 // Example of a recursive extension function
 const test3 = createExtension((builder) => ({
   nested: {
-    deeperNested: {
-      test() {
-        return builder.step();
-      },
+    test() {
+      return builder.step();
     },
   }
 }));
@@ -126,4 +120,4 @@ type CUSTOM = UnionToIntersection<typeof customExtensions[number]>
 
 const extended = workflow({ extensions: customExtensions });
 // Now we can chain everything
-extended.method1().step().nested
+const final = extended.method1().step().nested.test()
