@@ -1,5 +1,7 @@
 import { JsonObject } from "./types";
 
+type Context = JsonObject;
+
 type UnionToIntersection<U> = (
   U extends unknown ? (arg: U) => void : never
 ) extends (arg: infer I) => void
@@ -18,31 +20,36 @@ type Extension = {
 }
 
 class Builder {
-  private context = { value: 0 };
+  constructor(context: Context) {
 
+  }
   step() {
-    this.context.value += 1;
-    console.log(this.context.value);
     return this;
   }
 }
 
-function createWorkflow<Extensions extends Extension[]>(...extensions: Extensions) {
+function createWorkflow<
+  TExtensions extends Extension[]
+>({ extensions, context = {} }: { extensions: TExtensions, context?: Context }) {
   // 1. Make an instance of the base class
-  const builder = new Builder();
+  const builder = new Builder(context);
 
   // 2. Merge in all extension props
   Object.assign(builder, ...extensions);
 
   // 3. Build a type that includes the base class *and* the extension objects
   //    then pass it through `Chainable<>` so that all methods in *both* are chainified
-  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<Extensions[number]>>;
+  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<TExtensions[number]>>;
 
   // 4. Return that instance as FinalType
   return builder as ExtendedBuilder;
 }
 
 const createExtension = <TExtension extends Extension>(extension: TExtension): TExtension => extension;
+
+const workflow = <TExtensions extends Extension[]>(params: { extensions: TExtensions, context?: Context}) => {
+  return createWorkflow(params);
+};
 
 const extensions = [
   createExtension({
@@ -55,8 +62,8 @@ const extensions = [
       return this.step();
     },
   })
-] as const;
+];
 
-const extended = createWorkflow(...extensions);
+const extended = workflow({ extensions });
 // Now we can chain everything
-extended.method1().method1().method2()
+extended.method1().method1().method2().step()
