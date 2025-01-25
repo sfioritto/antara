@@ -15,16 +15,19 @@ type Chainable<T> = {
     : T[K];
 };
 
-type Extension = {
-  [name: string]: (this: Chainable<Builder>) => Chainable<Builder>;
+type ExtensionObject<TBuilder extends Builder<any>> = {
+  [name: string]: (this: Chainable<TBuilder>) => Chainable<TBuilder>;
 }
 
-class Builder<TExtensions extends Extension[] = []> {
+type ExtensionFunction<TBuilder extends Builder<any>> = (builder: TBuilder) => ExtensionObject<TBuilder>;
+
+type Extension<TBuilder extends Builder<any>> = ExtensionObject<TBuilder> | ExtensionFunction<TBuilder>;
+
+class Builder<TExtensions extends Extension<Builder>[] = []> {
   constructor(
     private context: Context,
     private extensions: TExtensions,
-  ) {
-  }
+  ) {}
 
   step() {
     const { extensions, context } = this;
@@ -33,27 +36,44 @@ class Builder<TExtensions extends Extension[] = []> {
 }
 
 function createWorkflow<
-  TExtensions extends Extension[]
+  TExtensions extends Extension<any>[]
 >({ extensions, context = {} }: { extensions: TExtensions, context?: Context }) {
-  // 1. Make an instance of the base class
   const builder = new Builder<TExtensions>(context, extensions);
 
-  // 2. Merge in all extension props
-  Object.assign(builder, ...extensions);
+  const objectExtensions = extensions.map((extension: Extension<Builder<TExtensions>>) => {
+    if (typeof extension === 'function') {
+      return extension(builder);
+    }
 
-  // 3. Build a type that includes the base class *and* the extension objects
-  //    then pass it through `Chainable<>` so that all methods in *both* are chainified
+    return extension;
+  })
+
+  Object.assign(builder, ...objectExtensions);
+
   type ExtendedBuilder = Chainable<Builder & UnionToIntersection<TExtensions[number]>>;
 
-  // 4. Return that instance as FinalType
   return builder as ExtendedBuilder;
 }
 
-const createExtension = <TExtension extends Extension>(extension: TExtension): TExtension => extension;
+const createExtension = <TExtension extends Extension<Builder<any>>>(extension: TExtension): TExtension => extension;
 
-const workflow = <TExtensions extends Extension[]>(params: { extensions: TExtensions, context?: Context}) => {
+const workflow = <TExtensions extends Extension<Builder<any>>[]>(params: { extensions: TExtensions, context?: Context}) => {
   return createWorkflow(params);
 };
+
+const test = createExtension((builder) => ({
+  test() {
+    return builder.step()
+  },
+}))
+type Test = ReturnType<typeof test>;
+
+const test2 = createExtension({
+  method1() {
+    return this.step();
+  },
+});
+type Test2 = typeof test2;
 
 const customExtensions = [
   createExtension({
@@ -61,6 +81,11 @@ const customExtensions = [
       return this.step();
     },
   }),
+  createExtension((builder) => ({
+    method3() {
+      return builder.step();
+    }
+  })),
   createExtension({
     method2() {
       return this.step();
@@ -70,4 +95,4 @@ const customExtensions = [
 
 const extended = workflow({ extensions: customExtensions });
 // Now we can chain everything
-extended.method1().method1().step().method2().step()
+extended.method1().method2().step().method1()
