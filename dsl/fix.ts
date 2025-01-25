@@ -27,7 +27,7 @@ class Builder {
   }
 }
 
-function createWorkflow<T extends Extension[]>(...extensions: T) {
+function createWorkflow<Extensions extends Extension[]>(...extensions: Extensions) {
   // 1. Make an instance of the base class
   const builder = new Builder();
 
@@ -36,13 +36,13 @@ function createWorkflow<T extends Extension[]>(...extensions: T) {
 
   // 3. Build a type that includes the base class *and* the extension objects
   //    then pass it through `Chainable<>` so that all methods in *both* are chainified
-  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<T[number]>>;
+  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<Extensions[number]>>;
 
   // 4. Return that instance as FinalType
   return builder as ExtendedBuilder;
 }
 
-const createExtension = <T extends Extension>(extension: T): T => extension;
+const createExtension = <TExtension extends Extension>(extension: TExtension): TExtension => extension;
 
 const extensions = [
   createExtension({
