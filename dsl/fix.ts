@@ -19,12 +19,16 @@ type Extension = {
   [name: string]: (this: Chainable<Builder>) => Chainable<Builder>;
 }
 
-class Builder {
-  constructor(context: Context) {
-
+class Builder<TExtensions extends Extension[] = []> {
+  constructor(
+    private context: Context,
+    private extensions: TExtensions,
+  ) {
   }
+
   step() {
-    return this;
+    const { extensions, context } = this;
+    return createWorkflow({ extensions, context });
   }
 }
 
@@ -32,7 +36,7 @@ function createWorkflow<
   TExtensions extends Extension[]
 >({ extensions, context = {} }: { extensions: TExtensions, context?: Context }) {
   // 1. Make an instance of the base class
-  const builder = new Builder(context);
+  const builder = new Builder<TExtensions>(context, extensions);
 
   // 2. Merge in all extension props
   Object.assign(builder, ...extensions);
@@ -51,7 +55,7 @@ const workflow = <TExtensions extends Extension[]>(params: { extensions: TExtens
   return createWorkflow(params);
 };
 
-const extensions = [
+const customExtensions = [
   createExtension({
     method1() {
       return this.step();
@@ -64,6 +68,6 @@ const extensions = [
   })
 ];
 
-const extended = workflow({ extensions });
+const extended = workflow({ extensions: customExtensions });
 // Now we can chain everything
-extended.method1().method1().method2().step()
+extended.method1().method1().step().method2().step()
