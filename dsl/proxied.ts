@@ -1,5 +1,7 @@
 import { JsonObject } from "./types";
 
+type Context = JsonObject;
+
 type Builder<T> = {
   [K in keyof T]: T[K] extends { [key: string]: (...args: any[]) => any }
     ? {
@@ -23,13 +25,6 @@ interface Extension {
   };
 }
 
-class BaseBuilder {
-  step(message: string = '') {
-    console.log('Step:', message);
-    return this;
-  }
-}
-
 type UnionToIntersection<U> = (
   U extends unknown ? (arg: U) => void : never
 ) extends (arg: infer I) => void
@@ -41,6 +36,13 @@ type Merge<T> = T extends object ? {
 } & {} : T;
 
 const createExtension = <T extends Extension>(ext: T): T => ext;
+
+class BaseBuilder {
+  step(message: string = '') {
+    console.log('Step:', message);
+    return this;
+  }
+}
 
 function createBuilder<TExtensions extends Extension[]>(
   builder: BaseBuilder,
