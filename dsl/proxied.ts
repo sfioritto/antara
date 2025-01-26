@@ -38,17 +38,17 @@ type Merge<T> = T extends object ? {
 const createExtension = <T extends Extension>(ext: T): T => ext;
 
 class BaseBuilder<TExtensions extends Extension[]> {
-  constructor(private extensions: TExtensions) { }
+  constructor(public extensions: TExtensions) { }
   step(message: string = '') {
     console.log('Step:', message);
-    return createBuilder(new BaseBuilder(this.extensions), this.extensions);
+    return createBuilder(new BaseBuilder(this.extensions));
   }
 }
 
 function createBuilder<TExtensions extends Extension[]>(
   builder: BaseBuilder<TExtensions>,
-  extensions: TExtensions,
 ): Builder<Merge<Merge<UnionToIntersection<TExtensions[number]>> & BaseBuilder<TExtensions>>> {
+  const { extensions } = builder;
   const proxyInstance = new Proxy(builder, {
     get(target: any, prop: string | symbol) {
       // First check if it's a property on the original builder
@@ -111,7 +111,6 @@ const extensions = [createExtension({
 
 const builder = createBuilder(
   new BaseBuilder(extensions),
-  extensions
 );
 
 const finished = builder
