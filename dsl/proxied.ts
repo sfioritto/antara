@@ -15,10 +15,10 @@ class Builder {
   }
 }
 
-type ExtensionMethod = (
-  this: Chainable<Builder & Record<string, Extension>>,
+type ExtensionMethod<T = any> = (
+  this: Chainable<Builder & T>,
   ...args: any[]
-) => Chainable<Builder & Record<string, Extension>>;
+) => Chainable<Builder & T>;
 
 interface Extension {
   [namespace: string]: {
@@ -26,22 +26,34 @@ interface Extension {
   };
 }
 
+type UnionToIntersection<U> = (
+  U extends unknown ? (arg: U) => void : never
+) extends (arg: infer I) => void
+  ? I
+  : never;
+
 const createExtension = <T extends Extension>(ext: T): T => ext;
 
-// Replace createExtension and slackExtension with:
 const extensions = [createExtension({
   slack: {
     message(text: string) {
       return this.step(`Slack message: ${text}`);
     }
   }
+}), createExtension({
+  files: {
+    file(name: string) {
+      return this.step(`File saved: ${name}`)
+    }
+  }
 })];
 
-// Update the extendBuilder function
-function extendBuilder(
+function extendBuilder<TExtensions extends Extension[]>(
   builder: Builder,
-  extensions: Extension[]
-) {
+  extensions: TExtensions,
+): Chainable<
+  Builder & UnionToIntersection<TExtensions[number]>
+> {
   const proxyInstance = new Proxy(builder, {
     get(target: any, prop: string | symbol) {
       // First check if it's a property on the original builder
@@ -70,12 +82,14 @@ function extendBuilder(
         });
       }
     }
-  }) as Chainable<Builder & Record<string, Extension>>;
+  }) as Chainable<
+    Builder & UnionToIntersection<TExtensions[number]>
+  >;
 
   return proxyInstance;
 }
 
-type TExtensions = typeof extensions[number];
+type TExtensions = UnionToIntersection<typeof extensions[number]>;
 
 // Remove the createExtension helper and type TExtensions
 // Create and extend our builder
@@ -84,6 +98,6 @@ const builder = extendBuilder(new Builder(), extensions);
 // This entire chain now works with full TypeScript hints
 builder
   .step('Start')
-  .slack.message('Hello')
+  .slack.message('Hello');
   .step('Middle')
   .slack.message('World');
