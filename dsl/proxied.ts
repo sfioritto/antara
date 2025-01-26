@@ -39,12 +39,16 @@ type UnionToIntersection<U> = (
   ? I
   : never;
 
+type Merge<T> = T extends object ? {
+  [K in keyof T]: T[K]
+} & {} : T;
+
 const createExtension = <T extends Extension>(ext: T): T => ext;
 
 function extendBuilder<TExtensions extends Extension[]>(
   builder: Builder,
   extensions: TExtensions,
-): Chainable<Builder & UnionToIntersection<TExtensions[number]>> {
+): Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>> {
   const proxyInstance = new Proxy(builder, {
     get(target: any, prop: string | symbol) {
       // First check if it's a property on the original builder
