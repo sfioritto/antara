@@ -57,11 +57,11 @@ class BaseBuilder<
     public context: ContextIn = {} as ContextIn,
   ) { }
 
-  step<NewContext extends Context>(
-    handler: (context: ContextIn) => NewContext
-  ): Builder<Merge<Merge<UnionToIntersection<TExtensions[number]>> & BaseBuilder<TExtensions, NewContext>>, NewContext> {
+  step(
+    handler: (context: ContextIn) => Context
+  ) {
     const newContext = handler(this.context);
-    return createBuilder<TExtensions, NewContext>(
+    return createBuilder(
       new BaseBuilder(this.extensions, newContext)
     );
   }
@@ -150,4 +150,5 @@ const finished = builder
   .slack.message('Hello')
   .slack.message('again')
   .files.file('name')
+  .step(context => context)
   .files.file('name');
