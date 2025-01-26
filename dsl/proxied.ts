@@ -1,24 +1,28 @@
 import { JsonObject } from "./types";
 
 // First, we define the base Builder class type
-type Chainable<T> = {
-  [K in keyof T]: T[K] extends (...args: infer A) => any
-    ? (this: Chainable<T>, ...args: A) => Chainable<T>
+type NamespacedChainable<T> = {
+  [K in keyof T]: T[K] extends { [key: string]: (...args: any[]) => any }
+    ? {
+        [M in keyof T[K]]: T[K][M] extends (...args: infer A) => any
+          ? (this: NamespacedChainable<T>, ...args: A) => NamespacedChainable<T>
+          : T[K][M];
+      }
     : T[K];
 };
 
 // The base Builder class - keeps things minimal with just the step method
-class Builder {
-  step(message: string = '') {
+class Builder<T = any> {
+  step(message: string = ''): NamespacedChainable<Builder<T> & T> {
     console.log('Step:', message);
-    return this;
+    return this as any;
   }
 }
 
 type ExtensionMethod<T = any> = (
-  this: Chainable<Builder & T>,
+  this: NamespacedChainable<Builder<T> & T>,
   ...args: any[]
-) => Chainable<Builder & T>;
+) => NamespacedChainable<Builder<T> & T>;
 
 interface Extension {
   [namespace: string]: {
@@ -49,11 +53,9 @@ const extensions = [createExtension({
 })];
 
 function extendBuilder<TExtensions extends Extension[]>(
-  builder: Builder,
+  builder: Builder<UnionToIntersection<TExtensions[number]>>,
   extensions: TExtensions,
-): Chainable<
-  Builder & UnionToIntersection<TExtensions[number]>
-> {
+): NamespacedChainable<Builder<UnionToIntersection<TExtensions[number]>> & UnionToIntersection<TExtensions[number]>> {
   const proxyInstance = new Proxy(builder, {
     get(target: any, prop: string | symbol) {
       // First check if it's a property on the original builder
@@ -82,22 +84,21 @@ function extendBuilder<TExtensions extends Extension[]>(
         });
       }
     }
-  }) as Chainable<
-    Builder & UnionToIntersection<TExtensions[number]>
-  >;
+  }) as NamespacedChainable<Builder<UnionToIntersection<TExtensions[number]>> & UnionToIntersection<TExtensions[number]>>;
 
   return proxyInstance;
 }
 
-type TExtensions = UnionToIntersection<typeof extensions[number]>;
+// type TExtensions = UnionToIntersection<typeof extensions[number]>;
 
 // Remove the createExtension helper and type TExtensions
 // Create and extend our builder
-const builder = extendBuilder(new Builder(), extensions);
+const builder = extendBuilder(
+  new Builder<UnionToIntersection<typeof extensions[number]>>(),
+  extensions
+);
 
 // This entire chain now works with full TypeScript hints
-builder
+const finished = builder
   .step('Start')
   .slack.message('Hello');
-  .step('Middle')
-  .slack.message('World');
