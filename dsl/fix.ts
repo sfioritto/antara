@@ -21,7 +21,7 @@ type ExtensionMethods<TBuilder extends Builder<any>> = {
 
 type Extension<
   TExtensionMethods,
-  TNamespace = string,
+  TNamespace = undefined,
 > = {
   namespace?: TNamespace;
   methods: TExtensionMethods;
@@ -85,10 +85,8 @@ function createWorkflow<
 >({ extensions, context = {} }: { extensions: TExtensions, context?: Context }) {
   const builder = new Builder<TExtensions>(context, extensions);
 
-  // Simplify extension handling since we no longer need to handle functions
-  Object.assign(builder, ...extensions.filter(e => !!e.namespace).map(e => e.methods));
-
-  type ExtendedBuilder = Chainable<Builder & UnionToIntersection<TExtensions[number]['namespace']>>;
+  type GlobalExtensions = Exclude<TExtensions[number], { namespace: "nested" }>;
+  type ExtendedBuilder = Chainable<Builder<TExtensions> & UnionToIntersection<GlobalExtensions['methods']>>;
 
   return builder as ExtendedBuilder;
 }
@@ -102,9 +100,9 @@ const createExtension = <
 ): Extension<TExtensionMethods, TNamespace > => {
   if (typeof namespaceOrExtension === 'string') {
     return {
-      namespace: namespaceOrExtension,
+      namespace: namespaceOrExtension as TNamespace,
       methods: maybeExtension!
-    };
+    } as TNamespace extends string ? Extension<TExtensionMethods, TNamespace> : never;
   }
   return {
     methods: namespaceOrExtension
@@ -117,38 +115,17 @@ const workflow = <
   return createWorkflow(params);
 };
 
-// Update test examples to use only object extensions
-const test = createExtension({
-  test() {
-    return this.step();
-  },
-});
-
-type TEST = typeof test;
-
-const test2 = createExtension({
-  method1() {
-    return this.step();
-  },
-});
-
-type TEST2 = typeof test2;
-
 // Update test3 to be non-recursive
-const test3 = createExtension('nested', {
-  nestedTest() {
-    console.log('nestedTest')
-    console.log(this);
+const namespacedExtension = createExtension('nested', {
+  nestedMethod() {
     return this.step();
   },
 });
 
-console.log(test3);
-
-type TEST3 = typeof test3;
+type TEST = typeof namespacedExtension;
 
 const customExtensions = [
-  test3,
+  namespacedExtension,
   createExtension({
     method1() {
       console.log('method 1')
@@ -157,20 +134,25 @@ const customExtensions = [
   }),
 ];
 
+type TExtensions = typeof customExtensions
+type Debug = TExtensions[number]
+// ... existing code ...
+
+const namespacedExtensions = customExtensions.filter((e) =>
+  typeof e.namespace === 'string'
+);
+
+type Namespaced = typeof namespacedExtensions
+
+type GlobalExtensions = Exclude<TExtensions[number], Extension<any, undefined>>;
+
+// ... existing code ...
+
 type EXT = typeof customExtensions[number];
 
 type CUSTOM = UnionToIntersection<typeof customExtensions[number]>
 
 const extended = workflow({ extensions: customExtensions });
-// Now we can chain everything
-const final = extended;
-
-
-const builder = new Builder({}, customExtensions);
-
-  // Simplify extension handling since we no longer need to handle functions
-Object.assign(builder, ...customExtensions.filter(e => !!e.namespace).map(e => e.methods));
-
-type ExtendedBuilder = Chainable<Builder & UnionToIntersection<typeof customExtensions[number]['methods']>>;
-
-console.log((builder as any).nested.nestedTest().method1())
+/// where are the methods?????
+// extended.????
+extended.method1()
