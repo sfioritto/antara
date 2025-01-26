@@ -15,7 +15,10 @@ class Builder {
   }
 }
 
-type ExtensionMethod = (this: Chainable<Builder & Record<string, Extension>>, ...args: any[]) => Chainable<Builder & Record<string, Extension>>;
+type ExtensionMethod = (
+  this: Chainable<Builder & Record<string, Extension>>,
+  ...args: any[]
+) => Chainable<Builder & Record<string, Extension>>;
 
 interface Extension {
   [namespace: string]: {
@@ -23,14 +26,16 @@ interface Extension {
   };
 }
 
+const createExtension = <T extends Extension>(ext: T): T => ext;
+
 // Replace createExtension and slackExtension with:
-const extensions: Extension[] = [{
+const extensions = [createExtension({
   slack: {
     message(text: string) {
       return this.step(`Slack message: ${text}`);
     }
   }
-}];
+})];
 
 // Update the extendBuilder function
 function extendBuilder(
@@ -69,6 +74,8 @@ function extendBuilder(
 
   return proxyInstance;
 }
+
+type TExtensions = typeof extensions[number];
 
 // Remove the createExtension helper and type TExtensions
 // Create and extend our builder
