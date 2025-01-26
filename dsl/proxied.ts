@@ -1,6 +1,5 @@
 import { JsonObject } from "./types";
 
-// First, we define the base Builder class type
 type Builder<T> = {
   [K in keyof T]: T[K] extends { [key: string]: (...args: any[]) => any }
     ? {
@@ -18,14 +17,12 @@ type ExtensionMethod<T = any> = (
   ...args: any[]
 ) => Builder<BaseBuilder & T>;
 
-// Update the Extension type to allow both nested and flat methods
 interface Extension {
   [key: string]: ExtensionMethod | {
     [method: string]: ExtensionMethod;
   };
 }
 
-// The base Builder class - keeps things minimal with just the step method
 class BaseBuilder {
   step(message: string = '') {
     console.log('Step:', message);
@@ -114,7 +111,6 @@ const builder = createBuilder(
   extensions
 );
 
-// This entire chain now works with full TypeScript hints
 const finished = builder
   .step('Start')
   .method()
