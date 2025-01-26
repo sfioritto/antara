@@ -1,22 +1,22 @@
 import { JsonObject } from "./types";
 
 // First, we define the base Builder class type
-type Chainable<T> = {
+type Builder<T> = {
   [K in keyof T]: T[K] extends { [key: string]: (...args: any[]) => any }
     ? {
         [M in keyof T[K]]: T[K][M] extends (...args: infer A) => any
-          ? (...args: A) => Chainable<T>
+          ? (...args: A) => Builder<T>
           : T[K][M];
       }
     : T[K] extends (...args: any[]) => any
-    ? (...args: Parameters<T[K]>) => Chainable<T>
+    ? (...args: Parameters<T[K]>) => Builder<T>
     : T[K];
 };
 
 type ExtensionMethod<T = any> = (
-  this: Chainable<Builder & T>,
+  this: Builder<BaseBuilder & T>,
   ...args: any[]
-) => Chainable<Builder & T>;
+) => Builder<BaseBuilder & T>;
 
 // Update the Extension type to allow both nested and flat methods
 interface Extension {
@@ -26,7 +26,7 @@ interface Extension {
 }
 
 // The base Builder class - keeps things minimal with just the step method
-class Builder {
+class BaseBuilder {
   step(message: string = '') {
     console.log('Step:', message);
     return this;
@@ -45,10 +45,10 @@ type Merge<T> = T extends object ? {
 
 const createExtension = <T extends Extension>(ext: T): T => ext;
 
-function extendBuilder<TExtensions extends Extension[]>(
-  builder: Builder,
+function createBuilder<TExtensions extends Extension[]>(
+  builder: BaseBuilder,
   extensions: TExtensions,
-): Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>> {
+): Builder<Merge<Merge<UnionToIntersection<TExtensions[number]>> & BaseBuilder>> {
   const proxyInstance = new Proxy(builder, {
     get(target: any, prop: string | symbol) {
       // First check if it's a property on the original builder
@@ -109,8 +109,8 @@ const extensions = [createExtension({
   }
 }), createExtension({ method() { return this.step('base method') } })];
 
-const builder = extendBuilder(
-  new Builder(),
+const builder = createBuilder(
+  new BaseBuilder(),
   extensions
 );
 
