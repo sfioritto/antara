@@ -13,14 +13,6 @@ type Chainable<T> = {
     : T[K];
 };
 
-// The base Builder class - keeps things minimal with just the step method
-class Builder {
-  step(message: string = '') {
-    console.log('Step:', message);
-    return this;
-  }
-}
-
 type ExtensionMethod<T = any> = (
   this: Chainable<Builder & T>,
   ...args: any[]
@@ -31,6 +23,14 @@ interface Extension {
   [key: string]: ExtensionMethod | {
     [method: string]: ExtensionMethod;
   };
+}
+
+// The base Builder class - keeps things minimal with just the step method
+class Builder {
+  step(message: string = '') {
+    console.log('Step:', message);
+    return this;
+  }
 }
 
 type UnionToIntersection<U> = (
