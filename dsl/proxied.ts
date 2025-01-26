@@ -1,11 +1,11 @@
 import { JsonObject } from "./types";
 
 // First, we define the base Builder class type
-type NamespacedChainable<T> = {
+type Chainable<T> = {
   [K in keyof T]: T[K] extends { [key: string]: (...args: any[]) => any }
     ? {
         [M in keyof T[K]]: T[K][M] extends (...args: infer A) => any
-          ? (this: NamespacedChainable<T>, ...args: A) => NamespacedChainable<T>
+          ? (...args: A) => Chainable<T>
           : T[K][M];
       }
     : T[K];
@@ -13,16 +13,16 @@ type NamespacedChainable<T> = {
 
 // The base Builder class - keeps things minimal with just the step method
 class Builder<T = any> {
-  step(message: string = ''): NamespacedChainable<Builder<T> & T> {
+  step(message: string = ''): Chainable<Builder<T> & T> {
     console.log('Step:', message);
-    return this as any;
+    return this as Chainable<Builder<T> & T>;
   }
 }
 
 type ExtensionMethod<T = any> = (
-  this: NamespacedChainable<Builder<T> & T>,
+  this: Chainable<Builder<T> & T>,
   ...args: any[]
-) => NamespacedChainable<Builder<T> & T>;
+) => Chainable<Builder<T> & T>;
 
 interface Extension {
   [namespace: string]: {
@@ -55,15 +55,15 @@ const extensions = [createExtension({
 function extendBuilder<TExtensions extends Extension[]>(
   builder: Builder<UnionToIntersection<TExtensions[number]>>,
   extensions: TExtensions,
-): NamespacedChainable<Builder<UnionToIntersection<TExtensions[number]>> & UnionToIntersection<TExtensions[number]>> {
+): Chainable<Builder<UnionToIntersection<TExtensions[number]>> & UnionToIntersection<TExtensions[number]>> {
   const proxyInstance = new Proxy(builder, {
     get(target: any, prop: string | symbol) {
       // First check if it's a property on the original builder
       if (prop in target) {
         const value = target[prop];
         if (typeof value === 'function') {
-          return function(this: any, ...args: any[]) {
-            const result = value.apply(target, args);
+          return function (this: any, ...args: any[]) {
+            const result = value.apply(proxyInstance, args);
             return result === target ? proxyInstance : result;
           };
         }
@@ -73,18 +73,21 @@ function extendBuilder<TExtensions extends Extension[]>(
       // Look for the namespace in our extensions
       const extension = extensions.find(ext => prop in ext);
       if (extension) {
-        return new Proxy(extension[prop as string], {
+        const namespace = extension[prop as string];
+        return new Proxy(namespace, {
           get(target: any, methodName: string | symbol) {
-            const method = extension[prop as string][methodName as string];
+            const method = namespace[methodName as string];
             if (typeof method === 'function') {
-              return method.bind(proxyInstance);
+              return function (this: any, ...args: any[]) {
+                return method.apply(proxyInstance, args);
+              };
             }
             return method;
           }
         });
       }
     }
-  }) as NamespacedChainable<Builder<UnionToIntersection<TExtensions[number]>> & UnionToIntersection<TExtensions[number]>>;
+  });
 
   return proxyInstance;
 }
@@ -101,4 +104,6 @@ const builder = extendBuilder(
 // This entire chain now works with full TypeScript hints
 const finished = builder
   .step('Start')
-  .slack.message('Hello');
+  .slack.message('Hello')
+  .slack.message('again')
+  .files.file('name');
