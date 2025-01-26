@@ -14,10 +14,13 @@ type Builder<T> = {
     : T[K];
 };
 
-type ExtensionMethod<T extends Extension[] = any> = (
-  this: Builder<BaseBuilder<T> & T>,
+type ExtensionMethod<
+  T extends Extension[] = any,
+  ContextIn extends Context = {},
+> = (
+  this: Builder<BaseBuilder<T, ContextIn> & T>,
   ...args: any[]
-) => Builder<BaseBuilder<T> & T>;
+) => Builder<BaseBuilder<T, ContextIn> & T>;
 
 interface Extension {
   [key: string]: ExtensionMethod | {
@@ -37,17 +40,26 @@ type Merge<T> = T extends object ? {
 
 const createExtension = <T extends Extension>(ext: T): T => ext;
 
-class BaseBuilder<TExtensions extends Extension[]> {
-  constructor(public extensions: TExtensions) { }
+class BaseBuilder<
+  TExtensions extends Extension[],
+  ContextIn extends Context,
+> {
+  constructor(
+    public extensions: TExtensions,
+    public context: ContextIn = {} as ContextIn,
+  ) { }
   step(message: string = '') {
     console.log('Step:', message);
     return createBuilder(new BaseBuilder(this.extensions));
   }
 }
 
-function createBuilder<TExtensions extends Extension[]>(
-  builder: BaseBuilder<TExtensions>,
-): Builder<Merge<Merge<UnionToIntersection<TExtensions[number]>> & BaseBuilder<TExtensions>>> {
+function createBuilder<
+  TExtensions extends Extension[],
+  ContextIn extends Context,
+>(
+  builder: BaseBuilder<TExtensions, ContextIn>,
+): Builder<Merge<Merge<UnionToIntersection<TExtensions[number]>> & BaseBuilder<TExtensions, ContextIn>>> {
   const { extensions } = builder;
   const proxyInstance = new Proxy(builder, {
     get(target: any, prop: string | symbol) {
