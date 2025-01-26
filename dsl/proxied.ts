@@ -14,17 +14,17 @@ type Chainable<T> = {
 };
 
 // The base Builder class - keeps things minimal with just the step method
-class Builder<T = any> {
-  step(message: string = ''): Chainable<Builder<T> & T> {
+class Builder {
+  step(message: string = '') {
     console.log('Step:', message);
-    return this as Chainable<Builder<T> & T>;
+    return this;
   }
 }
 
 type ExtensionMethod<T = any> = (
-  this: Chainable<Builder<T> & T>,
+  this: Chainable<Builder & T>,
   ...args: any[]
-) => Chainable<Builder<T> & T>;
+) => Chainable<Builder & T>;
 
 // Update the Extension type to allow both nested and flat methods
 interface Extension {
@@ -41,24 +41,10 @@ type UnionToIntersection<U> = (
 
 const createExtension = <T extends Extension>(ext: T): T => ext;
 
-const extensions = [createExtension({
-  slack: {
-    message(text: string) {
-      return this.step(`Slack message: ${text}`);
-    }
-  }
-}), createExtension({
-  files: {
-    file(name: string) {
-      return this.step(`File saved: ${name}`)
-    }
-  }
-}), createExtension({ method() { return this.step('base method') } })];
-
 function extendBuilder<TExtensions extends Extension[]>(
-  builder: Builder<UnionToIntersection<TExtensions[number]>>,
+  builder: Builder,
   extensions: TExtensions,
-): Chainable<Builder<UnionToIntersection<TExtensions[number]>> & UnionToIntersection<TExtensions[number]>> {
+): Chainable<Builder & UnionToIntersection<TExtensions[number]>> {
   const proxyInstance = new Proxy(builder, {
     get(target: any, prop: string | symbol) {
       // First check if it's a property on the original builder
@@ -105,12 +91,22 @@ function extendBuilder<TExtensions extends Extension[]>(
   return proxyInstance;
 }
 
-// type TExtensions = UnionToIntersection<typeof extensions[number]>;
+const extensions = [createExtension({
+  slack: {
+    message(text: string) {
+      return this.step(`Slack message: ${text}`);
+    }
+  }
+}), createExtension({
+  files: {
+    file(name: string) {
+      return this.step(`File saved: ${name}`)
+    }
+  }
+}), createExtension({ method() { return this.step('base method') } })];
 
-// Remove the createExtension helper and type TExtensions
-// Create and extend our builder
 const builder = extendBuilder(
-  new Builder<UnionToIntersection<typeof extensions[number]>>(),
+  new Builder(),
   extensions
 );
 
