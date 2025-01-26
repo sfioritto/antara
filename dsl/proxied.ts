@@ -2,15 +2,23 @@ import { JsonObject } from "./types";
 
 type Context = JsonObject;
 
-type Builder<T> = {
+type Builder<
+  T,
+  ContextIn extends Context = Context
+> = {
+  context: ContextIn;
+  step: <NewContext extends Context>(
+    handler: (context: ContextIn) => NewContext
+  ) => Builder<T, NewContext>;
+} & {
   [K in keyof T]: T[K] extends { [key: string]: (...args: any[]) => any }
     ? {
         [M in keyof T[K]]: T[K][M] extends (...args: infer A) => any
-          ? (...args: A) => Builder<T>
+          ? (...args: A) => Builder<T, ContextIn>
           : T[K][M];
       }
     : T[K] extends (...args: any[]) => any
-    ? (...args: Parameters<T[K]>) => Builder<T>
+    ? (...args: Parameters<T[K]>) => Builder<T, ContextIn>
     : T[K];
 };
 
@@ -48,9 +56,14 @@ class BaseBuilder<
     public extensions: TExtensions,
     public context: ContextIn = {} as ContextIn,
   ) { }
-  step(message: string = '') {
-    console.log('Step:', message);
-    return createBuilder(new BaseBuilder(this.extensions));
+
+  step<NewContext extends Context>(
+    handler: (context: ContextIn) => NewContext
+  ): Builder<Merge<Merge<UnionToIntersection<TExtensions[number]>> & BaseBuilder<TExtensions, NewContext>>, NewContext> {
+    const newContext = handler(this.context);
+    return createBuilder<TExtensions, NewContext>(
+      new BaseBuilder(this.extensions, newContext)
+    );
   }
 }
 
@@ -59,7 +72,7 @@ function createBuilder<
   ContextIn extends Context,
 >(
   builder: BaseBuilder<TExtensions, ContextIn>,
-): Builder<Merge<Merge<UnionToIntersection<TExtensions[number]>> & BaseBuilder<TExtensions, ContextIn>>> {
+): Builder<Merge<Merge<UnionToIntersection<TExtensions[number]>> & BaseBuilder<TExtensions, ContextIn>>, ContextIn> {
   const { extensions } = builder;
   const proxyInstance = new Proxy(builder, {
     get(target: any, prop: string | symbol) {
@@ -110,25 +123,31 @@ function createBuilder<
 const extensions = [createExtension({
   slack: {
     message(text: string) {
-      return this.step(`Slack message: ${text}`);
+      return this.step((context) => ({ ...context, message: text }));
     }
   }
 }), createExtension({
   files: {
     file(name: string) {
-      return this.step(`File saved: ${name}`)
+      return this.step((context) => ({ ...context, file: name }));
     }
   }
-}), createExtension({ method() { return this.step('base method') } })];
+}), createExtension({
+  method() {
+    return this.step((context) => ({ ...context, method: true }));
+  }
+})];
 
 const builder = createBuilder(
   new BaseBuilder(extensions),
 );
 
 const finished = builder
-  .step('Start')
+  .step((context) => ({ one: 'one' }))
+  .step((context) => ({ ...context, two: 'two' }))
+  .step((context) => context)
   .method()
-  .step('step again')
   .slack.message('Hello')
   .slack.message('again')
+  .files.file('name')
   .files.file('name');
