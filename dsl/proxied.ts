@@ -8,6 +8,8 @@ type Chainable<T> = {
           ? (...args: A) => Chainable<T>
           : T[K][M];
       }
+    : T[K] extends (...args: any[]) => any
+    ? (...args: Parameters<T[K]>) => Chainable<T>
     : T[K];
 };
 
@@ -24,8 +26,9 @@ type ExtensionMethod<T = any> = (
   ...args: any[]
 ) => Chainable<Builder<T> & T>;
 
+// Update the Extension type to allow both nested and flat methods
 interface Extension {
-  [namespace: string]: {
+  [key: string]: ExtensionMethod | {
     [method: string]: ExtensionMethod;
   };
 }
@@ -50,7 +53,7 @@ const extensions = [createExtension({
       return this.step(`File saved: ${name}`)
     }
   }
-})];
+}), createExtension({ method() { return this.step('base method') } })];
 
 function extendBuilder<TExtensions extends Extension[]>(
   builder: Builder<UnionToIntersection<TExtensions[number]>>,
@@ -70,21 +73,31 @@ function extendBuilder<TExtensions extends Extension[]>(
         return value;
       }
 
-      // Look for the namespace in our extensions
-      const extension = extensions.find(ext => prop in ext);
-      if (extension) {
-        const namespace = extension[prop as string];
-        return new Proxy(namespace, {
-          get(target: any, methodName: string | symbol) {
-            const method = namespace[methodName as string];
-            if (typeof method === 'function') {
-              return function (this: any, ...args: any[]) {
-                return method.apply(proxyInstance, args);
-              };
-            }
-            return method;
+      // Look for the property in our extensions
+      for (const ext of extensions) {
+        if (prop in ext) {
+          const value = ext[prop as string];
+
+          // Handle flat methods
+          if (typeof value === 'function') {
+            return function (this: any, ...args: any[]) {
+              return value.apply(proxyInstance, args);
+            };
           }
-        });
+
+          // Handle namespaced methods
+          return new Proxy(value, {
+            get(target: any, methodName: string | symbol) {
+              const method = target[methodName as string];
+              if (typeof method === 'function') {
+                return function (this: any, ...args: any[]) {
+                  return method.apply(proxyInstance, args);
+                };
+              }
+              return method;
+            }
+          });
+        }
       }
     }
   });
@@ -104,6 +117,8 @@ const builder = extendBuilder(
 // This entire chain now works with full TypeScript hints
 const finished = builder
   .step('Start')
+  .method()
+  .step('step again')
   .slack.message('Hello')
   .slack.message('again')
   .files.file('name');
