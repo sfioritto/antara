@@ -2,22 +2,22 @@ import { JsonObject } from "./types";
 
 type Context = JsonObject;
 
-type Builder<T> = {
+type ExtendedBuilder<T> = {
   [K in keyof T]: T[K] extends { [key: string]: (...args: any[]) => any }
     ? {
         [M in keyof T[K]]: T[K][M] extends (...args: infer A) => any
-          ? (...args: A) => Builder<T>
+          ? (...args: A) => ExtendedBuilder<T>
           : T[K][M];
       }
     : T[K] extends (...args: any[]) => any
-    ? (...args: Parameters<T[K]>) => Builder<T>
+    ? (...args: Parameters<T[K]>) => ExtendedBuilder<T>
     : T[K];
 };
 
 type ExtensionMethod<T = any> = (
-  this: Builder<BaseBuilder & T>,
+  this: ExtendedBuilder<BaseBuilder & T>,
   ...args: any[]
-) => Builder<BaseBuilder & T>;
+) => ExtendedBuilder<BaseBuilder & T>;
 
 interface Extension {
   [key: string]: ExtensionMethod | {
@@ -47,7 +47,7 @@ class BaseBuilder {
 function createBuilder<TExtensions extends Extension[]>(
   builder: BaseBuilder,
   extensions: TExtensions,
-): Builder<Merge<Merge<UnionToIntersection<TExtensions[number]>> & BaseBuilder>> {
+): ExtendedBuilder<Merge<Merge<UnionToIntersection<TExtensions[number]>> & BaseBuilder>> {
   const proxyInstance = new Proxy(builder, {
     get(target: any, prop: string | symbol) {
       // First check if it's a property on the original builder
