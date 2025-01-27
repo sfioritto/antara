@@ -47,16 +47,19 @@ type Extension = {
 const createExtension = <TExtension extends Extension>(ext: TExtension): TExtension => ext;
 
 class Builder {
-  constructor(extensions: Extension[] = []) {
-    return new Proxy(this, {
-      get(target: Builder, prop: string) {
+  constructor(
+    private context: Context = {},
+    private extensions: Extension[] = []
+  ) {
+    const proxyInstance =  new Proxy(this, {
+      get(baseBuilder: Builder, prop: string) {
         // First check if it's a property on the original builder
-        if (prop in target) {
-          const value = target[prop as keyof Builder];
+        if (prop in baseBuilder) {
+          const value = baseBuilder[prop as keyof Builder];
           if (typeof value === 'function') {
-            return function (this: Builder, ...args: any[] | any) {
-              const result = value.apply(this, args);
-              return result === target ? this : result;
+            return function (...args: any[] | any) {
+              const result = value.apply(proxyInstance, args);
+              return result;
             };
           }
           return value;
@@ -66,40 +69,41 @@ class Builder {
         for (const ext of extensions) {
           if (prop in ext) {
             const value = ext[prop];
-
             // Handle flat methods
             if (typeof value === 'function') {
-              return function (this: Builder, ...args: any[]) {
-                return (value as Function).apply(this, args);
+              return function (...args: any[]) {
+                return (value as Function).apply(proxyInstance, args);
               };
             }
-
             // Handle namespaced methods
             return new Proxy(value, {
-              get(target, methodName: string) {
-                const method = target[methodName];
+              get(namespacedBuilder, methodName: string) {
+                const method = namespacedBuilder[methodName];
                 if (typeof method === 'function') {
-                  return function (this: Builder, ...args: any[]) {
-                    return (method as Function).apply(this, args);
+                  return function (...args: any[]) {
+                    return (method as Function).apply(proxyInstance, args);
                   };
                 }
-                return method;
+                return this;
               }
             });
           }
         }
       }
     });
+
+    return proxyInstance;
   }
 
-  step(message = '') {
-    console.log('Step:', message);
+  step<ContextOut extends Context>(handler: (context: Context) => ContextOut) {
+    const newContext = handler(this.context);
+    console.log(newContext);
     return this;
   }
 }
 
 const createBuilder = <TExtensions extends Extension[]>(extensions: TExtensions): Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>> => {
-  const builder = new Builder(extensions);
+  const builder = new Builder({}, extensions);
   return builder as Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>>;
 }
 
@@ -156,21 +160,21 @@ const createBuilder = <TExtensions extends Extension[]>(extensions: TExtensions)
 const extensions = [createExtension({
   slack: {
     message(text: string) {
-      return this.step(`Slack message: ${text}`);
+      return this.step((context) => ({ slack: text, ...context}));
     }
   }
 }), createExtension({
   files: {
     file(name: string) {
-      return this.step(`File saved: ${name}`)
+      return this.step((context) => ({ file: name, ...context}))
     }
   }
 }), createExtension({
-  method() { return this.step('base method') }
+  method() { return this.step((context) => ({ method: 'method', ...context})) }
 })];
 
 const builder = createBuilder(extensions);
-
+builder.files.file('file name').slack.message('hi').step(context => ({ new: 'context' })).method().slack.message('hi again');
 // const builder = createBuilder(
 //   new BaseBuilder(),
 //   extensions
