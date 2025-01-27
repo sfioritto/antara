@@ -107,56 +107,6 @@ const createBuilder = <TExtensions extends Extension[]>(extensions: TExtensions)
   return builder as Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>>;
 }
 
-// function createBuilder<TExtensions extends Extension[]>(
-//   builder: BaseBuilder,
-//   extensions: TExtensions,
-// ): ExtendedBuilder<MergeExtensions<TExtensions> & BaseBuilder> {
-//   const proxyInstance = new Proxy(builder, {
-//     get(target: any, prop: string | symbol) {
-//       // First check if it's a property on the original builder
-//       if (prop in target) {
-//         const value = target[prop];
-//         if (typeof value === 'function') {
-//           return function (this: any, ...args: any[]) {
-//             const result = value.apply(proxyInstance, args);
-//             return result === target ? proxyInstance : result;
-//           };
-//         }
-//         return value;
-//       }
-
-//       // Look for the property in our extensions
-//       for (const ext of extensions) {
-//         if (prop in ext) {
-//           const value = ext[prop as string];
-
-//           // Handle flat methods
-//           if (typeof value === 'function') {
-//             return function (this: any, ...args: any[]) {
-//               return value.apply(proxyInstance, args);
-//             };
-//           }
-
-//           // Handle namespaced methods
-//           return new Proxy(value, {
-//             get(target: any, methodName: string | symbol) {
-//               const method = target[methodName as string];
-//               if (typeof method === 'function') {
-//                 return function (this: any, ...args: any[]) {
-//                   return method.apply(proxyInstance, args);
-//                 };
-//               }
-//               return method;
-//             }
-//           });
-//         }
-//       }
-//     }
-//   });
-
-//   return proxyInstance;
-// }
-
 const extensions = [createExtension({
   slack: {
     message(text: string) {
@@ -174,16 +124,9 @@ const extensions = [createExtension({
 })];
 
 const builder = createBuilder(extensions);
-builder.files.file('file name').slack.message('hi').step(context => ({ new: 'context' })).method().slack.message('hi again');
-// const builder = createBuilder(
-//   new BaseBuilder(),
-//   extensions
-// );
-
-// const finished = builder
-//   .step('Start')
-//   .method()
-//   .step('step again')
-//   .slack.message('Hello')
-//   .slack.message('again')
-//   .files.file('name');
+builder
+  .files.file('file name')
+  .slack.message('hi')
+  .step(context => ({ new: 'context' }))
+  .method()
+  .slack.message('hi again');
