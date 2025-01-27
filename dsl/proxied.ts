@@ -2,17 +2,17 @@ import { JsonObject } from "./types";
 
 type Context = JsonObject;
 
-// type ExtendedBuilder<T> = {
-//   [K in keyof T]: T[K] extends { [key: string]: (...args: any[]) => any }
-//     ? {
-//         [M in keyof T[K]]: T[K][M] extends (...args: infer A) => any
-//           ? (...args: A) => ExtendedBuilder<T>
-//           : T[K][M];
-//       }
-//     : T[K] extends (...args: any[]) => any
-//     ? (...args: Parameters<T[K]>) => ExtendedBuilder<T>
-//     : T[K];
-// };
+type Chainable<T> = {
+  [K in keyof T]: T[K] extends { [key: string]: (...args: any[]) => any }
+    ? {
+        [M in keyof T[K]]: T[K][M] extends (...args: infer A) => any
+          ? (...args: A) => Chainable<T>
+          : T[K][M];
+      }
+    : T[K] extends (...args: any[]) => any
+    ? (...args: Parameters<T[K]>) => Chainable<T>
+    : T[K];
+};
 
 // type ExtensionMethod<T = any> = (
 //   this: ExtendedBuilder<BaseBuilder & T>,
@@ -25,36 +25,36 @@ type Context = JsonObject;
 //   };
 // }
 
-// type UnionToIntersection<U> = (
-//   U extends unknown ? (arg: U) => void : never
-// ) extends (arg: infer I) => void
-//   ? I
-//   : never;
+type UnionToIntersection<U> = (
+  U extends unknown ? (arg: U) => void : never
+) extends (arg: infer I) => void
+  ? I
+  : never;
 
-// type Merge<T> = T extends object ? {
-//   [K in keyof T]: T[K]
-// } & {} : T;
+type Merge<T> = T extends object ? {
+  [K in keyof T]: T[K]
+} & {} : T;
 
 // type MergeExtensions<TExtensions extends Extension[]> = Merge<UnionToIntersection<TExtensions[number]>>;
 
-// const createExtension = <TExtension extends Extension>(ext: TExtension): TExtension => ext;
+type ExtensionMethod = (this: Builder, ...args: any[]) => Builder;
 
-// class BaseBuilder {
-//   step(message: string = '') {
-//     console.log('Step:', message);
-//     return this;
-//   }
-// }
+type Extension = {
+  [method: string]: ExtensionMethod | {
+    [method: string]: ExtensionMethod
+  }
+}
+const createExtension = <TExtension extends Extension>(ext: TExtension): TExtension => ext;
 
 class Builder {
-  constructor(extensions = []) {
+  constructor(extensions: Extension[] = []) {
     return new Proxy(this, {
-      get(target: Builder, prop) {
+      get(target: Builder, prop: string) {
         // First check if it's a property on the original builder
         if (prop in target) {
-          const value = (target as any)[prop];
+          const value = target[prop as keyof Builder];
           if (typeof value === 'function') {
-            return function (this: Builder, ...args: any[]) {
+            return function (this: Builder, ...args: any[] | any) {
               const result = value.apply(this, args);
               return result === target ? this : result;
             };
@@ -76,7 +76,7 @@ class Builder {
 
             // Handle namespaced methods
             return new Proxy(value, {
-              get(target, methodName) {
+              get(target, methodName: string) {
                 const method = target[methodName];
                 if (typeof method === 'function') {
                   return function (this: Builder, ...args: any[]) {
@@ -96,6 +96,11 @@ class Builder {
     console.log('Step:', message);
     return this;
   }
+}
+
+const createBuilder = <TExtensions extends Extension[]>(extensions: TExtensions): Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>> => {
+  const builder = new Builder(extensions);
+  return builder as Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>>;
 }
 
 // function createBuilder<TExtensions extends Extension[]>(
@@ -148,19 +153,23 @@ class Builder {
 //   return proxyInstance;
 // }
 
-// const extensions = [createExtension({
-//   slack: {
-//     message(text: string) {
-//       return this.step(`Slack message: ${text}`);
-//     }
-//   }
-// }), createExtension({
-//   files: {
-//     file(name: string) {
-//       return this.step(`File saved: ${name}`)
-//     }
-//   }
-// }), createExtension({ method() { return this.step('base method') } })];
+const extensions = [createExtension({
+  slack: {
+    message(text: string) {
+      return this.step(`Slack message: ${text}`);
+    }
+  }
+}), createExtension({
+  files: {
+    file(name: string) {
+      return this.step(`File saved: ${name}`)
+    }
+  }
+}), createExtension({
+  method() { return this.step('base method') }
+})];
+
+const builder = createBuilder(extensions);
 
 // const builder = createBuilder(
 //   new BaseBuilder(),
