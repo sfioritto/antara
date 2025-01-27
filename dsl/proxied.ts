@@ -35,7 +35,9 @@ type Merge<T> = T extends object ? {
   [K in keyof T]: T[K]
 } & {} : T;
 
-const createExtension = <T extends Extension>(ext: T): T => ext;
+type MergeExtensions<TExtensions extends Extension[]> = Merge<UnionToIntersection<TExtensions[number]>>;
+
+const createExtension = <TExtension extends Extension>(ext: TExtension): TExtension => ext;
 
 class BaseBuilder {
   step(message: string = '') {
@@ -47,7 +49,7 @@ class BaseBuilder {
 function createBuilder<TExtensions extends Extension[]>(
   builder: BaseBuilder,
   extensions: TExtensions,
-): ExtendedBuilder<Merge<Merge<UnionToIntersection<TExtensions[number]>> & BaseBuilder>> {
+): ExtendedBuilder<MergeExtensions<TExtensions> & BaseBuilder> {
   const proxyInstance = new Proxy(builder, {
     get(target: any, prop: string | symbol) {
       // First check if it's a property on the original builder
