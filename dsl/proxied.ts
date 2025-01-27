@@ -66,7 +66,7 @@ class Builder {
         }
 
         // Look for the property in our extensions
-        for (const ext of extensions) {
+        for (const ext of baseBuilder.extensions) {
           if (prop in ext) {
             const value = ext[prop];
             // Handle flat methods
