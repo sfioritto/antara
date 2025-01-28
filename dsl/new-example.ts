@@ -108,8 +108,11 @@ const actionOnlyWorkflow = createWorkflow("actions only")
   .step("Second step", ({ context }) => ({ secondStep: context.firstStep }))
 
 // Example using the files extension
-const fileWorkflow = createWorkflow<{}, FileExtension & LoggerExtension>("file example", [fileExtension, loggerExtension]);
-fileWorkflow.log("message").file('', '').step('', ({ context }) => console.log(context.logs.length));
+const fileWorkflow = createWorkflow<{}, FileExtension>("file example", [fileExtension, loggerExtension]);
+fileWorkflow
+  .file("title", "/path")
+  .step('', ({ context }) => ({ ...context, stepOne: 'one' }))
+  .step('', ({ context }) => context);
 
 // Run the file workflow
 (async () => {

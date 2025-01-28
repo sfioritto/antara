@@ -24,10 +24,10 @@ type Merge<T> = T extends object ? {
   [K in keyof T]: T[K]
 } & {} : T;
 
-type ExtensionMethod = <TExtensions extends Extension[]>(
-  this: Builder<TExtensions>,
+type ExtensionMethod = <TExtensions extends Extension[], TContextIn extends Context>(
+  this: Builder<TExtensions, TContextIn>,
   ...args: any[]
-) => Builder<TExtensions>;
+) => Builder<TExtensions, any>;
 
 type Extension = {
   [method: string]: ExtensionMethod | {
@@ -36,26 +36,33 @@ type Extension = {
 }
 const createExtension = <TExtension extends Extension>(ext: TExtension): TExtension => ext;
 
-type BuilderBase<TExtensions extends Extension[]> = {
-  step: <ContextOut extends Context>(handler: (context: Context) => ContextOut) => Builder<TExtensions>;
+type BuilderBase<TExtensions extends Extension[], TContextIn extends Context> = {
+  step: <TContextOut extends Context>(
+    handler: (context: TContextIn) => TContextOut
+  ) => Builder<TExtensions, TContextOut>;
   [key: string]: any;
 }
 
-type Builder<TExtensions extends Extension[]> = BuilderBase<TExtensions> &
-  Chainable<BuilderBase<TExtensions> & Merge<UnionToIntersection<TExtensions[number]>>>;
+type Builder<TExtensions extends Extension[], TContextIn extends Context> =
+  BuilderBase<TExtensions, TContextIn> &
+  Chainable<BuilderBase<TExtensions, TContextIn> & Merge<UnionToIntersection<TExtensions[number]>>>;
 
-function createBuilder<TExtensions extends Extension[]>(extensions: TExtensions): Builder<TExtensions> {
-  const context: Context = {};
-
+function createBuilder<
+  TExtensions extends Extension[],
+  TContextIn extends Context = {}
+>(
+  extensions: TExtensions,
+  context: TContextIn = {} as TContextIn
+) {
   const builder = {
-    step: function <ContextOut extends Context>(
-      handler: (context: Context) => ContextOut
+    step: function <TContextOut extends Context>(
+      handler: (context: TContextIn) => TContextOut
     ) {
       const newContext = handler(context);
       console.log(newContext);
-      return createBuilder(extensions);
+      return createBuilder<TExtensions, typeof newContext>(extensions, newContext);
     }
-  } as Builder<TExtensions>;
+  } as Builder<TExtensions, TContextIn>;
 
   // Bind extensions to the builder
   for (const ext of extensions) {
@@ -73,29 +80,36 @@ function createBuilder<TExtensions extends Extension[]>(extensions: TExtensions)
     }
   }
 
-  return builder as Builder<TExtensions>;
+  return builder as Builder<TExtensions, TContextIn>;
 }
 
 const extensions = [createExtension({
   slack: {
     message(text: string) {
-      return this.step((context) => ({ slack: text, ...context}));
+      return this.step((context) => ({ ...context, slack: text }));
     }
   }
 }), createExtension({
   files: {
     file(name: string) {
-      return this.step((context) => ({ file: name, ...context}))
+      return this.step((context) => ({ ...context, file: name }))
     }
   }
 }), createExtension({
-  method() { return this.step((context) => ({ method: 'method', ...context})) }
+  method() {
+    return this.step((context) => ({ method: 'method', ...context }))
+  }
 })];
 
 const builder = createBuilder(extensions);
 builder
-  .files.file('file name')
-  .slack.message('hi')
-  .step(context => ({ new: 'context' }))
+  .step(context => ({ ...context, new: 'context' }))
+  .step(context => ({ ...context, nextStep: 'next' }))
+  .step(context => ({ ...context, cool: 'cool' }))
   .method()
-  .slack.message('hi again');
+  .step(context => ({ ...context, cool: 'cool' }))
+  .files.file('file name')
+  .slack.message('hi again')
+  .slack.message('hi')
+  .step(context => ({ ...context, cool: 'cool' }))
+
