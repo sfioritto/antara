@@ -26,13 +26,14 @@ type Merge<T> = T extends object ? {
 
 type ExtensionMethod = <TContextIn extends Context>(
   ...args: any[]
-) => (context: TContextIn) => Context
+) => ((context: TContextIn) => Context);
 
 type Extension = {
   [methodOrNamespace: string]: ExtensionMethod | {
     [method: string]: ExtensionMethod
   }
 }
+
 const createExtension = <TExtension extends Extension>(ext: TExtension): TExtension => ext;
 
 type BuilderBase<TExtensions extends Extension[], TContextIn extends Context> = {
@@ -89,6 +90,19 @@ function createBuilder<
 
   return builder as Builder<TExtensions, TContextIn>;
 }
+
+const slackExtension = createExtension({
+  slack: {
+    message(text: string) {
+      return (context: Context) => ({ ...context, slack: text });
+    }
+  }
+});
+
+type Return = ReturnType<ReturnType<typeof slackExtension.slack.message>>
+
+const slackBuilder = createBuilder([slackExtension]);
+slackBuilder.slack.message('cool').step(context => context)
 
 const extensions = [createExtension({
   slack: {
