@@ -24,7 +24,10 @@ type Merge<T> = T extends object ? {
   [K in keyof T]: T[K]
 } & {} : T;
 
-type ExtensionMethod = (this: Builder, ...args: any[]) => Builder;
+type ExtensionMethod = <TExtensions extends Extension[]>(
+  this: Builder<TExtensions>,
+  ...args: any[]
+) => Builder<TExtensions>;
 
 type Extension = {
   [method: string]: ExtensionMethod | {
@@ -33,30 +36,36 @@ type Extension = {
 }
 const createExtension = <TExtension extends Extension>(ext: TExtension): TExtension => ext;
 
-type Builder = {
-  step: <ContextOut extends Context>(handler: (context: Context) => ContextOut) => Builder;
-} & Record<string, any>;
+type BuilderBase<TExtensions extends Extension[]> = {
+  step: <ContextOut extends Context>(handler: (context: Context) => ContextOut) => Builder<TExtensions>;
+  [key: string]: any;
+}
 
-function createBuilder<TExtensions extends Extension[]>(extensions: TExtensions) {
+type Builder<TExtensions extends Extension[]> = BuilderBase<TExtensions> &
+  Chainable<BuilderBase<TExtensions> & Merge<UnionToIntersection<TExtensions[number]>>>;
+
+function createBuilder<TExtensions extends Extension[]>(extensions: TExtensions): Builder<TExtensions> {
   const context: Context = {};
 
-  const builder: Builder = {
-    step: function<ContextOut extends Context>(handler: (context: Context) => ContextOut) {
+  const builder = {
+    step: function <ContextOut extends Context>(
+      handler: (context: Context) => ContextOut
+    ) {
       const newContext = handler(context);
       console.log(newContext);
-      return builder;
+      return createBuilder(extensions);
     }
-  };
+  } as Builder<TExtensions>;
 
   // Bind extensions to the builder
   for (const ext of extensions) {
     for (const [key, value] of Object.entries(ext)) {
       if (typeof value === 'function') {
         // Bind flat methods
-        builder[key] = value.bind(builder);
+        (builder as any)[key] = value.bind(builder);
       } else {
         // Handle namespaced methods
-        builder[key] = {};
+        (builder as any)[key] = {};
         for (const [methodName, method] of Object.entries(value)) {
           builder[key][methodName] = method.bind(builder);
         }
@@ -64,7 +73,7 @@ function createBuilder<TExtensions extends Extension[]>(extensions: TExtensions)
     }
   }
 
-  return builder as Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>>;
+  return builder as Builder<TExtensions>;
 }
 
 const extensions = [createExtension({
