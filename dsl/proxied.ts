@@ -46,64 +46,37 @@ type Extension = {
 }
 const createExtension = <TExtension extends Extension>(ext: TExtension): TExtension => ext;
 
-class Builder {
-  constructor(
-    private context: Context = {},
-    private extensions: Extension[] = []
-  ) {
-    const proxyInstance =  new Proxy(this, {
-      get(baseBuilder: Builder, prop: string) {
-        // First check if it's a property on the original builder
-        if (prop in baseBuilder) {
-          const value = baseBuilder[prop as keyof Builder];
-          if (typeof value === 'function') {
-            return function (...args: any[] | any) {
-              const result = value.apply(proxyInstance, args);
-              return result;
-            };
-          }
-          return value;
-        }
+type Builder = {
+  step: <ContextOut extends Context>(handler: (context: Context) => ContextOut) => Builder;
+} & Record<string, any>;
 
-        // Look for the property in our extensions
-        for (const ext of baseBuilder.extensions) {
-          if (prop in ext) {
-            const value = ext[prop];
-            // Handle flat methods
-            if (typeof value === 'function') {
-              return function (...args: any[]) {
-                return (value as Function).apply(proxyInstance, args);
-              };
-            }
-            // Handle namespaced methods
-            return new Proxy(value, {
-              get(namespacedBuilder, methodName: string) {
-                const method = namespacedBuilder[methodName];
-                if (typeof method === 'function') {
-                  return function (...args: any[]) {
-                    return (method as Function).apply(proxyInstance, args);
-                  };
-                }
-                return this;
-              }
-            });
-          }
+function createBuilder<TExtensions extends Extension[]>(extensions: TExtensions): Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>> {
+  const context: Context = {};
+
+  const builder: Builder = {
+    step: function<ContextOut extends Context>(handler: (context: Context) => ContextOut) {
+      const newContext = handler(context);
+      console.log(newContext);
+      return builder;
+    }
+  };
+
+  // Bind extensions to the builder
+  for (const ext of extensions) {
+    for (const [key, value] of Object.entries(ext)) {
+      if (typeof value === 'function') {
+        // Bind flat methods
+        builder[key] = value.bind(builder);
+      } else {
+        // Handle namespaced methods
+        builder[key] = {};
+        for (const [methodName, method] of Object.entries(value)) {
+          builder[key][methodName] = method.bind(builder);
         }
       }
-    });
-
-    return proxyInstance;
+    }
   }
 
-  step<ContextOut extends Context>(handler: (context: Context) => ContextOut) {
-    const newContext = handler(this.context);
-    console.log(newContext);
-    return this;
-  }
-}
-
-const createBuilder = <TExtensions extends Extension[]>(extensions: TExtensions): Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>> => {
-  const builder = new Builder({}, extensions);
   return builder as Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>>;
 }
 
