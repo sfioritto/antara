@@ -24,13 +24,12 @@ type Merge<T> = T extends object ? {
   [K in keyof T]: T[K]
 } & {} : T;
 
-type ExtensionMethod = <TExtensions extends Extension[], TContextIn extends Context>(
-  this: Builder<TExtensions, TContextIn>,
+type ExtensionMethod = <TContextIn extends Context>(
   ...args: any[]
-) => Builder<TExtensions, any>;
+) => (context: TContextIn) => Context
 
 type Extension = {
-  [method: string]: ExtensionMethod | {
+  [methodOrNamespace: string]: ExtensionMethod | {
     [method: string]: ExtensionMethod
   }
 }
@@ -60,21 +59,29 @@ function createBuilder<
     ) {
       const newContext = handler(context);
       console.log(newContext);
-      return createBuilder<TExtensions, typeof newContext>(extensions, newContext);
+      return createBuilder<TExtensions, TContextOut>(extensions, newContext);
     }
   } as Builder<TExtensions, TContextIn>;
 
   // Bind extensions to the builder
-  for (const ext of extensions) {
-    for (const [key, value] of Object.entries(ext)) {
+  for (const extension of extensions) {
+    for (const [key, value] of Object.entries(extension)) {
       if (typeof value === 'function') {
-        // Bind flat methods
-        (builder as any)[key] = value.bind(builder);
+        const methodName = key;
+        const method = value;
+        type Params = Parameters<typeof method>;
+        type ContextOut = ReturnType<ReturnType<typeof method>>;
+        (builder as any)[methodName] = (args: Params) => builder.step<ContextOut>(method(args));
       } else {
-        // Handle namespaced methods
-        (builder as any)[key] = {};
-        for (const [methodName, method] of Object.entries(value)) {
-          builder[key][methodName] = method.bind(builder);
+        const namespace = key;
+        const namespacedMethods = value;
+        (builder as any)[namespace] = {};
+        for (const [methodName, nestedMethod] of Object.entries(namespacedMethods)) {
+          if (typeof nestedMethod === 'function') {
+            type Params = Parameters<typeof nestedMethod>;
+            type ContextOut = ReturnType<ReturnType<typeof nestedMethod>>;
+            (builder as any)[namespace][methodName] = (args: Params) => builder.step<ContextOut>(nestedMethod(args));
+          }
         }
       }
     }
@@ -86,18 +93,18 @@ function createBuilder<
 const extensions = [createExtension({
   slack: {
     message(text: string) {
-      return this.step((context) => ({ ...context, slack: text }));
+      return (context) => ({ ...context, slack: text });
     }
   }
 }), createExtension({
   files: {
     file(name: string) {
-      return this.step((context) => ({ ...context, file: name }))
+      return (context) => ({ ...context, file: name });
     }
   }
 }), createExtension({
   method() {
-    return this.step((context) => ({ method: 'method', ...context }))
+    return (context) => ({ method: 'method', ...context })
   }
 })];
 
