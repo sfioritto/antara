@@ -14,17 +14,6 @@ type Chainable<T> = {
     : T[K];
 };
 
-// type ExtensionMethod<T = any> = (
-//   this: ExtendedBuilder<BaseBuilder & T>,
-//   ...args: any[]
-// ) => ExtendedBuilder<BaseBuilder & T>;
-
-// interface Extension {
-//   [key: string]: ExtensionMethod | {
-//     [method: string]: ExtensionMethod;
-//   };
-// }
-
 type UnionToIntersection<U> = (
   U extends unknown ? (arg: U) => void : never
 ) extends (arg: infer I) => void
@@ -34,8 +23,6 @@ type UnionToIntersection<U> = (
 type Merge<T> = T extends object ? {
   [K in keyof T]: T[K]
 } & {} : T;
-
-// type MergeExtensions<TExtensions extends Extension[]> = Merge<UnionToIntersection<TExtensions[number]>>;
 
 type ExtensionMethod = (this: Builder, ...args: any[]) => Builder;
 
@@ -50,7 +37,7 @@ type Builder = {
   step: <ContextOut extends Context>(handler: (context: Context) => ContextOut) => Builder;
 } & Record<string, any>;
 
-function createBuilder<TExtensions extends Extension[]>(extensions: TExtensions): Chainable<Builder & Merge<UnionToIntersection<TExtensions[number]>>> {
+function createBuilder<TExtensions extends Extension[]>(extensions: TExtensions) {
   const context: Context = {};
 
   const builder: Builder = {
