@@ -2,12 +2,15 @@ import { JsonObject } from "./types";
 
 type Context = JsonObject;
 
-type Chainable<TContextIn extends Context, TExtension extends Extension<any>> = {
+type Chainable<
+  TContextIn extends Context,
+  TExtension extends Extension<any>
+> = {
   step: AddStep<TContextIn, TExtension>;
 } & {
   [K in keyof TExtension]: TExtension[K] extends
-    (...args: infer A) => (context: TContextIn) => infer TContextOut
-    ? (...args: A) => Chainable<TContextOut & Context, TransformExtension<TExtension, TContextOut & Context>>
+    (...args: infer A) => (context: TContextIn) => (infer TContextOut extends Context)
+    ? (...args: A) => Chainable<TContextOut, TransformExtension<TExtension, TContextOut>>
     : TExtension[K];
 };
 
@@ -15,11 +18,15 @@ type AddStep<TContextIn extends Context, TExtension extends Extension<any>> = {
   <TContextOut extends Context>(
     title: string,
     action: (context: TContextIn) => TContextOut
-  ): Chainable<TContextOut & Context, TransformExtension<TExtension, TContextOut & Context>>;
+  ): Chainable<TContextOut, TransformExtension<TExtension, TContextOut>>;
 }
 
+type Merge<T> = T extends object ? {
+  [K in keyof T]: T[K]
+} : T;
+
 type Extension<TContextIn extends Context> = {
-  [name: string]: (...args: any[]) => (context: TContextIn) => TContextIn & Context
+  [name: string]: (...args: any[]) => (context: TContextIn) => Merge<TContextIn & Context>
 };
 
 type StepBlock<ContextIn extends Context> = {
@@ -29,22 +36,25 @@ type StepBlock<ContextIn extends Context> = {
 
 type TransformExtension<
   TExtension extends Extension<any>,
-  TNewContext extends Context
+  TContextIn extends Context
 > = {
   [K in keyof TExtension]: (
     ...args: Parameters<TExtension[K]>
-  ) => (context: TNewContext) => TNewContext & Context;
+  ) => (context: TContextIn) => Merge<TContextIn & Context>;
 };
 
-function transformExtension<T extends Extension<any>, TNew extends Context>(
-  extension: T
-): TransformExtension<T, TNew> {
+function transformExtension<
+  TExtension extends Extension<any>,
+  TContextIn extends Context
+>(
+  extension: TExtension
+): TransformExtension<TExtension, TContextIn> {
   return Object.fromEntries(
     Object.entries(extension).map(([k, fn]) => [
       k,
-      (...args: any[]) => (context: TNew) => ({ ...context, ...fn(...args)(context as any) })
+      (...args: any[]) => (context: TContextIn) => ({ ...context, ...fn(...args)(context) })
     ])
-  ) as TransformExtension<T, TNew>;
+  ) as TransformExtension<TExtension, TContextIn>;
 }
 
 const createBase = <
@@ -70,11 +80,11 @@ const createBase = <
       );
     }) as AddStep<ContextIn, TExtension>,
     ...Object.fromEntries(
-      Object.entries(extension).map(([key, fn]) => [
+      Object.entries(extension).map(([key, extensionMethod]) => [
         key,
         (...args: any[]) => {
-          const contextTransformer = fn(...args);
-          const newContext = contextTransformer(context);
+          const reduce = extensionMethod(...args);
+          const newContext = reduce(context);
           return createBase<typeof newContext, TransformExtension<TExtension, typeof newContext>>(
             transformExtension<TExtension, typeof newContext>(extension),
             newContext,
@@ -88,11 +98,13 @@ const createBase = <
   return base;
 }
 
-const simpleExtension = {
+const createExtension = <TContextIn extends Context, TExtension extends Extension<TContextIn>>(ext: TExtension): TExtension => ext;
+
+const simpleExtension = createExtension({
   simple: (message: string) => {
-    return (context: Context) => ({ ...context, message });
+    return () => ({ message });
   }
-}
+});
 
 const myBase = createBase(simpleExtension, {})
   .simple('message')
