@@ -19,16 +19,15 @@ interface SerializedStep {
   context: Context;
 }
 
+type Action<TContextIn extends Context, TContextOut extends Context = TContextIn & Context> =
+  (context: TContextIn) => TContextOut | Promise<TContextOut>;
 
-type Chainable<
-  TContextIn extends Context,
-  TExtension extends Extension<any>
-> = {
+type Chainable<TContextIn extends Context, TExtension extends Extension<any>> = {
   step: AddStep<TContextIn, TExtension>;
   run(initialContext?: TContextIn): AsyncGenerator<Event<any, any>, void, unknown>;
 } & {
   [K in keyof TExtension]: TExtension[K] extends
-    (...args: infer A) => (context: TContextIn) => (Promise<infer TContextOut extends Context> | infer TContextOut extends Context)
+    (...args: infer A) => Action<TContextIn, infer TContextOut>
     ? (...args: A) => Chainable<TContextOut, TransformExtension<TExtension, TContextOut>>
     : TExtension[K];
 };
@@ -36,17 +35,17 @@ type Chainable<
 type AddStep<TContextIn extends Context, TExtension extends Extension<any>> = {
   <TContextOut extends Context>(
     title: string,
-    action: (context: TContextIn) => TContextOut | Promise<TContextOut>
+    action: Action<TContextIn, TContextOut>
   ): Chainable<TContextOut, TransformExtension<TExtension, TContextOut>>;
 }
 
 type Extension<TContextIn extends Context> = {
-  [name: string]: (...args: any[]) => (context: TContextIn) => (Promise<TContextIn & Context> | (TContextIn & Context))
+  [name: string]: (...args: any[]) => Action<TContextIn>
 };
 
 type StepBlock<ContextIn extends Context> = {
   title: string;
-  action: (context: ContextIn) => Context | Promise<Context>;
+  action: Action<ContextIn>;
 }
 
 type Flatten<T> = T extends object ? {
