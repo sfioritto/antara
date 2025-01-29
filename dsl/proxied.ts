@@ -1,4 +1,6 @@
 import { JsonObject } from "./types";
+import { WORKFLOW_EVENTS, STATUS } from './constants';
+import type { SerializedError } from './types';
 
 type Context = JsonObject;
 
@@ -7,6 +9,7 @@ type Chainable<
   TExtension extends Extension<any>
 > = {
   step: AddStep<TContextIn, TExtension>;
+  run(initialContext?: TContextIn): AsyncGenerator<Event<any, any>, void, unknown>;
 } & {
   [K in keyof TExtension]: TExtension[K] extends
     (...args: infer A) => (context: TContextIn) => (Promise<infer TContextOut extends Context> | infer TContextOut extends Context)
@@ -90,7 +93,91 @@ const createBuilder = <
           );
         }
       ])
-    )
+    ),
+    run: async function* (initialContext: ContextIn = {} as ContextIn) {
+      let currentContext = structuredClone(initialContext) as Context;
+      const completedSteps: SerializedStep[] = [];
+
+      // Emit start event
+      yield {
+        type: WORKFLOW_EVENTS.START,
+        status: STATUS.RUNNING,
+        previousContext: initialContext,
+        newContext: currentContext,
+        steps: steps.map(step => ({
+          title: step.title,
+          status: STATUS.PENDING,
+          context: currentContext
+        }))
+      };
+
+      // Execute steps
+      for (const step of steps) {
+        const previousContext = structuredClone(currentContext);
+
+        try {
+          currentContext = await step.action(currentContext);
+
+          const completedStep = {
+            title: step.title,
+            status: STATUS.COMPLETE,
+            context: currentContext
+          };
+          completedSteps.push(completedStep);
+
+          // Emit update event
+          yield {
+            type: WORKFLOW_EVENTS.UPDATE,
+            status: STATUS.RUNNING,
+            previousContext,
+            newContext: currentContext,
+            completedStep,
+            steps: steps.map((s, index) =>
+              completedSteps[index] || {
+                title: s.title,
+                status: STATUS.PENDING,
+                context: currentContext
+              }
+            )
+          };
+
+        } catch (error) {
+          const errorStep = {
+            title: step.title,
+            status: STATUS.ERROR,
+            context: currentContext
+          };
+          completedSteps.push(errorStep);
+
+          // Emit error event
+          yield {
+            type: WORKFLOW_EVENTS.ERROR,
+            status: STATUS.ERROR,
+            previousContext,
+            newContext: currentContext,
+            error: error as Error,
+            completedStep: errorStep,
+            steps: steps.map((s, index) =>
+              completedSteps[index] || {
+                title: s.title,
+                status: STATUS.PENDING,
+                context: currentContext
+              }
+            )
+          };
+          return;
+        }
+      }
+
+      // Emit complete event
+      yield {
+        type: WORKFLOW_EVENTS.COMPLETE,
+        status: STATUS.COMPLETE,
+        previousContext: initialContext,
+        newContext: currentContext,
+        steps: completedSteps
+      };
+    }
   } as Chainable<ContextIn, TExtension>;
 
   return builder;
@@ -169,3 +256,19 @@ type TestResult = AssertEquals<TestFinalContext, ExpectedFinalContext>;
 
 // If you want to be even more explicit, you can add a const assertion
 const _typeTest: TestResult = true;
+
+export interface Event<ContextIn extends Context, ContextOut extends Context> {
+  type: typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
+  status: typeof STATUS[keyof typeof STATUS];
+  previousContext: ContextIn;
+  newContext: ContextOut;
+  error?: SerializedError;
+  completedStep?: SerializedStep;
+  steps: SerializedStep[];
+}
+
+interface SerializedStep {
+  title: string;
+  status: typeof STATUS[keyof typeof STATUS];
+  context: Context;
+}
