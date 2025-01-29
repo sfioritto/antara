@@ -1,8 +1,24 @@
-import { JsonObject } from "./types";
+import { JsonObject, SerializedError } from "./types";
 import { WORKFLOW_EVENTS, STATUS } from './constants';
-import type { SerializedError } from './types';
 
 type Context = JsonObject;
+
+export interface Event<ContextIn extends Context, ContextOut extends Context> {
+  type: typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
+  status: typeof STATUS[keyof typeof STATUS];
+  previousContext: ContextIn;
+  newContext: ContextOut;
+  error?: SerializedError;
+  completedStep?: SerializedStep;
+  steps: SerializedStep[];
+}
+
+interface SerializedStep {
+  title: string;
+  status: typeof STATUS[keyof typeof STATUS];
+  context: Context;
+}
+
 
 type Chainable<
   TContextIn extends Context,
@@ -97,7 +113,7 @@ const createBuilder = <
     run: async function* (initialContext: ContextIn = {} as ContextIn) {
       let currentContext = structuredClone(initialContext) as Context;
       const completedSteps: SerializedStep[] = [];
-
+      console.log('run')
       // Emit start event
       yield {
         type: WORKFLOW_EVENTS.START,
@@ -234,6 +250,14 @@ const myBuilder = createWorkflow([simpleExtension, anotherExtension])
   .simple('maybe not')
   .step('final final step v3', context => context)
 
+async function executeWorkflow() {
+  for await (const event of myBuilder.run()) {
+    console.log('Event:', event);
+  }
+}
+
+executeWorkflow();
+
 type AssertEquals<T, U> =
   0 extends (1 & T) ? false : // fails if T is any
   0 extends (1 & U) ? false : // fails if U is any
@@ -257,18 +281,3 @@ type TestResult = AssertEquals<TestFinalContext, ExpectedFinalContext>;
 // If you want to be even more explicit, you can add a const assertion
 const _typeTest: TestResult = true;
 
-export interface Event<ContextIn extends Context, ContextOut extends Context> {
-  type: typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
-  status: typeof STATUS[keyof typeof STATUS];
-  previousContext: ContextIn;
-  newContext: ContextOut;
-  error?: SerializedError;
-  completedStep?: SerializedStep;
-  steps: SerializedStep[];
-}
-
-interface SerializedStep {
-  title: string;
-  status: typeof STATUS[keyof typeof STATUS];
-  context: Context;
-}
