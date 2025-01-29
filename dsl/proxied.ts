@@ -98,22 +98,44 @@ const createBuilder = <
   return builder;
 }
 
+type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
+  ? Rest extends []
+    ? First
+    : First & MergeExtensions<Rest>
+  : never;
+
+
+const createWorkflow = <
+  TContextIn extends Context,
+  TExtensions extends Extension<TContextIn>[]
+>(
+  context: TContextIn = {} as TContextIn,
+  extensions: [...TExtensions]
+) => {
+  const extensionBlock = Object.assign({}, ...extensions) as MergeExtensions<TExtensions>;
+  const combinedExtension = createExtension(extensionBlock);
+  return createBuilder(combinedExtension, context);
+}
+
 const createExtension = <TExtension extends Extension<Context>>(ext: TExtension): TExtension => ext;
 
 const simpleExtension = createExtension({
-  another: () => () => ({ another: true }),
   simple: (message: string) => {
     return (context) => ({ message: `${message}: cool${context?.cool || '? ...not cool yet'}` });
   }
 });
 
-const myBuilder = createBuilder(simpleExtension, {})
+const anotherExtension = createExtension({
+  another: () => () => ({ another: 'another extension' }),
+})
+
+const myBuilder = createWorkflow({}, [simpleExtension, anotherExtension])
   .simple('message')
+  .another()
   .step('Add coolness', context => ({ cool: 'ness', ...context }))
   .step('Identity', context => ({ bad: 'news', ...context }))
   .step('final step', context => context)
   .simple('maybe not')
-  .another()
   .step('final final step v3', context => context)
 
 type AssertEquals<T, U> = [T] extends [U] ? [U] extends [T] ? true : false : false;
@@ -123,6 +145,7 @@ type ExpectedFinalContext = {
   message: string;
   cool: string;
   bad: string;
+  another: string
 };
 
 // Type test
