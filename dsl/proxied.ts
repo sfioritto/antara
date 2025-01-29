@@ -21,12 +21,8 @@ type AddStep<TContextIn extends Context, TExtension extends Extension<any>> = {
   ): Chainable<TContextOut, TransformExtension<TExtension, TContextOut>>;
 }
 
-type Merge<T> = T extends object ? {
-  [K in keyof T]: T[K]
-} : T;
-
 type Extension<TContextIn extends Context> = {
-  [name: string]: (...args: any[]) => (context: TContextIn) => Merge<TContextIn & Context>
+  [name: string]: (...args: any[]) => (context: TContextIn) => TContextIn & Context
 };
 
 type StepBlock<ContextIn extends Context> = {
@@ -40,7 +36,7 @@ type TransformExtension<
 > = {
   [K in keyof TExtension]: (
     ...args: Parameters<TExtension[K]>
-  ) => (context: TContextIn) => Merge<TContextIn>;
+  ) => (context: TContextIn) => TContextIn;
 };
 
 function transformExtension<
@@ -98,7 +94,7 @@ const createBase = <
   return base;
 }
 
-const createExtension = <TContextIn extends Context, TExtension extends Extension<TContextIn>>(ext: TExtension): TExtension => ext;
+const createExtension = <TExtension extends Extension<Context>>(ext: TExtension): TExtension => ext;
 
 const simpleExtension = createExtension({
   simple: (message: string) => {
@@ -113,3 +109,22 @@ const myBase = createBase(simpleExtension, {})
   .step('final step', context => context)
   .simple('maybe not')
   .step('final final step v3', context => context)
+
+type AssertEquals<T, U> = [T] extends [U] ? [U] extends [T] ? true : false : false;
+
+// Expected final context type
+type ExpectedFinalContext = {
+  message: string;
+  cool: string;
+  bad: string;
+};
+
+// Type test
+type TestFinalContext = typeof myBase extends { step: (...args: any[]) => any } ?
+  Parameters<Parameters<typeof myBase['step']>[1]>[0] : never;
+
+// This will show a type error if the types don't match
+type TestResult = AssertEquals<TestFinalContext, ExpectedFinalContext>;
+
+// If you want to be even more explicit, you can add a const assertion
+const _typeTest: TestResult = true;
