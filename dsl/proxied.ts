@@ -43,9 +43,20 @@ const createBase = <
       action: (context: ContextIn) => TContextOut
     ) => {
       const newStep = { title, action };
-      return createBase<TContextOut, TExtension>(extension, action(context), [...steps, newStep]);
+      const newContext = action(context);
+      console.log(newContext);
+      return createBase<TContextOut, TExtension>(extension, newContext, [...steps, newStep]);
     }) as AddStep<ContextIn, TExtension>,
-    ...extension
+    ...Object.fromEntries(
+      Object.entries(extension).map(([key, fn]) => [
+        key,
+        (...args: any[]) => {
+          const contextTransformer = fn(...args);
+          const newContext = contextTransformer(context);
+          return createBase(extension, newContext, steps);
+        }
+      ])
+    )
   } as Chainable<TExtension, ContextIn>;
 
   return base;
