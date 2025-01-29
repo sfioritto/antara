@@ -83,8 +83,8 @@ const createBase = <
       Object.entries(extension).map(([key, extensionMethod]) => [
         key,
         (...args: any[]) => {
-          const reduce = extensionMethod(...args);
-          const newContext = reduce(context);
+          const action = extensionMethod(...args);
+          const newContext = action(context);
           return createBase<typeof newContext, TransformExtension<TExtension, typeof newContext>>(
             transformExtension<TExtension, typeof newContext>(extension),
             newContext,
