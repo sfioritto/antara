@@ -30,13 +30,17 @@ type StepBlock<ContextIn extends Context> = {
   action: (context: ContextIn) => Context | Promise<Context>;
 }
 
+type Flatten<T> = {
+  [K in keyof T]: T[K]
+};
+
 type TransformExtension<
   TExtension extends Extension<any>,
   TContextIn extends Context
 > = {
   [K in keyof TExtension]: (
     ...args: Parameters<TExtension[K]>
-  ) => (context: TContextIn) => TContextIn;
+  ) => (context: TContextIn) => Flatten<TContextIn & ReturnType<ReturnType<TExtension[K]>>>;
 };
 
 function transformExtension<
@@ -97,6 +101,7 @@ const createBuilder = <
 const createExtension = <TExtension extends Extension<Context>>(ext: TExtension): TExtension => ext;
 
 const simpleExtension = createExtension({
+  another: () => () => ({ another: true }),
   simple: (message: string) => {
     return (context) => ({ message: `${message}: cool${context?.cool || '? ...not cool yet'}` });
   }
@@ -108,6 +113,7 @@ const myBuilder = createBuilder(simpleExtension, {})
   .step('Identity', context => ({ bad: 'news', ...context }))
   .step('final step', context => context)
   .simple('maybe not')
+  .another()
   .step('final final step v3', context => context)
 
 type AssertEquals<T, U> = [T] extends [U] ? [U] extends [T] ? true : false : false;
