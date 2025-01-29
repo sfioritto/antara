@@ -30,9 +30,9 @@ type StepBlock<ContextIn extends Context> = {
   action: (context: ContextIn) => Context | Promise<Context>;
 }
 
-type Flatten<T> = {
+type Flatten<T> = T extends object ? {
   [K in keyof T]: T[K]
-};
+} : T;
 
 type TransformExtension<
   TExtension extends Extension<any>,
