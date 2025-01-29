@@ -9,7 +9,7 @@ type Chainable<
   step: AddStep<TContextIn, TExtension>;
 } & {
   [K in keyof TExtension]: TExtension[K] extends
-    (...args: infer A) => (context: TContextIn) => (infer TContextOut extends Context)
+    (...args: infer A) => (context: TContextIn) => (Promise<infer TContextOut extends Context> | infer TContextOut extends Context)
     ? (...args: A) => Chainable<TContextOut, TransformExtension<TExtension, TContextOut>>
     : TExtension[K];
 };
@@ -22,7 +22,7 @@ type AddStep<TContextIn extends Context, TExtension extends Extension<any>> = {
 }
 
 type Extension<TContextIn extends Context> = {
-  [name: string]: (...args: any[]) => (context: TContextIn) => TContextIn & Context
+  [name: string]: (...args: any[]) => (context: TContextIn) => (Promise<TContextIn & Context> | (TContextIn & Context))
 };
 
 type StepBlock<ContextIn extends Context> = {
@@ -52,7 +52,7 @@ function transformExtension<
   return Object.fromEntries(
     Object.entries(extension).map(([k, fn]) => [
       k,
-      (...args: any[]) => (context: TContextIn) => ({ ...context, ...fn(...args)(context) })
+      (...args: any[]) => (context: TContextIn) => ({ ...context, ...(fn(...args)(context)) })
     ])
   ) as TransformExtension<TExtension, TContextIn>;
 }
@@ -62,7 +62,6 @@ const createBuilder = <
   TExtension extends Extension<ContextIn>,
 >(
   extension: TExtension,
-  context: ContextIn,
   steps: StepBlock<any>[] = []
 ): Chainable<ContextIn, TExtension> => {
   const builder = {
@@ -71,11 +70,8 @@ const createBuilder = <
       action: (context: ContextIn) => TContextOut
     ) => {
       const newStep = { title, action };
-      const newContext = action(context);
-      console.log(newContext);
       return createBuilder<TContextOut, TransformExtension<TExtension, TContextOut>>(
         transformExtension<TExtension, TContextOut>(extension),
-        newContext,
         [...steps, newStep]
       );
     }) as AddStep<ContextIn, TExtension>,
@@ -84,11 +80,13 @@ const createBuilder = <
         key,
         (...args: any[]) => {
           const action = extensionMethod(...args);
-          const newContext = action(context);
-          return createBuilder<typeof newContext, TransformExtension<TExtension, typeof newContext>>(
-            transformExtension<TExtension, typeof newContext>(extension),
-            newContext,
-            steps
+          const newStep = {
+            title: `Extension: ${key}`,
+            action: (ctx: ContextIn) => action(ctx)
+          };
+          return createBuilder<ContextIn, TExtension>(
+            extension,
+            [...steps, newStep]
           );
         }
       ])
@@ -109,12 +107,11 @@ const createWorkflow = <
   TContextIn extends Context,
   TExtensions extends Extension<TContextIn>[]
 >(
-  context: TContextIn = {} as TContextIn,
   extensions: [...TExtensions]
 ) => {
   const extensionBlock = Object.assign({}, ...extensions) as MergeExtensions<TExtensions>;
   const combinedExtension = createExtension(extensionBlock);
-  return createBuilder(combinedExtension, context);
+  return createBuilder(combinedExtension, []);
 }
 
 const createExtension = <TExtension extends Extension<Context>>(ext: TExtension): TExtension => ext;
@@ -126,10 +123,15 @@ const simpleExtension = createExtension({
 });
 
 const anotherExtension = createExtension({
-  another: () => () => ({ another: 'another extension' }),
+  another: () => async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 500);
+    })
+    return { another: 'another extension' };
+  }
 })
 
-const myBuilder = createWorkflow({}, [simpleExtension, anotherExtension])
+const myBuilder = createWorkflow([simpleExtension, anotherExtension])
   .simple('message')
   .another()
   .step('Add coolness', async context => {
