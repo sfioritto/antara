@@ -17,7 +17,7 @@ type Chainable<
 type AddStep<TContextIn extends Context, TExtension extends Extension<any>> = {
   <TContextOut extends Context>(
     title: string,
-    action: (context: TContextIn) => TContextOut
+    action: (context: TContextIn) => TContextOut | Promise<TContextOut>
   ): Chainable<TContextOut, TransformExtension<TExtension, TContextOut>>;
 }
 
@@ -132,13 +132,23 @@ const anotherExtension = createExtension({
 const myBuilder = createWorkflow({}, [simpleExtension, anotherExtension])
   .simple('message')
   .another()
-  .step('Add coolness', context => ({ cool: 'ness', ...context }))
+  .step('Add coolness', async context => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 500);
+    })
+    return {
+      cool: 'ness', ...context
+    }
+  })
   .step('Identity', context => ({ bad: 'news', ...context }))
   .step('final step', context => context)
   .simple('maybe not')
   .step('final final step v3', context => context)
 
-type AssertEquals<T, U> = [T] extends [U] ? [U] extends [T] ? true : false : false;
+type AssertEquals<T, U> =
+  0 extends (1 & T) ? false : // fails if T is any
+  0 extends (1 & U) ? false : // fails if U is any
+  [T] extends [U] ? [U] extends [T] ? true : false : false;
 
 // Expected final context type
 type ExpectedFinalContext = {
