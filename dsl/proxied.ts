@@ -40,7 +40,7 @@ type TransformExtension<
 > = {
   [K in keyof TExtension]: (
     ...args: Parameters<TExtension[K]>
-  ) => (context: TContextIn) => Merge<TContextIn & Context>;
+  ) => (context: TContextIn) => Merge<TContextIn>;
 };
 
 function transformExtension<
@@ -102,7 +102,7 @@ const createExtension = <TContextIn extends Context, TExtension extends Extensio
 
 const simpleExtension = createExtension({
   simple: (message: string) => {
-    return () => ({ message });
+    return (context) => ({ message: `${message}: cool${context?.cool || '? ...not cool yet'}` });
   }
 });
 
