@@ -2,24 +2,21 @@ import { JsonObject } from "./types";
 
 type Context = JsonObject;
 
-type Chainable<TBase, TContext extends Context> = {
-  step: AddStep<TContext, TBase>;
+type Chainable<TExtension, TContextIn extends Context> = {
+  step: AddStep<TContextIn, TExtension>;
 } & {
-  [K in keyof TBase]: TBase[K] extends (...args: any[]) => any
-    ? (...args: Parameters<TBase[K]>) => Chainable<
-        TBase,
-        TBase[K] extends (...args: any[]) => (context: Context) => (infer R extends Context)
-          ? R
-          : ReturnType<TBase[K]>
-      >
-    : TBase[K];
+  [K in keyof TExtension]: TExtension[K] extends (...args: any[]) => any
+    ? (...args: Parameters<TExtension[K]>) => Chainable<
+        TExtension,
+        ReturnType<ReturnType<TExtension[K]>>>
+    : TExtension[K];
 };
 
-type AddStep<TContext extends Context, TBase> = {
+type AddStep<TContextIn extends Context, TExtension> = {
   <TContextOut extends Context>(
     title: string,
-    action: (context: TContext) => TContextOut
-  ): Chainable<TBase, TContextOut>;
+    action: (context: TContextIn) => TContextOut
+  ): Chainable<TExtension, TContextOut>;
 }
 
 type Extension = { [name: string]: (...args: any[]) => (context: Context) => Context };
