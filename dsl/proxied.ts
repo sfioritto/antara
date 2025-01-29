@@ -53,7 +53,7 @@ function transformExtension<
   ) as TransformExtension<TExtension, TContextIn>;
 }
 
-const createBase = <
+const createBuilder = <
   ContextIn extends Context,
   TExtension extends Extension<ContextIn>,
 >(
@@ -61,7 +61,7 @@ const createBase = <
   context: ContextIn,
   steps: StepBlock<any>[] = []
 ): Chainable<ContextIn, TExtension> => {
-  const base = {
+  const builder = {
     step: (<TContextOut extends Context>(
       title: string,
       action: (context: ContextIn) => TContextOut
@@ -69,7 +69,7 @@ const createBase = <
       const newStep = { title, action };
       const newContext = action(context);
       console.log(newContext);
-      return createBase<TContextOut, TransformExtension<TExtension, TContextOut>>(
+      return createBuilder<TContextOut, TransformExtension<TExtension, TContextOut>>(
         transformExtension<TExtension, TContextOut>(extension),
         newContext,
         [...steps, newStep]
@@ -81,7 +81,7 @@ const createBase = <
         (...args: any[]) => {
           const action = extensionMethod(...args);
           const newContext = action(context);
-          return createBase<typeof newContext, TransformExtension<TExtension, typeof newContext>>(
+          return createBuilder<typeof newContext, TransformExtension<TExtension, typeof newContext>>(
             transformExtension<TExtension, typeof newContext>(extension),
             newContext,
             steps
@@ -91,7 +91,7 @@ const createBase = <
     )
   } as Chainable<ContextIn, TExtension>;
 
-  return base;
+  return builder;
 }
 
 const createExtension = <TExtension extends Extension<Context>>(ext: TExtension): TExtension => ext;
@@ -102,7 +102,7 @@ const simpleExtension = createExtension({
   }
 });
 
-const myBase = createBase(simpleExtension, {})
+const myBuilder = createBuilder(simpleExtension, {})
   .simple('message')
   .step('Add coolness', context => ({ cool: 'ness', ...context }))
   .step('Identity', context => ({ bad: 'news', ...context }))
@@ -120,8 +120,8 @@ type ExpectedFinalContext = {
 };
 
 // Type test
-type TestFinalContext = typeof myBase extends { step: (...args: any[]) => any } ?
-  Parameters<Parameters<typeof myBase['step']>[1]>[0] : never;
+type TestFinalContext = typeof myBuilder extends { step: (...args: any[]) => any } ?
+  Parameters<Parameters<typeof myBuilder['step']>[1]>[0] : never;
 
 // This will show a type error if the types don't match
 type TestResult = AssertEquals<TestFinalContext, ExpectedFinalContext>;
