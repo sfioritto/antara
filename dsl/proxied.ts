@@ -42,7 +42,9 @@ type AddStep<TContextIn extends Context, TExtension extends Extension<any>> = {
 type ExtensionMethod<TContextIn extends Context> = (...args: any[]) => Action<TContextIn>;
 
 type Extension<TContextIn extends Context> = {
-  [name: string]: ExtensionMethod<TContextIn>
+  [name: string]: ExtensionMethod<TContextIn> | {
+    [name: string]: ExtensionMethod<TContextIn>
+  }
 };
 
 type StepBlock<ContextIn extends Context> = {
@@ -65,7 +67,11 @@ type TransformExtension<
   TExtension extends Extension<any>,
   TContextIn extends Context
 > = {
-  [K in keyof TExtension]: TransformedExtensionMethod<TExtension[K], TContextIn>;
+    [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<TContextIn>
+    ? TransformedExtensionMethod<TExtension[K], TContextIn>
+    : TExtension[K] extends { [name: string]: ExtensionMethod<TContextIn> }
+    ? TransformExtension<TExtension[K], TContextIn>
+    : never;
 };
 
 type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
