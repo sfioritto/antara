@@ -102,9 +102,9 @@ function transformExtension<
       typeof fn === 'function'
         ? (...args: any[]) => (context: TContextIn) => ({ ...context, ...(fn(...args)(context)) })
         : Object.fromEntries(
-            Object.entries(fn).map(([subK, subFn]) => [
+            Object.entries(fn as object).map(([subK, subFn]) => [
               subK,
-              (...args: any[]) => (context: TContextIn) => ({ ...context, ...(subFn(...args)(context)) })
+              (...args: any[]) => (context: TContextIn) => ({ ...context, ...((subFn as ExtensionMethod<any>)(...args)(context)) })
             ])
           )
     ])
@@ -119,7 +119,11 @@ function createExtensionStep<ContextIn extends Context>(
   const action = extensionMethod(...args);
   return {
     title: `Extension: ${key}`,
-    action: (ctx: ContextIn) => action(ctx)
+    action: async (ctx: ContextIn) => {
+      const result = await action(ctx);
+      console.log(`Extension ${key} result:`, result); // Debug log
+      return { ...ctx, ...result };  // Spread both ctx and result
+    }
   };
 }
 
@@ -144,17 +148,16 @@ const createBuilder = <
     ...Object.fromEntries(
       Object.entries(extension).map(([key, extensionMethod]) => [
         key,
-        (...args: any[]) => {
-          if (typeof extensionMethod === 'function') {
-            const newStep = createExtensionStep(key, extensionMethod, args);
-            return createBuilder<ContextIn, TExtension>(
-              extension,
-              [...steps, newStep]
-            );
-          } else {
-            // Return an object with the nested methods
-            return Object.fromEntries(
-              Object.entries(extensionMethod).map(([subKey, subMethod]) => [
+        typeof extensionMethod === 'function'
+          ? (...args: any[]) => {
+              const newStep = createExtensionStep(key, extensionMethod, args);
+              return createBuilder<ContextIn, TExtension>(
+                extension,
+                [...steps, newStep]
+              );
+            }
+          : Object.fromEntries(
+              Object.entries(extensionMethod as object).map(([subKey, subMethod]) => [
                 subKey,
                 (...args: any[]) => {
                   const newStep = createExtensionStep(
@@ -168,9 +171,7 @@ const createBuilder = <
                   );
                 }
               ])
-            );
-          }
-        }
+            )
       ])
     ),
     run: async function* (initialContext: ContextIn = {} as ContextIn) {
@@ -291,8 +292,23 @@ const anotherExtension = createExtension({
   }
 })
 
-const myBuilder = createWorkflow([simpleExtension, anotherExtension])
+const mathExtension = createExtension({
+  math: {
+    add: (a: number, b: number) => (context) => ({
+      ...context,
+      result: (context.result as number ?? 0) + a + b
+    }),
+    multiply: (a: number, b: number) => (context) => ({
+      ...context,
+      result: (context.result as number ?? 1) * a * b
+    })
+  }
+})
+
+
+const myBuilder = createWorkflow([simpleExtension, anotherExtension, mathExtension])
   .simple('message')
+  .math.add(1, 2)
   .another()
   .step('Add coolness', async context => {
     await new Promise((resolve) => {
