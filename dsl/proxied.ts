@@ -54,14 +54,19 @@ type Flatten<T> = T extends object ? {
   [K in keyof T]: T[K]
 } : T;
 
+type TransformedExtensionMethod<
+  TMethod extends ExtensionMethod<any>,
+  TContextIn extends Context
+> = (
+  ...args: Parameters<TMethod>
+) => (context: TContextIn) => Flatten<TContextIn & ReturnType<ReturnType<TMethod>>>;
+
 type TransformExtension<
   TExtension extends Extension<any>,
   TContextIn extends Context
 > = {
-  [K in keyof TExtension]: (
-    ...args: Parameters<TExtension[K]>
-  ) => (context: TContextIn) => Flatten<TContextIn & ReturnType<ReturnType<TExtension[K]>>>;
-  };
+  [K in keyof TExtension]: TransformedExtensionMethod<TExtension[K], TContextIn>;
+};
 
 type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
   ? Rest extends []
