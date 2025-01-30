@@ -22,14 +22,17 @@ interface SerializedStep {
 type Action<TContextIn extends Context, TContextOut extends Context = TContextIn & Context> =
   (context: TContextIn) => TContextOut | Promise<TContextOut>;
 
-type Chainable<TContextIn extends Context, TExtension extends Extension<any>> = {
+type Chainable<
+  TContextIn extends Context,
+  TExtension extends Extension<any>
+> = {
   step: AddStep<TContextIn, TExtension>;
   run(initialContext?: TContextIn): AsyncGenerator<Event<any, any>, void, unknown>;
 } & {
-  [K in keyof TExtension]: TExtension[K] extends
-    (...args: infer A) => Action<TContextIn, infer TContextOut>
-    ? (...args: A) => Chainable<TContextOut, TransformExtension<TExtension, TContextOut>>
-    : TExtension[K];
+  [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<
+    TContextIn, infer A, infer TContextOut>
+  ? (...args: A) => Chainable<Flatten<TContextOut>, TransformExtension<TExtension, TContextOut>>
+  : TExtension[K];
 };
 
 type AddStep<TContextIn extends Context, TExtension extends Extension<any>> = {
@@ -39,7 +42,12 @@ type AddStep<TContextIn extends Context, TExtension extends Extension<any>> = {
   ): Chainable<TContextOut, TransformExtension<TExtension, TContextOut>>;
 }
 
-type ExtensionMethod<TContextIn extends Context> = (...args: any[]) => Action<TContextIn>;
+type ExtensionMethod<
+  TContextIn extends Context,
+  TArgs extends any[] = any[],
+  TContextOut extends Context = TContextIn
+> =
+  (...args: TArgs) => Action<TContextIn, TContextOut>;
 
 type Extension<TContextIn extends Context> = {
   [name: string]: ExtensionMethod<TContextIn> | {
@@ -61,16 +69,18 @@ type TransformedExtensionMethod<
   TContextIn extends Context
 > = (
   ...args: Parameters<TMethod>
-) => (context: TContextIn) => Flatten<TContextIn & ReturnType<ReturnType<TMethod>>>;
+) => (context: TContextIn) => ReturnType<ReturnType<TMethod>> extends Promise<infer R>
+  ? TContextIn & R
+  : TContextIn & ReturnType<ReturnType<TMethod>>;
 
 type TransformExtension<
   TExtension extends Extension<any>,
   TContextIn extends Context
 > = {
-    [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<TContextIn>
+  [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<any>
     ? TransformedExtensionMethod<TExtension[K], TContextIn>
-    : TExtension[K] extends { [name: string]: ExtensionMethod<TContextIn> }
-    ? TransformExtension<TExtension[K], TContextIn>
+    : TExtension[K] extends { [name: string]: ExtensionMethod<any> }
+    ? { [P in keyof TExtension[K]]: TransformedExtensionMethod<TExtension[K][P], TContextIn> }
     : never;
 };
 
@@ -89,9 +99,28 @@ function transformExtension<
   return Object.fromEntries(
     Object.entries(extension).map(([k, fn]) => [
       k,
-      (...args: any[]) => (context: TContextIn) => ({ ...context, ...(fn(...args)(context)) })
+      typeof fn === 'function'
+        ? (...args: any[]) => (context: TContextIn) => ({ ...context, ...(fn(...args)(context)) })
+        : Object.fromEntries(
+            Object.entries(fn).map(([subK, subFn]) => [
+              subK,
+              (...args: any[]) => (context: TContextIn) => ({ ...context, ...(subFn(...args)(context)) })
+            ])
+          )
     ])
   ) as TransformExtension<TExtension, TContextIn>;
+}
+
+function createExtensionStep<ContextIn extends Context>(
+  key: string,
+  extensionMethod: (...args: any[]) => Action<ContextIn>,
+  args: any[]
+): StepBlock<ContextIn> {
+  const action = extensionMethod(...args);
+  return {
+    title: `Extension: ${key}`,
+    action: (ctx: ContextIn) => action(ctx)
+  };
 }
 
 const createBuilder = <
@@ -116,15 +145,31 @@ const createBuilder = <
       Object.entries(extension).map(([key, extensionMethod]) => [
         key,
         (...args: any[]) => {
-          const action = extensionMethod(...args);
-          const newStep = {
-            title: `Extension: ${key}`,
-            action: (ctx: ContextIn) => action(ctx)
-          };
-          return createBuilder<ContextIn, TExtension>(
-            extension,
-            [...steps, newStep]
-          );
+          if (typeof extensionMethod === 'function') {
+            const newStep = createExtensionStep(key, extensionMethod, args);
+            return createBuilder<ContextIn, TExtension>(
+              extension,
+              [...steps, newStep]
+            );
+          } else {
+            // Return an object with the nested methods
+            return Object.fromEntries(
+              Object.entries(extensionMethod).map(([subKey, subMethod]) => [
+                subKey,
+                (...args: any[]) => {
+                  const newStep = createExtensionStep(
+                    `${key}.${subKey}`,
+                    subMethod as ExtensionMethod<ContextIn>,
+                    args
+                  );
+                  return createBuilder<ContextIn, TExtension>(
+                    extension,
+                    [...steps, newStep]
+                  );
+                }
+              ])
+            );
+          }
         }
       ])
     ),
