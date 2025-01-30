@@ -59,7 +59,13 @@ type TransformExtension<
   [K in keyof TExtension]: (
     ...args: Parameters<TExtension[K]>
   ) => (context: TContextIn) => Flatten<TContextIn & ReturnType<ReturnType<TExtension[K]>>>;
-};
+  };
+
+type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
+  ? Rest extends []
+    ? First
+    : First & MergeExtensions<Rest>
+  : never;
 
 function transformExtension<
   TExtension extends Extension<any>,
@@ -197,12 +203,6 @@ const createBuilder = <
 
   return builder;
 }
-
-type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
-  ? Rest extends []
-    ? First
-    : First & MergeExtensions<Rest>
-  : never;
 
 
 const createWorkflow = <
