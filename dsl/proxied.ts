@@ -39,8 +39,10 @@ type AddStep<TContextIn extends Context, TExtension extends Extension<any>> = {
   ): Chainable<TContextOut, TransformExtension<TExtension, TContextOut>>;
 }
 
+type ExtensionMethod<TContextIn extends Context> = (...args: any[]) => Action<TContextIn>;
+
 type Extension<TContextIn extends Context> = {
-  [name: string]: (...args: any[]) => Action<TContextIn>
+  [name: string]: ExtensionMethod<TContextIn>
 };
 
 type StepBlock<ContextIn extends Context> = {
