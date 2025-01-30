@@ -22,17 +22,34 @@ interface SerializedStep {
 type Action<TContextIn extends Context, TContextOut extends Context = TContextIn & Context> =
   (context: TContextIn) => TContextOut | Promise<TContextOut>;
 
+type Flatten<T> = T extends object
+  ? T extends Promise<infer R>
+    ? Flatten<R>
+    : { [K in keyof T]: T[K] }
+  : T;
+
+type UnionToIntersection<U extends Context> =
+  (U extends any ? (k: U) => void : never) extends ((k: infer I extends Context) => void) ? I : never;
+
 type Chainable<
   TContextIn extends Context,
   TExtension extends Extension<any>
 > = {
-  step: AddStep<TContextIn, TExtension>;
+  step: AddStep<UnionToIntersection<Flatten<TContextIn>>, TExtension>;
   run(initialContext?: TContextIn): AsyncGenerator<Event<any, any>, void, unknown>;
 } & {
-  [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<
-    TContextIn, infer A, infer TContextOut>
-  ? (...args: A) => Chainable<Flatten<TContextOut>, TransformExtension<TExtension, TContextOut>>
-  : TExtension[K];
+  [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<any>
+    ? (...args: Parameters<TExtension[K]>) => Chainable<
+        UnionToIntersection<Flatten<TContextIn & (ReturnType<ReturnType<TExtension[K]>> extends Promise<infer R> ? R : ReturnType<ReturnType<TExtension[K]>>)>>,
+        TExtension
+      >
+    : TExtension[K] extends { [name: string]: ExtensionMethod<any> }
+      ? { [P in keyof TExtension[K]]: (...args: Parameters<TExtension[K][P]>) =>
+          Chainable<
+            UnionToIntersection<Flatten<TContextIn & (ReturnType<ReturnType<TExtension[K][P]>> extends Promise<infer R> ? R : ReturnType<ReturnType<TExtension[K][P]>>)>>,
+            TExtension
+          > }
+      : never;
 };
 
 type AddStep<TContextIn extends Context, TExtension extends Extension<any>> = {
@@ -46,8 +63,7 @@ type ExtensionMethod<
   TContextIn extends Context,
   TArgs extends any[] = any[],
   TContextOut extends Context = TContextIn
-> =
-  (...args: TArgs) => Action<TContextIn, TContextOut>;
+> = (...args: TArgs) => Action<TContextIn, TContextOut extends Promise<infer R> ? R : TContextOut>;
 
 type Extension<TContextIn extends Context> = {
   [name: string]: ExtensionMethod<TContextIn> | {
@@ -57,31 +73,25 @@ type Extension<TContextIn extends Context> = {
 
 type StepBlock<ContextIn extends Context> = {
   title: string;
-  action: Action<ContextIn>;
-}
-
-type Flatten<T> = T extends object ? {
-  [K in keyof T]: T[K]
-} : T;
+  action: Action<ContextIn, ContextIn extends Promise<infer R> ? R : ContextIn>;
+};
 
 type TransformedExtensionMethod<
   TMethod extends ExtensionMethod<any>,
   TContextIn extends Context
 > = (
   ...args: Parameters<TMethod>
-) => (context: TContextIn) => ReturnType<ReturnType<TMethod>> extends Promise<infer R>
-  ? TContextIn & R
-  : TContextIn & ReturnType<ReturnType<TMethod>>;
+) => Action<TContextIn, TContextIn & ReturnType<ReturnType<TMethod>>>;
 
 type TransformExtension<
   TExtension extends Extension<any>,
   TContextIn extends Context
 > = {
   [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<any>
-    ? TransformedExtensionMethod<TExtension[K], TContextIn>
+    ? ExtensionMethod<TContextIn, Parameters<TExtension[K]>, TContextIn & ReturnType<ReturnType<TExtension[K]>>>
     : TExtension[K] extends { [name: string]: ExtensionMethod<any> }
-    ? { [P in keyof TExtension[K]]: TransformedExtensionMethod<TExtension[K][P], TContextIn> }
-    : never;
+      ? { [P in keyof TExtension[K]]: ExtensionMethod<TContextIn, Parameters<TExtension[K][P]>, TContextIn & ReturnType<ReturnType<TExtension[K][P]>>> }
+      : never;
 };
 
 type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
@@ -100,11 +110,11 @@ function transformExtension<
     Object.entries(extension).map(([k, fn]) => [
       k,
       typeof fn === 'function'
-        ? (...args: any[]) => (context: TContextIn) => ({ ...context, ...(fn(...args)(context)) })
+        ? (...args: any[]) => async (context: TContextIn) => ({ ...context, ...await (fn(...args)(context)) })
         : Object.fromEntries(
             Object.entries(fn as object).map(([subK, subFn]) => [
               subK,
-              (...args: any[]) => (context: TContextIn) => ({ ...context, ...((subFn as ExtensionMethod<any>)(...args)(context)) })
+              (...args: any[]) => async (context: TContextIn) => ({ ...context, ...await ((subFn as ExtensionMethod<any>)(...args)(context)) })
             ])
           )
     ])
@@ -113,17 +123,13 @@ function transformExtension<
 
 function createExtensionStep<ContextIn extends Context>(
   key: string,
-  extensionMethod: (...args: any[]) => Action<ContextIn>,
+  extensionMethod: ExtensionMethod<ContextIn>,
   args: any[]
 ): StepBlock<ContextIn> {
   const action = extensionMethod(...args);
   return {
     title: `Extension: ${key}`,
-    action: async (ctx: ContextIn) => {
-      const result = await action(ctx);
-      console.log(`Extension ${key} result:`, result); // Debug log
-      return { ...ctx, ...result };  // Spread both ctx and result
-    }
+    action
   };
 }
 
@@ -133,20 +139,23 @@ const createBuilder = <
 >(
   extension: TExtension,
   steps: StepBlock<any>[] = []
-): Chainable<ContextIn, TExtension> => {
+): Chainable<UnionToIntersection<Flatten<ContextIn>>, TExtension> => {
+  // Transform the extension first
+  const transformedExtension = transformExtension<TExtension, UnionToIntersection<Flatten<ContextIn>>>(extension);
+
   const builder = {
     step: (<TContextOut extends Context>(
       title: string,
-      action: (context: ContextIn) => TContextOut
+      action: (context: UnionToIntersection<Flatten<ContextIn>>) => TContextOut
     ) => {
       const newStep = { title, action };
       return createBuilder<TContextOut, TransformExtension<TExtension, TContextOut>>(
         transformExtension<TExtension, TContextOut>(extension),
         [...steps, newStep]
       );
-    }) as AddStep<ContextIn, TExtension>,
+    }) as AddStep<UnionToIntersection<Flatten<ContextIn>>, TExtension>,
     ...Object.fromEntries(
-      Object.entries(extension).map(([key, extensionMethod]) => [
+      Object.entries(transformedExtension).map(([key, extensionMethod]) => [  // Use transformedExtension here
         key,
         typeof extensionMethod === 'function'
           ? (...args: any[]) => {
@@ -258,7 +267,7 @@ const createBuilder = <
         steps: completedSteps
       };
     }
-  } as Chainable<ContextIn, TExtension>;
+  } as Chainable<UnionToIntersection<Flatten<ContextIn>>, TExtension>;
 
   return builder;
 }
@@ -284,26 +293,30 @@ const simpleExtension = createExtension({
 });
 
 const anotherExtension = createExtension({
-  another: () => async () => {
+  another: () => async (context) => {
     await new Promise((resolve) => {
       setTimeout(resolve, 500);
-    })
+    });
     return { another: 'another extension' };
   }
-})
+});
 
 const mathExtension = createExtension({
   math: {
-    add: (a: number, b: number) => (context) => ({
-      ...context,
-      result: (context.result as number ?? 0) + a + b
-    }),
+    add: (a: number, b: number) => (context) => {
+      const result = (context.result as number ?? 0) + a + b;
+      return {
+        ...context,
+        result
+      };
+    },
     multiply: (a: number, b: number) => (context) => ({
       ...context,
       result: (context.result as number ?? 1) * a * b
     })
   }
 })
+
 
 
 const myBuilder = createWorkflow([simpleExtension, anotherExtension, mathExtension])
@@ -341,7 +354,8 @@ type ExpectedFinalContext = {
   message: string;
   cool: string;
   bad: string;
-  another: string
+  another: string;
+  result: number;
 };
 
 // Type test
