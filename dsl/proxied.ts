@@ -255,6 +255,8 @@ function createBuilder<
           });
 
         } catch (error) {
+          console.error((error as Error).message);
+
           const errorStep = {
             title: step.title,
             status: STATUS.ERROR,
@@ -262,7 +264,7 @@ function createBuilder<
           };
           completedSteps.push(errorStep);
 
-          // Emit error event
+          // Emit error event with enhanced error context
           yield clone({
             workflowName: metadata.workflowName,
             description: metadata.description,
@@ -270,7 +272,7 @@ function createBuilder<
             status: STATUS.ERROR,
             previousContext,
             newContext: currentContext,
-            error: error as Error,
+            error: error as SerializedError,
             completedStep: errorStep,
             steps: steps.map((s, index) =>
               completedSteps[index] || {
