@@ -3,12 +3,12 @@ import { createWorkflow, createExtension } from './proxied';
 
 export const simpleExtension = createExtension({
   simple: (message: string) => {
-    return (context) => ({ message: `${message}: cool${context?.cool || '? ...not cool yet'}` });
+    return ({ context }) => ({ message: `${message}: cool${context?.cool || '? ...not cool yet'}` });
   }
 });
 
 export const anotherExtension = createExtension({
-  another: () => async () => {
+  another: () => async ({ context }) => {
     await new Promise((resolve) => {
       setTimeout(resolve, 500);
     });
@@ -18,14 +18,14 @@ export const anotherExtension = createExtension({
 
 export const mathExtension = createExtension({
   math: {
-    add: (a: number, b: number) => (context) => {
+    add: (a: number, b: number) => ({ context }) => {
       const result = (context.result as number ?? 0) + a + b;
       return {
         ...context,
         result
       };
     },
-    multiply: (a: number, b: number) => (context) => ({
+    multiply: (a: number, b: number) => ({ context }) => ({
       ...context,
       result: (context.result as number ?? 1) * a * b
     })
@@ -35,19 +35,19 @@ export const mathExtension = createExtension({
 // Basic workflow example showing type inference with string name
 const myWorkflow = createWorkflow("Coverage Analysis", [simpleExtension])
   .simple("Initial message")
-  .step("Get coverage", (context) => {
+  .step("Get coverage", ({ context }) => {
     return {
       ...context,
       coverage: { files: ["file1.ts", "file2.ts"] }
     };
   })
-  .step("Find lowest coverage", (context) => {
+  .step("Find lowest coverage", ({ context }) => {
     return {
       ...context,
       lowestCoverageFile: { path: context.coverage.files[0] }
     };
   })
-  .step("For hovering over context", (context) => {
+  .step("For hovering over context", ({ context }) => {
     return {
       ...context,
       hovered: !!context.lowestCoverageFile
@@ -87,7 +87,7 @@ const multiExtensionWorkflow = createWorkflow(
 )
   .math.add(5, 3)
   .another()
-  .step("Final step", context => context);
+  .step("Final step", ({ context }) => context);
 
 // Run the multi-extension workflow
 (async () => {
@@ -143,7 +143,7 @@ const myBuilder = createWorkflow(
   .simple('message')
   .math.add(1, 2)
   .another()
-  .step('Add coolness', async context => {
+  .step('Add coolness', async ({ context }) => {
     await new Promise((resolve) => {
       setTimeout(resolve, 500);
     })
@@ -151,10 +151,10 @@ const myBuilder = createWorkflow(
       cool: 'ness', ...context
     }
   })
-  .step('Identity', context => ({ bad: 'news', ...context }))
-  .step('final step', context => context)
+  .step('Identity', ({ context }) => ({ bad: 'news', ...context }))
+  .step('final step', ({ context }) => context)
   .simple('maybe not')
-  .step('final final step v3', context => context);
+  .step('final final step v3', ({ context }) => context);
 
 async function executeWorkflow() {
   for await (const event of myBuilder.run()) {
@@ -179,9 +179,11 @@ type ExpectedFinalContext = {
   result: number;
 };
 
-// Type test
-type TestFinalContext = typeof myBuilder extends { step: (...args: any[]) => any } ?
-  Parameters<Parameters<typeof myBuilder['step']>[1]>[0] : never;
+// Type test - extract the context type from the action parameter
+type ExtractContextType<T> = T extends { step: (...args: any[]) => any } ?
+  Parameters<Parameters<T['step']>[1]>[0] extends { context: infer C } ? C : never : never;
+
+type TestFinalContext = ExtractContextType<typeof myBuilder>;
 
 // This will show a type error if the types don't match
 type TestResult = AssertEquals<TestFinalContext, ExpectedFinalContext>;

@@ -8,7 +8,7 @@ interface WorkflowConfig {
   description?: string;
 }
 
-export interface Event<ContextIn extends Context, ContextOut extends Context> {
+export interface Event<ContextIn extends Context, ContextOut extends Context, Options extends JsonObject = {}> {
   workflowName: string;
   description?: string;
   type: typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
@@ -18,6 +18,7 @@ export interface Event<ContextIn extends Context, ContextOut extends Context> {
   error?: SerializedError;
   completedStep?: SerializedStep;
   steps: SerializedStep[];
+  options: Options;
 }
 
 interface SerializedStep {
@@ -26,8 +27,8 @@ interface SerializedStep {
   context: Context;
 }
 
-type Action<TContextIn extends Context, TContextOut extends Context = TContextIn & Context> =
-  (context: TContextIn) => TContextOut | Promise<TContextOut>;
+type Action<TContextIn extends Context, TOptions extends JsonObject = {}, TContextOut extends Context = TContextIn & Context> =
+  (params: { context: TContextIn; options: TOptions }) => TContextOut | Promise<TContextOut>;
 
 type Flatten<T> = T extends object
   ? T extends Promise<infer R>
@@ -37,19 +38,20 @@ type Flatten<T> = T extends object
 
 type ExtensionMethod<
   TContextIn extends Context,
+  TOptions extends JsonObject = {},
   TArgs extends any[] = any[],
   TContextOut extends Context = TContextIn
-> = (...args: TArgs) => Action<TContextIn, TContextOut extends Promise<infer R> ? R : TContextOut>;
+> = (...args: TArgs) => Action<TContextIn, TOptions, TContextOut extends Promise<infer R> ? R : TContextOut>;
 
-type Extension<TContextIn extends Context> = {
-  [name: string]: ExtensionMethod<TContextIn> | {
-    [name: string]: ExtensionMethod<TContextIn>
+type Extension<TContextIn extends Context, TOptions extends JsonObject = {}> = {
+  [name: string]: ExtensionMethod<TContextIn, TOptions> | {
+    [name: string]: ExtensionMethod<TContextIn, TOptions>
   }
 };
 
-type StepBlock<ContextIn extends Context> = {
+type StepBlock<ContextIn extends Context, Options extends JsonObject = {}> = {
   title: string;
-  action: Action<ContextIn, ContextIn extends Promise<infer R> ? R : ContextIn>;
+  action: Action<ContextIn, Options, ContextIn extends Promise<infer R> ? R : ContextIn>;
 };
 
 type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
@@ -58,11 +60,11 @@ type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extend
     : First & MergeExtensions<Rest>
   : never;
 
-function createExtensionStep<ContextIn extends Context>(
+function createExtensionStep<ContextIn extends Context, Options extends JsonObject>(
   key: string,
-  extensionMethod: ExtensionMethod<ContextIn>,
+  extensionMethod: ExtensionMethod<ContextIn, Options>,
   args: any[]
-): StepBlock<ContextIn> {
+): StepBlock<ContextIn, Options> {
   const action = extensionMethod(...args);
   return {
     title: `Extension: ${key}`,
@@ -72,6 +74,7 @@ function createExtensionStep<ContextIn extends Context>(
 
 type BuilderExtension<
   TContextIn extends Context,
+  TOptions extends JsonObject,
   TExtension extends Extension<any>
 > = {
   [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<any>
@@ -79,6 +82,7 @@ type BuilderExtension<
         ...args: Parameters<TExtension[K]>
       ) => Builder<
         TContextIn & Awaited<ReturnType<ReturnType<TExtension[K]>>>,
+        TOptions,
         TExtension
       >
     : {
@@ -87,6 +91,7 @@ type BuilderExtension<
               ...args: Parameters<TExtension[K][P]>
             ) => Builder<
               TContextIn & Awaited<ReturnType<ReturnType<TExtension[K][P]>>>,
+              TOptions,
               TExtension
             >
           : never
@@ -95,21 +100,24 @@ type BuilderExtension<
 
 type Builder<
   TContextIn extends Context,
+  TOptions extends JsonObject,
   TExtension extends Extension<Context>
 > = {
   step: <TContextOut extends Context>(
     title: string,
-    action: Action<TContextIn, TContextOut>
+    action: (params: { context: TContextIn; options: TOptions }) => TContextOut | Promise<TContextOut>
   ) => Builder<
-    Flatten<TContextIn & (TContextOut extends Promise<infer R> ? R : TContextOut)>,
+    Flatten<TContextOut>,
+    TOptions,
     TExtension
   >;
-  run(initialContext?: TContextIn): AsyncGenerator<Event<any, any>, void, unknown>;
-} & BuilderExtension<TContextIn, TExtension>;
+  run(params?: { initialContext?: TContextIn, options?: TOptions }): AsyncGenerator<Event<any, any, TOptions>, void, unknown>;
+} & BuilderExtension<TContextIn, TOptions, TExtension>;
 
 export const createWorkflow = <
   TContextIn extends Context,
-  TExtensions extends Extension<TContextIn>[]
+  TOptions extends JsonObject = {},
+  TExtensions extends Extension<TContextIn>[]= []
 >(
   nameOrConfig: string | WorkflowConfig,
   extensions: [...TExtensions]
@@ -118,24 +126,25 @@ export const createWorkflow = <
   const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
   const extensionBlock = Object.assign({}, ...extensions) as MergeExtensions<TExtensions>;
   const combinedExtension = createExtension(extensionBlock);
-  return createBuilder(combinedExtension, [], { workflowName, description });
+  return createBuilder<TContextIn, TOptions, typeof combinedExtension>(combinedExtension, [], { workflowName, description });
 }
 
 function createBuilder<
   ContextIn extends Context,
-  TExtension extends Extension<Context>,
+  Options extends JsonObject,
+  TExtension extends Extension<Context>
 >(
   extension: TExtension,
-  steps: StepBlock<any>[] = [],
+  steps: StepBlock<any, Options>[] = [],
   metadata: { workflowName: string; description?: string }
-): Builder<ContextIn, TExtension> {
+): Builder<ContextIn, Options, TExtension> {
   const builder = {
     step: (<TContextOut extends Context>(
       title: string,
-      action: (context: ContextIn) => TContextOut
+      action: (params: { context: ContextIn; options: Options }) => TContextOut | Promise<TContextOut>
     ) => {
       const newStep = { title, action };
-      return createBuilder<TContextOut, TExtension>(
+      return createBuilder<TContextOut, Options, TExtension>(
         extension,
         [...steps, newStep],
         metadata
@@ -147,7 +156,7 @@ function createBuilder<
         typeof extensionMethod === 'function'
           ? (...args: any[]) => {
               const newStep = createExtensionStep(key, extensionMethod, args);
-              return createBuilder<ContextIn, TExtension>(
+              return createBuilder<ContextIn, Options, TExtension>(
                 extension,
                 [...steps, newStep],
                 metadata
@@ -162,7 +171,7 @@ function createBuilder<
                     subMethod as ExtensionMethod<ContextIn>,
                     args
                   );
-                  return createBuilder<ContextIn, TExtension>(
+                  return createBuilder<ContextIn, Options, TExtension>(
                     extension,
                     [...steps, newStep],
                     metadata
@@ -172,7 +181,7 @@ function createBuilder<
             )
       ])
     ),
-    run: async function* (initialContext: ContextIn = {} as ContextIn) {
+    run: async function* ({ initialContext = {} as ContextIn, options = {} as Options } = {}) {
       let currentContext = structuredClone(initialContext) as Context;
       const completedSteps: SerializedStep[] = [];
       console.log('run')
@@ -188,7 +197,8 @@ function createBuilder<
           title: step.title,
           status: STATUS.PENDING,
           context: currentContext
-        }))
+        })),
+        options
       };
 
       // Execute steps
@@ -196,7 +206,8 @@ function createBuilder<
         const previousContext = structuredClone(currentContext);
 
         try {
-          currentContext = await step.action(currentContext);
+          const result = await step.action({ context: currentContext, options });
+          currentContext = result;
 
           const completedStep = {
             title: step.title,
@@ -220,7 +231,8 @@ function createBuilder<
                 status: STATUS.PENDING,
                 context: currentContext
               }
-            )
+            ),
+            options
           };
 
         } catch (error) {
@@ -247,7 +259,8 @@ function createBuilder<
                 status: STATUS.PENDING,
                 context: currentContext
               }
-            )
+            ),
+            options
           };
           return;
         }
@@ -261,10 +274,11 @@ function createBuilder<
         status: STATUS.COMPLETE,
         previousContext: initialContext,
         newContext: currentContext,
-        steps: completedSteps
+        steps: completedSteps,
+        options
       };
     }
-  } as Builder<ContextIn, TExtension>;
+  } as Builder<ContextIn, Options, TExtension>;
 
   return builder;
 }
