@@ -12,7 +12,10 @@ interface WorkflowConfig {
   description?: string;
 }
 
-export interface Event<ContextIn extends Context, ContextOut extends Context, Options extends object = {}> {
+export interface Event<
+  ContextIn extends Context, ContextOut extends Context,
+  Options extends object = {}
+> {
   workflowName: string;
   description?: string;
   type: typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
@@ -31,8 +34,11 @@ interface SerializedStep {
   context: Context;
 }
 
-type Action<TContextIn extends Context, TOptions extends object = {}, TContextOut extends Context = TContextIn & Context> =
-  (params: { context: TContextIn; options: TOptions }) => TContextOut | Promise<TContextOut>;
+type Action<
+  TContextIn extends Context,
+  TOptions extends object = {},
+  TContextOut extends Context = TContextIn & Context
+> = (params: { context: TContextIn; options: TOptions }) => TContextOut | Promise<TContextOut>;
 
 type Flatten<T> = T extends object
   ? T extends Promise<infer R>
@@ -47,13 +53,19 @@ type ExtensionMethod<
   TContextOut extends Context = TContextIn
 > = (...args: TArgs) => Action<TContextIn, TOptions, TContextOut extends Promise<infer R> ? R : TContextOut>;
 
-type Extension<TContextIn extends Context, TOptions extends object = {}> = {
+type Extension<
+  TContextIn extends Context,
+  TOptions extends object = {}
+> = {
   [name: string]: ExtensionMethod<TContextIn, TOptions> | {
     [name: string]: ExtensionMethod<TContextIn, TOptions>
   }
 };
 
-type StepBlock<ContextIn extends Context, Options extends object = {}> = {
+type StepBlock<
+  ContextIn extends Context,
+  Options extends object = {}
+> = {
   title: string;
   action: Action<ContextIn, Options>;
 };
@@ -82,18 +94,14 @@ type BuilderExtension<
   TExtension extends Extension<any>
 > = {
   [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<any>
-    ? (
-        ...args: Parameters<TExtension[K]>
-      ) => Builder<
+    ? (...args: Parameters<TExtension[K]>) => Builder<
         TContextIn & Awaited<ReturnType<ReturnType<TExtension[K]>>>,
         TOptions,
         TExtension
       >
     : {
         [P in keyof TExtension[K]]: TExtension[K][P] extends ExtensionMethod<any>
-          ? (
-              ...args: Parameters<TExtension[K][P]>
-            ) => Builder<
+          ? (...args: Parameters<TExtension[K][P]>) => Builder<
               TContextIn & Awaited<ReturnType<ReturnType<TExtension[K][P]>>>,
               TOptions,
               TExtension
@@ -102,7 +110,10 @@ type BuilderExtension<
       }
 };
 
-interface RunParams<Options extends object = {}, ContextIn extends Context = Context> {
+interface RunParams<
+  Options extends object = {},
+  ContextIn extends Context = Context
+> {
   initialContext?: ContextIn;
   options?: Options;
   initialCompletedSteps?: SerializedStep[];
