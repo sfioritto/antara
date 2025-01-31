@@ -3,7 +3,14 @@ import { WORKFLOW_EVENTS, STATUS } from './constants';
 
 type Context = JsonObject;
 
+interface WorkflowConfig {
+  name: string;
+  description?: string;
+}
+
 export interface Event<ContextIn extends Context, ContextOut extends Context> {
+  workflowName: string;
+  description?: string;
   type: typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
   status: typeof STATUS[keyof typeof STATUS];
   previousContext: ContextIn;
@@ -100,12 +107,27 @@ type Builder<
   run(initialContext?: TContextIn): AsyncGenerator<Event<any, any>, void, unknown>;
 } & BuilderExtension<TContextIn, TExtension>;
 
+export const createWorkflow = <
+  TContextIn extends Context,
+  TExtensions extends Extension<TContextIn>[]
+>(
+  nameOrConfig: string | WorkflowConfig,
+  extensions: [...TExtensions]
+) => {
+  const workflowName = typeof nameOrConfig === 'string' ? nameOrConfig : nameOrConfig.name;
+  const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
+  const extensionBlock = Object.assign({}, ...extensions) as MergeExtensions<TExtensions>;
+  const combinedExtension = createExtension(extensionBlock);
+  return createBuilder(combinedExtension, [], { workflowName, description });
+}
+
 function createBuilder<
   ContextIn extends Context,
   TExtension extends Extension<Context>,
 >(
   extension: TExtension,
-  steps: StepBlock<any>[] = []
+  steps: StepBlock<any>[] = [],
+  metadata: { workflowName: string; description?: string }
 ): Builder<ContextIn, TExtension> {
   const builder = {
     step: (<TContextOut extends Context>(
@@ -115,7 +137,8 @@ function createBuilder<
       const newStep = { title, action };
       return createBuilder<TContextOut, TExtension>(
         extension,
-        [...steps, newStep]
+        [...steps, newStep],
+        metadata
       );
     }),
     ...Object.fromEntries(
@@ -126,7 +149,8 @@ function createBuilder<
               const newStep = createExtensionStep(key, extensionMethod, args);
               return createBuilder<ContextIn, TExtension>(
                 extension,
-                [...steps, newStep]
+                [...steps, newStep],
+                metadata
               );
             }
           : Object.fromEntries(
@@ -140,7 +164,8 @@ function createBuilder<
                   );
                   return createBuilder<ContextIn, TExtension>(
                     extension,
-                    [...steps, newStep]
+                    [...steps, newStep],
+                    metadata
                   );
                 }
               ])
@@ -153,6 +178,8 @@ function createBuilder<
       console.log('run')
       // Emit start event
       yield {
+        workflowName: metadata.workflowName,
+        description: metadata.description,
         type: WORKFLOW_EVENTS.START,
         status: STATUS.RUNNING,
         previousContext: initialContext,
@@ -180,6 +207,8 @@ function createBuilder<
 
           // Emit update event
           yield {
+            workflowName: metadata.workflowName,
+            description: metadata.description,
             type: WORKFLOW_EVENTS.UPDATE,
             status: STATUS.RUNNING,
             previousContext,
@@ -204,6 +233,8 @@ function createBuilder<
 
           // Emit error event
           yield {
+            workflowName: metadata.workflowName,
+            description: metadata.description,
             type: WORKFLOW_EVENTS.ERROR,
             status: STATUS.ERROR,
             previousContext,
@@ -224,6 +255,8 @@ function createBuilder<
 
       // Emit complete event
       yield {
+        workflowName: metadata.workflowName,
+        description: metadata.description,
         type: WORKFLOW_EVENTS.COMPLETE,
         status: STATUS.COMPLETE,
         previousContext: initialContext,
@@ -234,17 +267,6 @@ function createBuilder<
   } as Builder<ContextIn, TExtension>;
 
   return builder;
-}
-
-export const createWorkflow = <
-  TContextIn extends Context,
-  TExtensions extends Extension<TContextIn>[]
->(
-  extensions: [...TExtensions]
-) => {
-  const extensionBlock = Object.assign({}, ...extensions) as MergeExtensions<TExtensions>;
-  const combinedExtension = createExtension(extensionBlock);
-  return createBuilder(combinedExtension, []);
 }
 
 export const createExtension = <TExtension extends Extension<Context>>(ext: TExtension): TExtension => ext;

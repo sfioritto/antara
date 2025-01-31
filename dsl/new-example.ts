@@ -32,8 +32,8 @@ export const mathExtension = createExtension({
   }
 })
 
-// Basic workflow example showing type inference
-const myWorkflow = createWorkflow([simpleExtension])
+// Basic workflow example showing type inference with string name
+const myWorkflow = createWorkflow("Coverage Analysis", [simpleExtension])
   .simple("Initial message")
   .step("Get coverage", (context) => {
     return {
@@ -77,8 +77,14 @@ const myWorkflow = createWorkflow([simpleExtension])
   }
 })();
 
-// Example using multiple extensions
-const multiExtensionWorkflow = createWorkflow([mathExtension, anotherExtension])
+// Example using multiple extensions with WorkflowConfig
+const multiExtensionWorkflow = createWorkflow(
+  {
+    name: "Math Operations",
+    description: "A workflow that performs math operations and async tasks"
+  },
+  [mathExtension, anotherExtension]
+)
   .math.add(5, 3)
   .another()
   .step("Final step", context => context);
@@ -126,8 +132,14 @@ const fileWorkflow = createWorkflow<{}, FileExtension>("file example", [fileExte
   .logger.info("File processing complete");
 */
 
-// Example builder with multiple steps and extensions
-const myBuilder = createWorkflow([simpleExtension, anotherExtension, mathExtension])
+// Example builder with multiple steps and extensions using WorkflowConfig
+const myBuilder = createWorkflow(
+  {
+    name: "Complex Builder Example",
+    description: "A complex workflow demonstrating multiple extensions and steps"
+  },
+  [simpleExtension, anotherExtension, mathExtension]
+)
   .simple('message')
   .math.add(1, 2)
   .another()
