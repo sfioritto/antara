@@ -78,34 +78,24 @@ type MergeExtensions<
     : First & MergeExtensions<Rest>
   : never;
 
-function createExtensionStep<
-  ContextIn extends Context,
-  Options extends object
->(
-  key: string,
-  extensionMethod: ExtensionMethodOrObject<ContextIn, Options>,
-  args: any[]
-) {
-  let action: Action<ContextIn, Options>;
-  let titleSuffix = key;
-  if (typeof extensionMethod === 'function') {
-    action = extensionMethod(...args);
-  } else {
-    // extensionMethod is wrapped with an optional title and a handler
-    action = extensionMethod.handler(...args);
-    if (extensionMethod.title) {
-      titleSuffix = extensionMethod.title;
-    }
-  }
-  return {
-    title: titleSuffix,
-    action
-  };
-}
-
 type ExtensionResult<EM> = EM extends (...args: any[]) => (...args: any[]) => infer R
   ? Awaited<R>
   : never;
+
+// Helper type to extract the parameters of an extension method,
+// whether it is a bare function or an object with a handler method.
+type GetParameters<T> = T extends { handler: (...args: infer P) => any }
+  ? P
+  : T extends (...args: infer P) => any
+    ? P
+    : never;
+
+// Helper type to extract the result type of an extension's action.
+type GetExtensionResult<T> = T extends { handler: (...args: any[]) => infer R }
+  ? ExtensionResult<(...args: any[]) => R>
+  : T extends (...args: any[]) => any
+    ? ExtensionResult<T>
+    : never;
 
 type BuilderExtension<
   TContextIn extends Context,
@@ -114,46 +104,18 @@ type BuilderExtension<
 > = {
   [K in keyof TExtension]: TExtension[K] extends ExtensionMethodOrObject<any, any>
     ? (
-        ...args: TExtension[K] extends { handler: infer H }
-          ? H extends (...args: any[]) => any
-            ? Parameters<H>
-            : never
-          : TExtension[K] extends (...args: any[]) => any
-            ? Parameters<TExtension[K]>
-            : never
+        ...args: GetParameters<TExtension[K]>
       ) => Builder<
-        TContextIn & ExtensionResult<
-          TExtension[K] extends { handler: infer H }
-            ? H extends (...args: any[]) => any
-              ? H
-              : never
-            : TExtension[K] extends (...args: any[]) => any
-              ? TExtension[K]
-              : never
-        >,
+        TContextIn & GetExtensionResult<TExtension[K]>,
         TOptions,
         TExtension
       >
     : {
         [P in keyof TExtension[K]]: TExtension[K][P] extends ExtensionMethodOrObject<any, any>
           ? (
-              ...args: TExtension[K][P] extends { handler: infer H }
-                ? H extends (...args: any[]) => any
-                  ? Parameters<H>
-                  : never
-                : TExtension[K][P] extends (...args: any[]) => any
-                  ? Parameters<TExtension[K][P]>
-                  : never
+              ...args: GetParameters<TExtension[K][P]>
             ) => Builder<
-              TContextIn & ExtensionResult<
-                TExtension[K][P] extends { handler: infer H }
-                  ? H extends (...args: any[]) => any
-                    ? H
-                    : never
-                  : TExtension[K][P] extends (...args: any[]) => any
-                    ? TExtension[K][P]
-                    : never
-              >,
+              TContextIn & GetExtensionResult<TExtension[K][P]>,
               TOptions,
               TExtension
             >
@@ -198,6 +160,31 @@ export const createWorkflow = <
   const extensionBlock = Object.assign({}, ...extensions) as MergeExtensions<TExtensions>;
   const combinedExtension = createExtension(extensionBlock);
   return createBuilder<Context, TOptions, typeof combinedExtension>(combinedExtension, [], { workflowName, description });
+}
+
+function createExtensionStep<
+  ContextIn extends Context,
+  Options extends object
+>(
+  key: string,
+  extensionMethod: ExtensionMethodOrObject<ContextIn, Options>,
+  args: any[]
+) {
+  let action: Action<ContextIn, Options>;
+  let titleSuffix = key;
+  if (typeof extensionMethod === 'function') {
+    action = extensionMethod(...args);
+  } else {
+    // extensionMethod is wrapped with an optional title and a handler
+    action = extensionMethod.handler(...args);
+    if (extensionMethod.title) {
+      titleSuffix = extensionMethod.title;
+    }
+  }
+  return {
+    title: titleSuffix,
+    action
+  };
 }
 
 function createBuilder<
