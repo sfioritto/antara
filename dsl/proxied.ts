@@ -28,37 +28,6 @@ type Flatten<T> = T extends object
     : { [K in keyof T]: T[K] }
   : T;
 
-type UnionToIntersection<U extends Context> =
-  (U extends any ? (k: U) => void : never) extends ((k: infer I extends Context) => void) ? I : never;
-
-type Chainable<
-  TContextIn extends Context,
-  TExtension extends Extension<any>
-> = {
-  step: AddStep<UnionToIntersection<Flatten<TContextIn>>, TExtension>;
-  run(initialContext?: TContextIn): AsyncGenerator<Event<any, any>, void, unknown>;
-} & {
-  [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<any>
-    ? (...args: Parameters<TExtension[K]>) => Chainable<
-        UnionToIntersection<Flatten<TContextIn & (ReturnType<ReturnType<TExtension[K]>> extends Promise<infer R> ? R : ReturnType<ReturnType<TExtension[K]>>)>>,
-        TExtension
-      >
-    : TExtension[K] extends { [name: string]: ExtensionMethod<any> }
-      ? { [P in keyof TExtension[K]]: (...args: Parameters<TExtension[K][P]>) =>
-          Chainable<
-            UnionToIntersection<Flatten<TContextIn & (ReturnType<ReturnType<TExtension[K][P]>> extends Promise<infer R> ? R : ReturnType<ReturnType<TExtension[K][P]>>)>>,
-            TExtension
-          > }
-      : never;
-};
-
-type AddStep<TContextIn extends Context, TExtension extends Extension<any>> = {
-  <TContextOut extends Context>(
-    title: string,
-    action: Action<TContextIn, TContextOut>
-  ): Chainable<TContextOut, TransformExtension<TExtension, TContextOut>>;
-}
-
 type ExtensionMethod<
   TContextIn extends Context,
   TArgs extends any[] = any[],
@@ -76,43 +45,11 @@ type StepBlock<ContextIn extends Context> = {
   action: Action<ContextIn, ContextIn extends Promise<infer R> ? R : ContextIn>;
 };
 
-type TransformExtension<
-  TExtension extends Extension<any>,
-  TContextIn extends Context
-> = {
-  [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<any>
-    ? ExtensionMethod<TContextIn, Parameters<TExtension[K]>, TContextIn & ReturnType<ReturnType<TExtension[K]>>>
-    : TExtension[K] extends { [name: string]: ExtensionMethod<any> }
-      ? { [P in keyof TExtension[K]]: ExtensionMethod<TContextIn, Parameters<TExtension[K][P]>, TContextIn & ReturnType<ReturnType<TExtension[K][P]>>> }
-      : never;
-};
-
 type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
   ? Rest extends []
     ? First
     : First & MergeExtensions<Rest>
   : never;
-
-function transformExtension<
-  TExtension extends Extension<any>,
-  TContextIn extends Context
->(
-  extension: TExtension
-): TransformExtension<TExtension, TContextIn> {
-  return Object.fromEntries(
-    Object.entries(extension).map(([k, fn]) => [
-      k,
-      typeof fn === 'function'
-        ? (...args: any[]) => async (context: TContextIn) => ({ ...context, ...await (fn(...args)(context)) })
-        : Object.fromEntries(
-            Object.entries(fn as object).map(([subK, subFn]) => [
-              subK,
-              (...args: any[]) => async (context: TContextIn) => ({ ...context, ...await ((subFn as ExtensionMethod<any>)(...args)(context)) })
-            ])
-          )
-    ])
-  ) as TransformExtension<TExtension, TContextIn>;
-}
 
 function createExtensionStep<ContextIn extends Context>(
   key: string,
@@ -126,29 +63,63 @@ function createExtensionStep<ContextIn extends Context>(
   };
 }
 
-const createBuilder = <
+type BuilderExtension<
+  TContextIn extends Context,
+  TExtension extends Extension<any>
+> = {
+  [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<any>
+    ? (
+        ...args: Parameters<TExtension[K]>
+      ) => Builder<
+        TContextIn & Awaited<ReturnType<ReturnType<TExtension[K]>>>,
+        TExtension
+      >
+    : {
+        [P in keyof TExtension[K]]: TExtension[K][P] extends ExtensionMethod<any>
+          ? (
+              ...args: Parameters<TExtension[K][P]>
+            ) => Builder<
+              TContextIn & Awaited<ReturnType<ReturnType<TExtension[K][P]>>>,
+              TExtension
+            >
+          : never
+      }
+};
+
+type Builder<
+  TContextIn extends Context,
+  TExtension extends Extension<Context>
+> = {
+  step: <TContextOut extends Context>(
+    title: string,
+    action: Action<TContextIn, TContextOut>
+  ) => Builder<
+    Flatten<TContextIn & (TContextOut extends Promise<infer R> ? R : TContextOut)>,
+    TExtension
+  >;
+  run(initialContext?: TContextIn): AsyncGenerator<Event<any, any>, void, unknown>;
+} & BuilderExtension<TContextIn, TExtension>;
+
+function createBuilder<
   ContextIn extends Context,
-  TExtension extends Extension<ContextIn>,
+  TExtension extends Extension<Context>,
 >(
   extension: TExtension,
   steps: StepBlock<any>[] = []
-): Chainable<UnionToIntersection<Flatten<ContextIn>>, TExtension> => {
-  // Transform the extension first
-  const transformedExtension = transformExtension<TExtension, UnionToIntersection<Flatten<ContextIn>>>(extension);
-
+): Builder<ContextIn, TExtension> {
   const builder = {
     step: (<TContextOut extends Context>(
       title: string,
-      action: (context: UnionToIntersection<Flatten<ContextIn>>) => TContextOut
+      action: (context: ContextIn) => TContextOut
     ) => {
       const newStep = { title, action };
-      return createBuilder<TContextOut, TransformExtension<TExtension, TContextOut>>(
-        transformExtension<TExtension, TContextOut>(extension),
+      return createBuilder<TContextOut, TExtension>(
+        extension,
         [...steps, newStep]
       );
-    }) as AddStep<UnionToIntersection<Flatten<ContextIn>>, TExtension>,
+    }),
     ...Object.fromEntries(
-      Object.entries(transformedExtension).map(([key, extensionMethod]) => [  // Use transformedExtension here
+      Object.entries(extension).map(([key, extensionMethod]) => [
         key,
         typeof extensionMethod === 'function'
           ? (...args: any[]) => {
@@ -260,11 +231,10 @@ const createBuilder = <
         steps: completedSteps
       };
     }
-  } as Chainable<UnionToIntersection<Flatten<ContextIn>>, TExtension>;
+  } as Builder<ContextIn, TExtension>;
 
   return builder;
 }
-
 
 const createWorkflow = <
   TContextIn extends Context,
@@ -286,7 +256,7 @@ const simpleExtension = createExtension({
 });
 
 const anotherExtension = createExtension({
-  another: () => async (context) => {
+  another: () => async () => {
     await new Promise((resolve) => {
       setTimeout(resolve, 500);
     });
@@ -309,8 +279,6 @@ const mathExtension = createExtension({
     })
   }
 })
-
-
 
 const myBuilder = createWorkflow([simpleExtension, anotherExtension, mathExtension])
   .simple('message')
