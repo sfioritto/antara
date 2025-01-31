@@ -1,6 +1,10 @@
 import { JsonObject, SerializedError } from "./types";
 import { WORKFLOW_EVENTS, STATUS } from './constants';
 
+function clone<T>(original: T): T {
+  return structuredClone(original) as T;
+}
+
 type Context = JsonObject;
 
 interface WorkflowConfig {
@@ -187,16 +191,16 @@ function createBuilder<
       ])
     ),
     run: async function* ({ initialContext = {} as ContextIn, options = {} as Options, initialCompletedSteps = [] } = {}) {
-      let currentContext = structuredClone(initialContext) as Context;
+      let currentContext = clone(initialContext) as Context;
       const completedSteps: SerializedStep[] = [...initialCompletedSteps];
 
       // If we have completed steps, use the context from the last completed step
       if (initialCompletedSteps.length > 0) {
-        currentContext = structuredClone(initialCompletedSteps[initialCompletedSteps.length - 1].context);
+        currentContext = clone(initialCompletedSteps[initialCompletedSteps.length - 1].context);
       }
 
       // Emit start/restart event
-      yield {
+      yield clone({
         workflowName: metadata.workflowName,
         description: metadata.description,
         type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
@@ -211,18 +215,18 @@ function createBuilder<
           }
         ),
         options
-      };
+      });
 
       // Skip already completed steps and execute remaining ones
       const remainingSteps = steps.slice(initialCompletedSteps.length);
 
       // Execute remaining steps
       for (const step of remainingSteps) {
-        const previousContext = structuredClone(currentContext);
+        const previousContext = clone(currentContext);
 
         try {
-          const result = await step.action({ context: currentContext, options });
-          currentContext = result;
+          const result = await step.action({ context: clone(currentContext), options });
+          currentContext = clone(result);
 
           const completedStep = {
             title: step.title,
@@ -232,7 +236,7 @@ function createBuilder<
           completedSteps.push(completedStep);
 
           // Emit update event
-          yield {
+          yield clone({
             workflowName: metadata.workflowName,
             description: metadata.description,
             type: WORKFLOW_EVENTS.UPDATE,
@@ -248,7 +252,7 @@ function createBuilder<
               }
             ),
             options
-          };
+          });
 
         } catch (error) {
           const errorStep = {
@@ -259,7 +263,7 @@ function createBuilder<
           completedSteps.push(errorStep);
 
           // Emit error event
-          yield {
+          yield clone({
             workflowName: metadata.workflowName,
             description: metadata.description,
             type: WORKFLOW_EVENTS.ERROR,
@@ -276,13 +280,13 @@ function createBuilder<
               }
             ),
             options
-          };
+          });
           return;
         }
       }
 
       // Emit complete event
-      yield {
+      yield clone({
         workflowName: metadata.workflowName,
         description: metadata.description,
         type: WORKFLOW_EVENTS.COMPLETE,
@@ -291,7 +295,7 @@ function createBuilder<
         newContext: currentContext,
         steps: completedSteps,
         options
-      };
+      });
     }
   } as Builder<ContextIn, Options, TExtension>;
 
