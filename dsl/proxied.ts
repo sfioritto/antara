@@ -117,10 +117,10 @@ export type Builder<
 export const createWorkflow = <
   TContextIn extends Context,
   TOptions extends object = {},
-  TExtensions extends Extension<TContextIn>[]= []
+  TExtensions extends Extension<TContextIn>[] = [Extension<TContextIn>]
 >(
   nameOrConfig: string | WorkflowConfig,
-  extensions: [...TExtensions]
+  extensions: TExtensions | [] = []
 ) => {
   const workflowName = typeof nameOrConfig === 'string' ? nameOrConfig : nameOrConfig.name;
   const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
