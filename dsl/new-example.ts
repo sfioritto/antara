@@ -1,4 +1,5 @@
 import { createWorkflow, createExtension } from './proxied';
+import type { Builder } from './proxied';
 
 
 export const simpleExtension = createExtension({
@@ -179,9 +180,8 @@ type ExpectedFinalContext = {
   result: number;
 };
 
-// Type test - extract the context type from the action parameter
-type ExtractContextType<T> = T extends { step: (...args: any[]) => any } ?
-  Parameters<Parameters<T['step']>[1]>[0] extends { context: infer C } ? C : never : never;
+// Type test - extract the raw context type from the final builder state
+type ExtractContextType<T> = T extends Builder<infer Context, infer _Options, infer _Extension> ? Context : never;
 
 type TestFinalContext = ExtractContextType<typeof myBuilder>;
 

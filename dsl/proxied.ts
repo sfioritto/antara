@@ -98,21 +98,21 @@ type BuilderExtension<
       }
 };
 
-type Builder<
+export type Builder<
   TContextIn extends Context,
   TOptions extends JsonObject,
   TExtension extends Extension<Context>
 > = {
   step: <TContextOut extends Context>(
     title: string,
-    action: (params: { context: TContextIn; options: TOptions }) => TContextOut | Promise<TContextOut>
+    action: (params: { context: Flatten<TContextIn>; options: TOptions }) => TContextOut | Promise<TContextOut>
   ) => Builder<
     Flatten<TContextOut>,
     TOptions,
     TExtension
   >;
   run(params?: { initialContext?: TContextIn, options?: TOptions }): AsyncGenerator<Event<any, any, TOptions>, void, unknown>;
-} & BuilderExtension<TContextIn, TOptions, TExtension>;
+} & BuilderExtension<Flatten<TContextIn>, TOptions, TExtension>;
 
 export const createWorkflow = <
   TContextIn extends Context,
@@ -141,7 +141,7 @@ function createBuilder<
   const builder = {
     step: (<TContextOut extends Context>(
       title: string,
-      action: (params: { context: ContextIn; options: Options }) => TContextOut | Promise<TContextOut>
+      action: (params: { context: Flatten<ContextIn>; options: Options }) => TContextOut | Promise<TContextOut>
     ) => {
       const newStep = { title, action };
       return createBuilder<TContextOut, Options, TExtension>(
