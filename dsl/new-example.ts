@@ -97,27 +97,27 @@ const multiExtensionWorkflow = createWorkflow(
   }
 })();
 
-/*
+
 // Example with workflow options - not yet supported in new DSL
 const optionsExample = {
   features: ['speed', 'maneuver'],
 }
 
-const optionsWorkflow = createWorkflow<typeof optionsExample>("options test")
-  .step("Check features", (context) => {
+const optionsWorkflow = createWorkflow<{}, { features: string[] }>("options test")
+  .step("Check features", ({ context, options }) => {
     return {
       ...context,
-      hasSpeed: context.features.includes('speed'),
-      hasManeuver: context.features.includes('maneuver')
+      hasSpeed: options.features.includes('speed'),
+      hasManeuver: options.features.includes('maneuver')
     };
   })
-  .step("Process features", (context) => {
+  .step("Process features", ({ context }) => {
     return {
       ...context,
       processed: true
     };
   });
-*/
+
 
 /*
 // Example using the files extension - not yet supported in new DSL
