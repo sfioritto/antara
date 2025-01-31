@@ -70,13 +70,18 @@ type StepBlock<
   action: Action<ContextIn, Options>;
 };
 
-type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
+type MergeExtensions<
+  T extends Extension<any>[]
+> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
   ? Rest extends []
     ? First
     : First & MergeExtensions<Rest>
   : never;
 
-function createExtensionStep<ContextIn extends Context, Options extends object>(
+function createExtensionStep<
+  ContextIn extends Context,
+  Options extends object
+>(
   key: string,
   extensionMethod: ExtensionMethod<ContextIn, Options>,
   args: any[]
@@ -315,5 +320,7 @@ function createBuilder<
   return builder;
 }
 
-export const createExtension = <TExtension extends Extension<Context>>(ext: TExtension): TExtension => ext;
+export const createExtension = <
+  TExtension extends Extension<Context>
+>(ext: TExtension): TExtension => ext;
 
