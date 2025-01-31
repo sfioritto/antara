@@ -115,9 +115,8 @@ export type Builder<
 } & BuilderExtension<Flatten<TContextIn>, TOptions, TExtension>;
 
 export const createWorkflow = <
-  TContextIn extends Context,
   TOptions extends object = {},
-  TExtensions extends Extension<TContextIn>[] = [Extension<TContextIn>]
+  TExtensions extends Extension<Context>[] = [Extension<Context>]
 >(
   nameOrConfig: string | WorkflowConfig,
   extensions: TExtensions | [] = []
@@ -126,7 +125,7 @@ export const createWorkflow = <
   const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
   const extensionBlock = Object.assign({}, ...extensions) as MergeExtensions<TExtensions>;
   const combinedExtension = createExtension(extensionBlock);
-  return createBuilder<TContextIn, TOptions, typeof combinedExtension>(combinedExtension, [], { workflowName, description });
+  return createBuilder<Context, TOptions, typeof combinedExtension>(combinedExtension, [], { workflowName, description });
 }
 
 function createBuilder<

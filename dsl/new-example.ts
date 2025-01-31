@@ -103,7 +103,7 @@ const optionsExample = {
   features: ['speed', 'maneuver'],
 }
 
-const optionsWorkflow = createWorkflow<{}, { features: string[] }>("options test")
+const optionsWorkflow = createWorkflow<{ features: string[] }>("options test")
   .step("Check features", ({ context, options }) => {
     return {
       ...context,
