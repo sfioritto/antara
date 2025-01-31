@@ -51,7 +51,7 @@ type Extension<TContextIn extends Context, TOptions extends object = {}> = {
 
 type StepBlock<ContextIn extends Context, Options extends object = {}> = {
   title: string;
-  action: Action<ContextIn, Options, ContextIn extends Promise<infer R> ? R : ContextIn>;
+  action: Action<ContextIn, Options>;
 };
 
 type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
@@ -64,7 +64,7 @@ function createExtensionStep<ContextIn extends Context, Options extends object>(
   key: string,
   extensionMethod: ExtensionMethod<ContextIn, Options>,
   args: any[]
-): StepBlock<ContextIn, Options> {
+) {
   const action = extensionMethod(...args);
   return {
     title: `Extension: ${key}`,
