@@ -76,13 +76,6 @@ type StepBlock<ContextIn extends Context> = {
   action: Action<ContextIn, ContextIn extends Promise<infer R> ? R : ContextIn>;
 };
 
-type TransformedExtensionMethod<
-  TMethod extends ExtensionMethod<any>,
-  TContextIn extends Context
-> = (
-  ...args: Parameters<TMethod>
-) => Action<TContextIn, TContextIn & ReturnType<ReturnType<TMethod>>>;
-
 type TransformExtension<
   TExtension extends Extension<any>,
   TContextIn extends Context
