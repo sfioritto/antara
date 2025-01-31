@@ -98,6 +98,12 @@ type BuilderExtension<
       }
 };
 
+interface RunParams<Options extends object = {}, ContextIn extends Context = Context> {
+  initialContext?: ContextIn;
+  options?: Options;
+  initialCompletedSteps?: SerializedStep[];
+}
+
 export type Builder<
   TContextIn extends Context,
   TOptions extends object,
@@ -111,7 +117,7 @@ export type Builder<
     TOptions,
     TExtension
   >;
-  run(params?: { initialContext?: TContextIn, options?: TOptions }): AsyncGenerator<Event<any, any, TOptions>, void, unknown>;
+  run(params?: RunParams<TOptions, TContextIn>): AsyncGenerator<Event<any, any, TOptions>, void, unknown>;
 } & BuilderExtension<Flatten<TContextIn>, TOptions, TExtension>;
 
 export const createWorkflow = <
@@ -180,28 +186,38 @@ function createBuilder<
             )
       ])
     ),
-    run: async function* ({ initialContext = {} as ContextIn, options = {} as Options } = {}) {
+    run: async function* ({ initialContext = {} as ContextIn, options = {} as Options, initialCompletedSteps = [] } = {}) {
       let currentContext = structuredClone(initialContext) as Context;
-      const completedSteps: SerializedStep[] = [];
-      console.log('run')
-      // Emit start event
+      const completedSteps: SerializedStep[] = [...initialCompletedSteps];
+
+      // If we have completed steps, use the context from the last completed step
+      if (initialCompletedSteps.length > 0) {
+        currentContext = structuredClone(initialCompletedSteps[initialCompletedSteps.length - 1].context);
+      }
+
+      // Emit start/restart event
       yield {
         workflowName: metadata.workflowName,
         description: metadata.description,
-        type: WORKFLOW_EVENTS.START,
+        type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
         status: STATUS.RUNNING,
         previousContext: initialContext,
         newContext: currentContext,
-        steps: steps.map(step => ({
-          title: step.title,
-          status: STATUS.PENDING,
-          context: currentContext
-        })),
+        steps: steps.map((step, index) =>
+          completedSteps[index] || {
+            title: step.title,
+            status: STATUS.PENDING,
+            context: currentContext
+          }
+        ),
         options
       };
 
-      // Execute steps
-      for (const step of steps) {
+      // Skip already completed steps and execute remaining ones
+      const remainingSteps = steps.slice(initialCompletedSteps.length);
+
+      // Execute remaining steps
+      for (const step of remainingSteps) {
         const previousContext = structuredClone(currentContext);
 
         try {
