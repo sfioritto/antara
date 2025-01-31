@@ -46,7 +46,6 @@ type Flatten<T> = T extends object
     : { [K in keyof T]: T[K] }
   : T;
 
-/* NEW: Allow extension methods to optionally include a custom title */
 export type ExtensionMethod<TContextIn extends Context, TOptions extends object = {}> =
   (...args: any[]) => Action<TContextIn, TOptions, TContextIn>;
 
@@ -79,7 +78,6 @@ type MergeExtensions<
     : First & MergeExtensions<Rest>
   : never;
 
-/* Updated: Adjust createExtensionStep to work with either a plain extension method or one with a title */
 function createExtensionStep<
   ContextIn extends Context,
   Options extends object
@@ -105,7 +103,6 @@ function createExtensionStep<
   };
 }
 
-// New helper type to unwrap the extension's action result
 type ExtensionResult<EM> = EM extends (...args: any[]) => (...args: any[]) => infer R
   ? Awaited<R>
   : never;
@@ -226,9 +223,9 @@ function createBuilder<
     }),
     ...Object.fromEntries(
       Object.entries(extension).map(([key, extProp]) => {
-        // helper type-guard for wrapped extension
-        const isWrapped = (m: any): m is { handler: Function } => m && typeof m === 'object' && 'handler' in m;
-        if (typeof extProp === 'function' || isWrapped(extProp)) {
+        // helper type-guard for when an extension method is an object with a handler property
+        const isExtensionObject = (m: any): m is { handler: Function } => m && typeof m === 'object' && 'handler' in m;
+        if (typeof extProp === 'function' || isExtensionObject(extProp)) {
           return [key, (...args: any[]) => {
             const newStep = createExtensionStep(key, extProp, args);
             return createBuilder<ContextIn, Options, TExtension>(
