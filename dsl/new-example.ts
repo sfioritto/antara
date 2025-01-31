@@ -19,12 +19,15 @@ export const anotherExtension = createExtension({
 
 export const mathExtension = createExtension({
   math: {
-    add: (a: number, b: number) => ({ context }) => {
-      const result = (context.result as number ?? 0) + a + b;
-      return {
-        ...context,
-        result
-      };
+    add: {
+      title: "Addition",
+      handler: (a: number, b: number) => ({ context }) => {
+        const result = (context.result as number ?? 0) + a + b;
+        return {
+          ...context,
+          result
+        };
+      }
     },
     multiply: {
       title: "Multiplication",
@@ -59,12 +62,15 @@ const myWorkflow = createWorkflow("Coverage Analysis", [simpleExtension])
   });
 
 // Example of running a workflow and handling events
-(async () => {
+await (async () => {
+  console.log(myWorkflow.title)
+  console.log('--------------------------------')
   for await (const event of myWorkflow.run()) {
     if (event.type === 'workflow:update') {
       console.log(event.completedStep?.title)
     }
   }
+  console.log('\n\n')
 })();
 
 // Example using multiple extensions with WorkflowConfig
@@ -80,12 +86,15 @@ const multiExtensionWorkflow = createWorkflow(
   .step("Final step", ({ context }) => context);
 
 // Run the multi-extension workflow
-(async () => {
+await (async () => {
+  console.log(multiExtensionWorkflow.title)
+  console.log('--------------------------------')
   for await (const event of multiExtensionWorkflow.run()) {
     if (event.type === 'workflow:update') {
       console.log('Multi-extension event:', event.completedStep?.title);
     }
   }
+  console.log('\n\n')
 })();
 
 
@@ -134,6 +143,7 @@ const myBuilder = createWorkflow(
 )
   .simple('message')
   .math.add(1, 2)
+  .math.multiply(3, 4)
   .another()
   .step('Add coolness', async ({ context }) => {
     await new Promise((resolve) => {
@@ -149,14 +159,17 @@ const myBuilder = createWorkflow(
   .step('final final step v3', ({ context }) => context);
 
 async function executeWorkflow() {
+  console.log(myBuilder.title)
+  console.log('--------------------------------')
   for await (const event of myBuilder.run()) {
     if (event.type === 'workflow:update') {
       console.log('Event:', event.completedStep?.title);
     }
   }
+  console.log('\n\n')
 }
 
-executeWorkflow();
+await executeWorkflow();
 
 // Type testing
 type AssertEquals<T, U> =

@@ -146,6 +146,10 @@ export type Builder<
     TExtension
   >;
   run(params?: RunParams<TOptions, TContextIn>): AsyncGenerator<Event<any, any, TOptions>, void, unknown>;
+  extension: TExtension;
+  steps: StepBlock<any, TOptions>[];
+  title: string;
+  description?: string;
 } & BuilderExtension<Flatten<TContextIn>, TOptions, TExtension>;
 
 export const createWorkflow = <
@@ -159,7 +163,12 @@ export const createWorkflow = <
   const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
   const extensionBlock = Object.assign({}, ...extensions) as MergeExtensions<TExtensions>;
   const combinedExtension = createExtension(extensionBlock);
-  return createBuilder<Context, TOptions, typeof combinedExtension>(combinedExtension, [], { workflowName, description });
+  return createBuilder<Context, TOptions, typeof combinedExtension>({
+    extension: combinedExtension,
+    steps: [],
+    title: workflowName,
+    description
+  });
 }
 
 function createExtensionStep<
@@ -192,70 +201,84 @@ function createBuilder<
   Options extends object,
   TExtension extends Extension<Context>
 >(
-  extension: TExtension,
-  steps: StepBlock<any, Options>[] = [],
-  metadata: { workflowName: string; description?: string }
+  props: {
+    extension: TExtension;
+    steps?: StepBlock<any, Options>[];
+    title: string;
+    description?: string;
+  }
 ): Builder<ContextIn, Options, TExtension> {
+  const { extension, steps = [], title, description } = props;
+
   const builder = {
     step: (<TContextOut extends Context>(
-      title: string,
+      stepTitle: string,
       action: (params: { context: Flatten<ContextIn>; options: Options }) => TContextOut | Promise<TContextOut>
     ) => {
-      const newStep = { title, action };
-      return createBuilder<TContextOut, Options, TExtension>(
+      const newStep: StepBlock<any, Options> = { title: stepTitle, action };
+      return createBuilder<TContextOut, Options, TExtension>({
         extension,
-        [...steps, newStep],
-        metadata
-      );
+        steps: [...steps, newStep],
+        title,
+        description,
+      });
     }),
     ...Object.fromEntries(
       Object.entries(extension).map(([key, extProp]) => {
-        // helper type-guard for when an extension method is an object with a handler property
+        // Type guard for when an extension method is an object with a handler property
         const isExtensionObject = (m: any): m is { handler: Function } => m && typeof m === 'object' && 'handler' in m;
         if (typeof extProp === 'function' || isExtensionObject(extProp)) {
-          return [key, (...args: any[]) => {
-            const newStep = createExtensionStep(key, extProp, args);
-            return createBuilder<ContextIn, Options, TExtension>(
-              extension,
-              [...steps, newStep],
-              metadata
-            );
-          }];
+          return [
+            key,
+            (...args: any[]) => {
+              const newStep = createExtensionStep(key, extProp, args);
+              return createBuilder<ContextIn, Options, TExtension>({
+                extension,
+                steps: [...steps, newStep],
+                title,
+                description,
+              });
+            }
+          ];
         } else {
           // Nested extension case
-          return [key, Object.fromEntries(Object.entries(extProp as object).map(([subKey, subMethod]) => {
-            return [
-              subKey,
-              (...args: any[]) => {
-                const newStep = createExtensionStep(
-                  `${key}.${subKey}`,
-                  subMethod,
-                  args
-                );
-                return createBuilder<ContextIn, Options, TExtension>(
-                  extension,
-                  [...steps, newStep],
-                  metadata
-                );
-              }
-            ];
-          }))]
+          return [
+            key,
+            Object.fromEntries(
+              Object.entries(extProp as object).map(([subKey, subMethod]) => {
+                return [
+                  subKey,
+                  (...args: any[]) => {
+                    const newStep = createExtensionStep(`${key}.${subKey}`, subMethod, args);
+                    return createBuilder<ContextIn, Options, TExtension>({
+                      extension,
+                      steps: [...steps, newStep],
+                      title,
+                      description,
+                    });
+                  }
+                ];
+              })
+            )
+          ];
         }
       })
     ),
-    run: async function* ({ initialContext = {} as ContextIn, options = {} as Options, initialCompletedSteps = [] } = {}) {
+    run: async function*({
+      initialContext = {} as ContextIn,
+      options = {} as Options,
+      initialCompletedSteps = []
+    }: RunParams<Options, ContextIn> = {}) {
       let currentContext = clone(initialContext) as Context;
       const completedSteps: SerializedStep[] = [...initialCompletedSteps];
 
-      // If we have completed steps, use the context from the last completed step
       if (initialCompletedSteps.length > 0) {
         currentContext = clone(initialCompletedSteps[initialCompletedSteps.length - 1].context);
       }
 
-      // Emit start/restart event
       yield clone({
-        workflowName: metadata.workflowName,
-        description: metadata.description,
+        workflowName: title,
+        description,
         type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
         status: STATUS.RUNNING,
         previousContext: initialContext,
@@ -270,10 +293,7 @@ function createBuilder<
         options
       });
 
-      // Skip already completed steps and execute remaining ones
       const remainingSteps = steps.slice(initialCompletedSteps.length);
-
-      // Execute remaining steps
       for (const step of remainingSteps) {
         const previousContext = clone(currentContext);
 
@@ -288,10 +308,9 @@ function createBuilder<
           };
           completedSteps.push(completedStep);
 
-          // Emit update event
           yield clone({
-            workflowName: metadata.workflowName,
-            description: metadata.description,
+            workflowName: title,
+            description,
             type: WORKFLOW_EVENTS.UPDATE,
             status: STATUS.RUNNING,
             previousContext,
@@ -317,10 +336,9 @@ function createBuilder<
           };
           completedSteps.push(errorStep);
 
-          // Emit error event with enhanced error context
           yield clone({
-            workflowName: metadata.workflowName,
-            description: metadata.description,
+            workflowName: title,
+            description,
             type: WORKFLOW_EVENTS.ERROR,
             status: STATUS.ERROR,
             previousContext,
@@ -340,10 +358,9 @@ function createBuilder<
         }
       }
 
-      // Emit complete event
       yield clone({
-        workflowName: metadata.workflowName,
-        description: metadata.description,
+        workflowName: title,
+        description,
         type: WORKFLOW_EVENTS.COMPLETE,
         status: STATUS.COMPLETE,
         previousContext: initialContext,
@@ -351,7 +368,12 @@ function createBuilder<
         steps: completedSteps,
         options
       });
-    }
+    },
+    // Expose the config on the builder
+    extension,
+    steps,
+    title,
+    description
   } as Builder<ContextIn, Options, TExtension>;
 
   return builder;
