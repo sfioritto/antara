@@ -46,19 +46,20 @@ type Flatten<T> = T extends object
     : { [K in keyof T]: T[K] }
   : T;
 
-type ExtensionMethod<
-  TContextIn extends Context,
-  TOptions extends object = {},
-  TArgs extends any[] = any[],
-  TContextOut extends Context = TContextIn
-> = (...args: TArgs) => Action<TContextIn, TOptions, TContextOut extends Promise<infer R> ? R : TContextOut>;
+/* NEW: Allow extension methods to optionally include a custom title */
+export type ExtensionMethod<TContextIn extends Context, TOptions extends object = {}> =
+  (...args: any[]) => Action<TContextIn, TOptions, TContextIn>;
+
+export type ExtensionMethodOrObject<TContextIn extends Context, TOptions extends object = {}> =
+  | ExtensionMethod<TContextIn, TOptions>
+  | { title?: string; handler: ExtensionMethod<TContextIn, TOptions> };
 
 type Extension<
   TContextIn extends Context,
   TOptions extends object = {}
 > = {
-  [name: string]: ExtensionMethod<TContextIn, TOptions> | {
-    [name: string]: ExtensionMethod<TContextIn, TOptions>
+  [name: string]: ExtensionMethodOrObject<TContextIn, TOptions> | {
+    [name: string]: ExtensionMethodOrObject<TContextIn, TOptions>
   }
 };
 
@@ -78,36 +79,84 @@ type MergeExtensions<
     : First & MergeExtensions<Rest>
   : never;
 
+/* Updated: Adjust createExtensionStep to work with either a plain extension method or one with a title */
 function createExtensionStep<
   ContextIn extends Context,
   Options extends object
 >(
   key: string,
-  extensionMethod: ExtensionMethod<ContextIn, Options>,
+  extensionMethod: ExtensionMethodOrObject<ContextIn, Options>,
   args: any[]
 ) {
-  const action = extensionMethod(...args);
+  let action: Action<ContextIn, Options>;
+  let titleSuffix = key;
+  if (typeof extensionMethod === 'function') {
+    action = extensionMethod(...args);
+  } else {
+    // extensionMethod is wrapped with an optional title and a handler
+    action = extensionMethod.handler(...args);
+    if (extensionMethod.title) {
+      titleSuffix = extensionMethod.title;
+    }
+  }
   return {
-    title: `Extension: ${key}`,
+    title: titleSuffix,
     action
   };
 }
 
+// New helper type to unwrap the extension's action result
+type ExtensionResult<EM> = EM extends (...args: any[]) => (...args: any[]) => infer R
+  ? Awaited<R>
+  : never;
+
 type BuilderExtension<
   TContextIn extends Context,
   TOptions extends object,
-  TExtension extends Extension<any>
+  TExtension extends Extension<Context>
 > = {
-  [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<any>
-    ? (...args: Parameters<TExtension[K]>) => Builder<
-        TContextIn & Awaited<ReturnType<ReturnType<TExtension[K]>>>,
+  [K in keyof TExtension]: TExtension[K] extends ExtensionMethodOrObject<any, any>
+    ? (
+        ...args: TExtension[K] extends { handler: infer H }
+          ? H extends (...args: any[]) => any
+            ? Parameters<H>
+            : never
+          : TExtension[K] extends (...args: any[]) => any
+            ? Parameters<TExtension[K]>
+            : never
+      ) => Builder<
+        TContextIn & ExtensionResult<
+          TExtension[K] extends { handler: infer H }
+            ? H extends (...args: any[]) => any
+              ? H
+              : never
+            : TExtension[K] extends (...args: any[]) => any
+              ? TExtension[K]
+              : never
+        >,
         TOptions,
         TExtension
       >
     : {
-        [P in keyof TExtension[K]]: TExtension[K][P] extends ExtensionMethod<any>
-          ? (...args: Parameters<TExtension[K][P]>) => Builder<
-              TContextIn & Awaited<ReturnType<ReturnType<TExtension[K][P]>>>,
+        [P in keyof TExtension[K]]: TExtension[K][P] extends ExtensionMethodOrObject<any, any>
+          ? (
+              ...args: TExtension[K][P] extends { handler: infer H }
+                ? H extends (...args: any[]) => any
+                  ? Parameters<H>
+                  : never
+                : TExtension[K][P] extends (...args: any[]) => any
+                  ? Parameters<TExtension[K][P]>
+                  : never
+            ) => Builder<
+              TContextIn & ExtensionResult<
+                TExtension[K][P] extends { handler: infer H }
+                  ? H extends (...args: any[]) => any
+                    ? H
+                    : never
+                  : TExtension[K][P] extends (...args: any[]) => any
+                    ? TExtension[K][P]
+                    : never
+              >,
               TOptions,
               TExtension
             >
@@ -176,35 +225,39 @@ function createBuilder<
       );
     }),
     ...Object.fromEntries(
-      Object.entries(extension).map(([key, extensionMethod]) => [
-        key,
-        typeof extensionMethod === 'function'
-          ? (...args: any[]) => {
-              const newStep = createExtensionStep(key, extensionMethod, args);
-              return createBuilder<ContextIn, Options, TExtension>(
-                extension,
-                [...steps, newStep],
-                metadata
-              );
-            }
-          : Object.fromEntries(
-              Object.entries(extensionMethod as object).map(([subKey, subMethod]) => [
-                subKey,
-                (...args: any[]) => {
-                  const newStep = createExtensionStep(
-                    `${key}.${subKey}`,
-                    subMethod as ExtensionMethod<ContextIn>,
-                    args
-                  );
-                  return createBuilder<ContextIn, Options, TExtension>(
-                    extension,
-                    [...steps, newStep],
-                    metadata
-                  );
-                }
-              ])
-            )
-      ])
+      Object.entries(extension).map(([key, extProp]) => {
+        // helper type-guard for wrapped extension
+        const isWrapped = (m: any): m is { handler: Function } => m && typeof m === 'object' && 'handler' in m;
+        if (typeof extProp === 'function' || isWrapped(extProp)) {
+          return [key, (...args: any[]) => {
+            const newStep = createExtensionStep(key, extProp, args);
+            return createBuilder<ContextIn, Options, TExtension>(
+              extension,
+              [...steps, newStep],
+              metadata
+            );
+          }];
+        } else {
+          // Nested extension case
+          return [key, Object.fromEntries(Object.entries(extProp as object).map(([subKey, subMethod]) => {
+            return [
+              subKey,
+              (...args: any[]) => {
+                const newStep = createExtensionStep(
+                  `${key}.${subKey}`,
+                  subMethod,
+                  args
+                );
+                return createBuilder<ContextIn, Options, TExtension>(
+                  extension,
+                  [...steps, newStep],
+                  metadata
+                );
+              }
+            ];
+          }))]
+        }
+      })
     ),
     run: async function* ({ initialContext = {} as ContextIn, options = {} as Options, initialCompletedSteps = [] } = {}) {
       let currentContext = clone(initialContext) as Context;

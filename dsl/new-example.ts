@@ -26,10 +26,13 @@ export const mathExtension = createExtension({
         result
       };
     },
-    multiply: (a: number, b: number) => ({ context }) => ({
-      ...context,
-      result: (context.result as number ?? 1) * a * b
-    })
+    multiply: {
+      title: "Multiplication",
+      handler: (a: number, b: number) => ({ context }) => ({
+        ...context,
+        result: (context.result as number ?? 1) * a * b
+      })
+    }
   }
 })
 
@@ -58,22 +61,8 @@ const myWorkflow = createWorkflow("Coverage Analysis", [simpleExtension])
 // Example of running a workflow and handling events
 (async () => {
   for await (const event of myWorkflow.run()) {
-    console.log('Event:', event);
-
-    switch (event.type) {
-      case 'workflow:start':
-        console.log('Workflow started:', event.newContext);
-        break;
-      case 'workflow:update':
-        console.log('Step completed:', event.completedStep?.title);
-        console.log('Current context:', event.newContext);
-        break;
-      case 'workflow:complete':
-        console.log('Workflow completed:', event.newContext);
-        break;
-      case 'workflow:error':
-        console.log('Error occurred:', event.error);
-        break;
+    if (event.type === 'workflow:update') {
+      console.log(event.completedStep?.title)
     }
   }
 })();
@@ -93,7 +82,9 @@ const multiExtensionWorkflow = createWorkflow(
 // Run the multi-extension workflow
 (async () => {
   for await (const event of multiExtensionWorkflow.run()) {
-    console.log('Multi-extension event:', event);
+    if (event.type === 'workflow:update') {
+      console.log('Multi-extension event:', event.completedStep?.title);
+    }
   }
 })();
 
@@ -159,7 +150,9 @@ const myBuilder = createWorkflow(
 
 async function executeWorkflow() {
   for await (const event of myBuilder.run()) {
-    console.log('Event:', event);
+    if (event.type === 'workflow:update') {
+      console.log('Event:', event.completedStep?.title);
+    }
   }
 }
 
