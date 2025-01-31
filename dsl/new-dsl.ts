@@ -1,316 +1,308 @@
-import { JsonObject } from "./types"
-import type { SerializedError } from './types'
-import { WORKFLOW_EVENTS, STATUS } from './constants'
+import { JsonObject, SerializedError } from "./types";
+import { WORKFLOW_EVENTS, STATUS } from './constants';
 
-export type EventTypes = typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
-export type StatusOptions = typeof STATUS[keyof typeof STATUS];
-
-export type Builder<
-  ContextIn extends JsonObject,
-  InitialContext extends JsonObject,
-  WorkflowOptions extends JsonObject,
-  ExtensionBlock extends Record<string, any>
-> = {
-  step: AddStep<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock>;
-  run<Options extends WorkflowOptions>(
-    params: RunParams<Options, InitialContext>
-  ): AsyncGenerator<
-    | Event<InitialContext, InitialContext, Options>
-    | Event<ContextIn, JsonObject, Options>
-    | Event<InitialContext, ContextIn, Options>
-    , void, unknown>;
-} & ExtensionBlock;
-
-export interface Event<
-  ContextIn extends JsonObject,
-  ContextOut extends JsonObject,
-  Options extends JsonObject,
-> {
-  workflowName: string,
-  description?: string,
-  previousContext: ContextIn,
-  newContext: ContextOut,
-  error?: SerializedError,
-  type: EventTypes,
-  status: StatusOptions,
-  completedStep?: SerializedStep,
-  steps: SerializedStep[],
-  options: Options,
+function clone<T>(original: T): T {
+  return structuredClone(original) as T;
 }
 
-export interface SerializedStep {
-  title: string
-  status: StatusOptions
-  context: JsonObject
-}
-
-type Action<
-  ContextIn extends JsonObject,
-  WorkflowOptions extends JsonObject,
-  ActionOut
-> = (params: {
-  context: ContextIn;
-  options: WorkflowOptions;
-}) => ActionOut | Promise<ActionOut>
-
-type Reduce<
-  ActionOut,
-  ContextIn extends JsonObject,
-  WorkflowOptions extends JsonObject,
-  ContextOut extends JsonObject
-> = (params: {
-  result: ActionOut;
-  context: ContextIn;
-  options: WorkflowOptions;
-}) => ContextOut | Promise<ContextOut>
-
-interface StepBlock<
-  ContextIn extends JsonObject,
-  WorkflowOptions extends JsonObject,
-  ActionOut,
-  ContextOut extends JsonObject
-> {
-  title: string;
-  action: Action<ContextIn, WorkflowOptions, ActionOut>;
-  reduce: Reduce<ActionOut, ContextIn, WorkflowOptions, ContextOut>;
-}
-
-type GenericReducerOutput<ActionOut, ContextIn> =
-  ActionOut extends JsonObject ? Merge<ContextIn & ActionOut> :
-  ActionOut extends void ? ContextIn :
-  ContextIn;
-
-interface RunParams<WorkflowOptions extends JsonObject, InitialContext extends JsonObject> {
-  initialContext?: InitialContext;
-  options?: WorkflowOptions;
-  initialCompletedSteps?: SerializedStep[];
-}
-
-export type AddStep<
-  ContextIn extends JsonObject,
-  InitialContext extends JsonObject,
-  WorkflowOptions extends JsonObject,
-  ExtensionBlock extends Record<string, any>,
-> = {
-  <ActionOut, ContextOut extends JsonObject>(
-    title: string,
-    action: Action<ContextIn, WorkflowOptions, ActionOut>,
-    reduce: Reduce<ActionOut, ContextIn, WorkflowOptions, ContextOut>
-  ): Builder<Merge<ContextOut>, InitialContext, WorkflowOptions, ExtensionBlock>;
-
-  <ActionOut>(
-    title: string,
-    action: Action<ContextIn, WorkflowOptions, ActionOut>
-  ): Builder<Merge<GenericReducerOutput<ActionOut, ContextIn>>, InitialContext, WorkflowOptions, ExtensionBlock>;
-};
-
-export type Extension<
-  TBase extends Record<string, any> = {},
-  TExtension extends Record<string, (...args: any[]) => any> = {}
-> = (builder: Builder<JsonObject, JsonObject, JsonObject, TBase>) => {
-  [K in keyof TExtension]: (...args: Parameters<TExtension[K]>) => ReturnType<TExtension[K]>
-};
-
-type Merge<T> = T extends object ? {
-  [K in keyof T]: T[K]
-} & {} : T;
+type Context = JsonObject;
 
 interface WorkflowConfig {
   name: string;
   description?: string;
 }
 
-function clone<T>(original: T): T {
-  return structuredClone(original) as T;
+export interface Event<ContextIn extends Context, ContextOut extends Context, Options extends object = {}> {
+  workflowName: string;
+  description?: string;
+  type: typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
+  status: typeof STATUS[keyof typeof STATUS];
+  previousContext: ContextIn;
+  newContext: ContextOut;
+  error?: SerializedError;
+  completedStep?: SerializedStep;
+  steps: SerializedStep[];
+  options: Options;
 }
 
-function serializedSteps(
-  currentContext: JsonObject,
-  completedSteps: SerializedStep[],
-  stepBlocks: StepBlock<JsonObject, any, JsonObject, JsonObject>[]
-): SerializedStep[] {
-  return stepBlocks.map((stepBlock, index) => {
-    const completedStep = completedSteps[index];
-    if (!completedStep) {
-      return {
-        title: stepBlock.title,
-        status: STATUS.PENDING,
-        context: currentContext,
-      };
-    }
-    return completedStep;
-  });
+interface SerializedStep {
+  title: string;
+  status: typeof STATUS[keyof typeof STATUS];
+  context: Context;
 }
 
-export function createWorkflow<
-  WorkflowOptions extends JsonObject = {},
-  ExtensionBlock extends Record<string, any> = {},
-  InitialContext extends JsonObject = {}
+type Action<TContextIn extends Context, TOptions extends object = {}, TContextOut extends Context = TContextIn & Context> =
+  (params: { context: TContextIn; options: TOptions }) => TContextOut | Promise<TContextOut>;
+
+type Flatten<T> = T extends object
+  ? T extends Promise<infer R>
+    ? Flatten<R>
+    : { [K in keyof T]: T[K] }
+  : T;
+
+type ExtensionMethod<
+  TContextIn extends Context,
+  TOptions extends object = {},
+  TArgs extends any[] = any[],
+  TContextOut extends Context = TContextIn
+> = (...args: TArgs) => Action<TContextIn, TOptions, TContextOut extends Promise<infer R> ? R : TContextOut>;
+
+type Extension<TContextIn extends Context, TOptions extends object = {}> = {
+  [name: string]: ExtensionMethod<TContextIn, TOptions> | {
+    [name: string]: ExtensionMethod<TContextIn, TOptions>
+  }
+};
+
+type StepBlock<ContextIn extends Context, Options extends object = {}> = {
+  title: string;
+  action: Action<ContextIn, Options>;
+};
+
+type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extends Extension<any>, ...infer Rest extends Extension<any>[]]
+  ? Rest extends []
+    ? First
+    : First & MergeExtensions<Rest>
+  : never;
+
+function createExtensionStep<ContextIn extends Context, Options extends object>(
+  key: string,
+  extensionMethod: ExtensionMethod<ContextIn, Options>,
+  args: any[]
+) {
+  const action = extensionMethod(...args);
+  return {
+    title: `Extension: ${key}`,
+    action
+  };
+}
+
+type BuilderExtension<
+  TContextIn extends Context,
+  TOptions extends object,
+  TExtension extends Extension<any>
+> = {
+  [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<any>
+    ? (
+        ...args: Parameters<TExtension[K]>
+      ) => Builder<
+        TContextIn & Awaited<ReturnType<ReturnType<TExtension[K]>>>,
+        TOptions,
+        TExtension
+      >
+    : {
+        [P in keyof TExtension[K]]: TExtension[K][P] extends ExtensionMethod<any>
+          ? (
+              ...args: Parameters<TExtension[K][P]>
+            ) => Builder<
+              TContextIn & Awaited<ReturnType<ReturnType<TExtension[K][P]>>>,
+              TOptions,
+              TExtension
+            >
+          : never
+      }
+};
+
+interface RunParams<Options extends object = {}, ContextIn extends Context = Context> {
+  initialContext?: ContextIn;
+  options?: Options;
+  initialCompletedSteps?: SerializedStep[];
+}
+
+export type Builder<
+  TContextIn extends Context,
+  TOptions extends object,
+  TExtension extends Extension<Context>
+> = {
+  step: <TContextOut extends Context>(
+    title: string,
+    action: (params: { context: Flatten<TContextIn>; options: TOptions }) => TContextOut | Promise<TContextOut>
+  ) => Builder<
+    Flatten<TContextOut>,
+    TOptions,
+    TExtension
+  >;
+  run(params?: RunParams<TOptions, TContextIn>): AsyncGenerator<Event<any, any, TOptions>, void, unknown>;
+} & BuilderExtension<Flatten<TContextIn>, TOptions, TExtension>;
+
+export const createWorkflow = <
+  TOptions extends object = {},
+  TExtensions extends Extension<Context>[] = [Extension<Context>]
 >(
   nameOrConfig: string | WorkflowConfig,
-  extensions: Extension<ExtensionBlock>[] = []
-) {
+  extensions: TExtensions | [] = []
+) => {
   const workflowName = typeof nameOrConfig === 'string' ? nameOrConfig : nameOrConfig.name;
   const description = typeof nameOrConfig === 'string' ? undefined : nameOrConfig.description;
+  const extensionBlock = Object.assign({}, ...extensions) as MergeExtensions<TExtensions>;
+  const combinedExtension = createExtension(extensionBlock);
+  return createBuilder<Context, TOptions, typeof combinedExtension>(combinedExtension, [], { workflowName, description });
+}
 
-  function createBuilder<
-    ContextIn extends JsonObject
-  >(
-    steps: StepBlock<JsonObject, WorkflowOptions, any, JsonObject>[]
-  ): Builder<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock> {
-    const builderBase = {
-      step: (<ActionOut, ContextOut extends JsonObject>(
-        title: string,
-        action: Action<ContextIn, WorkflowOptions, ActionOut>,
-        reduce?: Reduce<ActionOut, ContextIn, WorkflowOptions, ContextOut>
-      ) => {
-        const genericReducer: Reduce<
-          ActionOut,
-          ContextIn,
-          WorkflowOptions,
-          Merge<ActionOut & ContextIn>
-        > = ({ result, context }) => {
-          if (result === undefined || result === null) {
-            return context as Merge<ActionOut & ContextIn>;
+function createBuilder<
+  ContextIn extends Context,
+  Options extends object,
+  TExtension extends Extension<Context>
+>(
+  extension: TExtension,
+  steps: StepBlock<any, Options>[] = [],
+  metadata: { workflowName: string; description?: string }
+): Builder<ContextIn, Options, TExtension> {
+  const builder = {
+    step: (<TContextOut extends Context>(
+      title: string,
+      action: (params: { context: Flatten<ContextIn>; options: Options }) => TContextOut | Promise<TContextOut>
+    ) => {
+      const newStep = { title, action };
+      return createBuilder<TContextOut, Options, TExtension>(
+        extension,
+        [...steps, newStep],
+        metadata
+      );
+    }),
+    ...Object.fromEntries(
+      Object.entries(extension).map(([key, extensionMethod]) => [
+        key,
+        typeof extensionMethod === 'function'
+          ? (...args: any[]) => {
+              const newStep = createExtensionStep(key, extensionMethod, args);
+              return createBuilder<ContextIn, Options, TExtension>(
+                extension,
+                [...steps, newStep],
+                metadata
+              );
+            }
+          : Object.fromEntries(
+              Object.entries(extensionMethod as object).map(([subKey, subMethod]) => [
+                subKey,
+                (...args: any[]) => {
+                  const newStep = createExtensionStep(
+                    `${key}.${subKey}`,
+                    subMethod as ExtensionMethod<ContextIn>,
+                    args
+                  );
+                  return createBuilder<ContextIn, Options, TExtension>(
+                    extension,
+                    [...steps, newStep],
+                    metadata
+                  );
+                }
+              ])
+            )
+      ])
+    ),
+    run: async function* ({ initialContext = {} as ContextIn, options = {} as Options, initialCompletedSteps = [] } = {}) {
+      let currentContext = clone(initialContext) as Context;
+      const completedSteps: SerializedStep[] = [...initialCompletedSteps];
+
+      // If we have completed steps, use the context from the last completed step
+      if (initialCompletedSteps.length > 0) {
+        currentContext = clone(initialCompletedSteps[initialCompletedSteps.length - 1].context);
+      }
+
+      // Emit start/restart event
+      yield clone({
+        workflowName: metadata.workflowName,
+        description: metadata.description,
+        type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
+        status: STATUS.RUNNING,
+        previousContext: initialContext,
+        newContext: currentContext,
+        steps: steps.map((step, index) =>
+          completedSteps[index] || {
+            title: step.title,
+            status: STATUS.PENDING,
+            context: currentContext
           }
-          if (
-            result &&
-            typeof result === "object" &&
-            !Array.isArray(result) &&
-            Object.getPrototypeOf(result) === Object.prototype
-          ) {
-            return {
-              ...context,
-              ...result,
-            } as Merge<ActionOut & ContextIn>;
-          }
-          return context as Merge<ActionOut & ContextIn>;
-        };
+        ),
+        options
+      });
 
-        const newStep = {
-          title,
-          action,
-          reduce: reduce ?? genericReducer,
-        } as StepBlock<JsonObject, WorkflowOptions, ActionOut, ContextOut>;
+      // Skip already completed steps and execute remaining ones
+      const remainingSteps = steps.slice(initialCompletedSteps.length);
 
-        const newSteps = [...steps, newStep];
-        return createBuilder<ContextOut>(newSteps);
-      }) as AddStep<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock>,
+      // Execute remaining steps
+      for (const step of remainingSteps) {
+        const previousContext = clone(currentContext);
 
-      run: async function* <Options extends WorkflowOptions>({
-        initialContext = {} as InitialContext,
-        initialCompletedSteps = [],
-        options = {} as Options
-      }: RunParams<Options, InitialContext>): AsyncGenerator<
-        | Event<InitialContext, InitialContext, Options> // START event
-        | Event<ContextIn, ContextIn, Options> // Update Event
-        | Event<InitialContext, ContextIn, Options> // Complete Event
-        , void, unknown> {
-        let newContext = initialCompletedSteps.length > 0
-          ? clone(initialCompletedSteps[initialCompletedSteps.length - 1].context)
-          : clone(initialContext);
-        const completedSteps = [...initialCompletedSteps];
-
-        const startEvent: Event<InitialContext, InitialContext, Options> = {
-          workflowName,
-          description,
-          type: initialCompletedSteps.length > 0 ? WORKFLOW_EVENTS.RESTART : WORKFLOW_EVENTS.START,
-          previousContext: initialContext,
-          newContext: initialContext,
-          status: STATUS.RUNNING,
-          steps: serializedSteps(newContext, completedSteps, steps),
-          options,
-        };
-
-        yield clone(startEvent);
-
-        // Skip already completed steps
-        const remainingSteps = steps.slice(initialCompletedSteps.length);
-
-        for (const step of remainingSteps) {
-          const previousContext = clone(newContext);
-
-          try {
-            const result = await step.action({ context: clone(newContext), options });
-            newContext = step.reduce
-              ? await step.reduce({ result, context: clone(newContext), options })
-              : newContext;
-          } catch (stepError) {
-            const error = stepError as Error;
-            console.error(error.message);
-
-            const completedStep = {
-              title: step.title,
-              status: STATUS.ERROR,
-              context: newContext,
-            };
-            completedSteps.push(completedStep);
-
-            const errorEvent: Event<ContextIn, ContextIn, Options> = {
-              workflowName,
-              type: WORKFLOW_EVENTS.ERROR,
-              previousContext: previousContext as ContextIn,
-              newContext: newContext as ContextIn,
-              status: STATUS.ERROR,
-              error,
-              completedStep,
-              options,
-              steps: serializedSteps(newContext, completedSteps, steps),
-            };
-            yield clone(errorEvent);
-            return;
-          }
+        try {
+          const result = await step.action({ context: clone(currentContext), options });
+          currentContext = clone(result);
 
           const completedStep = {
             title: step.title,
             status: STATUS.COMPLETE,
-            context: newContext,
+            context: currentContext
           };
           completedSteps.push(completedStep);
 
-          const updateEvent: Event<ContextIn, ContextIn, Options> = {
-            workflowName,
+          // Emit update event
+          yield clone({
+            workflowName: metadata.workflowName,
+            description: metadata.description,
             type: WORKFLOW_EVENTS.UPDATE,
-            previousContext: previousContext as ContextIn,
-            newContext: newContext as ContextIn,
-            completedStep,
             status: STATUS.RUNNING,
-            options,
-            steps: serializedSteps(newContext, completedSteps, steps),
+            previousContext,
+            newContext: currentContext,
+            completedStep,
+            steps: steps.map((s, index) =>
+              completedSteps[index] || {
+                title: s.title,
+                status: STATUS.PENDING,
+                context: currentContext
+              }
+            ),
+            options
+          });
+
+        } catch (error) {
+          console.error((error as Error).message);
+
+          const errorStep = {
+            title: step.title,
+            status: STATUS.ERROR,
+            context: currentContext
           };
+          completedSteps.push(errorStep);
 
-          yield clone(updateEvent);
+          // Emit error event with enhanced error context
+          yield clone({
+            workflowName: metadata.workflowName,
+            description: metadata.description,
+            type: WORKFLOW_EVENTS.ERROR,
+            status: STATUS.ERROR,
+            previousContext,
+            newContext: currentContext,
+            error: error as SerializedError,
+            completedStep: errorStep,
+            steps: steps.map((s, index) =>
+              completedSteps[index] || {
+                title: s.title,
+                status: STATUS.PENDING,
+                context: currentContext
+              }
+            ),
+            options
+          });
+          return;
         }
-
-        const completeEvent: Event<InitialContext, ContextIn, Options> = {
-          workflowName,
-          type: WORKFLOW_EVENTS.COMPLETE,
-          previousContext: initialContext,
-          newContext: newContext as ContextIn,
-          status: STATUS.COMPLETE,
-          options,
-          steps: serializedSteps(newContext, completedSteps, steps),
-        };
-
-        yield clone(completeEvent);
       }
-    };
 
-    // Apply extensions in sequence, composing their types
-    let extensionBlock = {} as ExtensionBlock;
-    for (const extension of extensions) {
-      extensionBlock = {
-        ...extensionBlock,
-        ...extension(builderBase as Builder<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock>)
-      } as ExtensionBlock;
+      // Emit complete event
+      yield clone({
+        workflowName: metadata.workflowName,
+        description: metadata.description,
+        type: WORKFLOW_EVENTS.COMPLETE,
+        status: STATUS.COMPLETE,
+        previousContext: initialContext,
+        newContext: currentContext,
+        steps: completedSteps,
+        options
+      });
     }
+  } as Builder<ContextIn, Options, TExtension>;
 
-    return {
-      ...extensionBlock,
-      ...builderBase
-    } as Builder<ContextIn, InitialContext, WorkflowOptions, ExtensionBlock>;
-  }
-
-  return createBuilder<InitialContext>([]);
+  return builder;
 }
+
+export const createExtension = <TExtension extends Extension<Context>>(ext: TExtension): TExtension => ext;
 

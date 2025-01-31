@@ -1,5 +1,5 @@
-import { createWorkflow, createExtension } from './proxied';
-import type { Builder } from './proxied';
+import { createWorkflow, createExtension } from './new-dsl';
+import type { Builder } from './new-dsl';
 
 
 export const simpleExtension = createExtension({
