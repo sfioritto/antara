@@ -236,7 +236,7 @@ function createBuilder<
   return builder;
 }
 
-const createWorkflow = <
+export const createWorkflow = <
   TContextIn extends Context,
   TExtensions extends Extension<TContextIn>[]
 >(
@@ -247,85 +247,5 @@ const createWorkflow = <
   return createBuilder(combinedExtension, []);
 }
 
-const createExtension = <TExtension extends Extension<Context>>(ext: TExtension): TExtension => ext;
-
-const simpleExtension = createExtension({
-  simple: (message: string) => {
-    return (context) => ({ message: `${message}: cool${context?.cool || '? ...not cool yet'}` });
-  }
-});
-
-const anotherExtension = createExtension({
-  another: () => async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 500);
-    });
-    return { another: 'another extension' };
-  }
-});
-
-const mathExtension = createExtension({
-  math: {
-    add: (a: number, b: number) => (context) => {
-      const result = (context.result as number ?? 0) + a + b;
-      return {
-        ...context,
-        result
-      };
-    },
-    multiply: (a: number, b: number) => (context) => ({
-      ...context,
-      result: (context.result as number ?? 1) * a * b
-    })
-  }
-})
-
-const myBuilder = createWorkflow([simpleExtension, anotherExtension, mathExtension])
-  .simple('message')
-  .math.add(1, 2)
-  .another()
-  .step('Add coolness', async context => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 500);
-    })
-    return {
-      cool: 'ness', ...context
-    }
-  })
-  .step('Identity', context => ({ bad: 'news', ...context }))
-  .step('final step', context => context)
-  .simple('maybe not')
-  .step('final final step v3', context => context)
-
-async function executeWorkflow() {
-  for await (const event of myBuilder.run()) {
-    console.log('Event:', event);
-  }
-}
-
-executeWorkflow();
-
-type AssertEquals<T, U> =
-  0 extends (1 & T) ? false : // fails if T is any
-  0 extends (1 & U) ? false : // fails if U is any
-  [T] extends [U] ? [U] extends [T] ? true : false : false;
-
-// Expected final context type
-type ExpectedFinalContext = {
-  message: string;
-  cool: string;
-  bad: string;
-  another: string;
-  result: number;
-};
-
-// Type test
-type TestFinalContext = typeof myBuilder extends { step: (...args: any[]) => any } ?
-  Parameters<Parameters<typeof myBuilder['step']>[1]>[0] : never;
-
-// This will show a type error if the types don't match
-type TestResult = AssertEquals<TestFinalContext, ExpectedFinalContext>;
-
-// If you want to be even more explicit, you can add a const assertion
-const _typeTest: TestResult = true;
+export const createExtension = <TExtension extends Extension<Context>>(ext: TExtension): TExtension => ext;
 

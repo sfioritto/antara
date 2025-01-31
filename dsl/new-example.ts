@@ -1,126 +1,178 @@
-import { createWorkflow } from './new-dsl';
-import { fileExtension, type FileExtension } from '../extensions/files';
-import { LoggerExtension, loggerExtension, type LoggerContext } from '../extensions/logger';
+import { createWorkflow, createExtension } from './proxied';
 
-// Original example showing type inference
-const myWorkflow = createWorkflow("workflow name")
-  .step("Get coverage", () => {
+
+export const simpleExtension = createExtension({
+  simple: (message: string) => {
+    return (context) => ({ message: `${message}: cool${context?.cool || '? ...not cool yet'}` });
+  }
+});
+
+export const anotherExtension = createExtension({
+  another: () => async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 500);
+    });
+    return { another: 'another extension' };
+  }
+});
+
+export const mathExtension = createExtension({
+  math: {
+    add: (a: number, b: number) => (context) => {
+      const result = (context.result as number ?? 0) + a + b;
       return {
+        ...context,
+        result
+      };
+    },
+    multiply: (a: number, b: number) => (context) => ({
+      ...context,
+      result: (context.result as number ?? 1) * a * b
+    })
+  }
+})
+
+// Basic workflow example showing type inference
+const myWorkflow = createWorkflow([simpleExtension])
+  .simple("Initial message")
+  .step("Get coverage", (context) => {
+    return {
+      ...context,
       coverage: { files: ["file1.ts", "file2.ts"] }
     };
   })
-  .step("Find lowest coverage", ({ context }) => {
-    // context now has { coverage: { files: string[] } }
+  .step("Find lowest coverage", (context) => {
     return {
+      ...context,
       lowestCoverageFile: { path: context.coverage.files[0] }
     };
   })
-  .step("For hovering over context to see type inference", ({ context }) => {
-    // context has coverage + lowestCoverageFile
-    // => we can do context.lowestCoverageFile.path etc.
+  .step("For hovering over context", (context) => {
     return {
+      ...context,
       hovered: !!context.lowestCoverageFile
     };
   });
 
-// The resulting workflow is typed so that the final .run()
-// will return { coverage: { files: string[] }, lowestCoverageFile: { path: string }, hovered: boolean }
-
+// Example of running a workflow and handling events
 (async () => {
-  const workflow = await myWorkflow.run({ initialContext: { cool: 'cool' } });
+  for await (const event of myWorkflow.run()) {
+    console.log('Event:', event);
 
-  // START event
-  const start = await workflow.next();
-  console.log('Workflow started:', start.value);
-
-  // Each step will produce an UPDATE event
-  const step1 = await workflow.next();
-  console.log('Step 1 completed:', step1);
-
-  const step2 = await workflow.next();
-  console.log('Step 2 completed:', step2.value);
-
-  const step3 = await workflow.next();
-  console.log('Step 3 completed:', step3.value);
-
-  // COMPLETE event
-  const complete = await workflow.next();
-  console.log('Workflow completed:', complete.value?.newContext);
+    switch (event.type) {
+      case 'workflow:start':
+        console.log('Workflow started:', event.newContext);
+        break;
+      case 'workflow:update':
+        console.log('Step completed:', event.completedStep?.title);
+        console.log('Current context:', event.newContext);
+        break;
+      case 'workflow:complete':
+        console.log('Workflow completed:', event.newContext);
+        break;
+      case 'workflow:error':
+        console.log('Error occurred:', event.error);
+        break;
+    }
+  }
 })();
 
-// Additional examples showing options and different patterns
+// Example using multiple extensions
+const multiExtensionWorkflow = createWorkflow([mathExtension, anotherExtension])
+  .math.add(5, 3)
+  .another()
+  .step("Final step", context => context);
 
-// Example with workflow options
+// Run the multi-extension workflow
+(async () => {
+  for await (const event of multiExtensionWorkflow.run()) {
+    console.log('Multi-extension event:', event);
+  }
+})();
+
+/*
+// Example with workflow options - not yet supported in new DSL
 const optionsExample = {
   features: ['speed', 'maneuver'],
 }
 
 const optionsWorkflow = createWorkflow<typeof optionsExample>("options test")
-  .step(
-    "Step 1",
-    () => ({ count: 1 }),
-    ({ result }) => result
-  )
-  .step(
-    "Step 2",
-    ({ context, options }) => ({ doubled: context.count * 2 }),
-    ({ result, context, options }) => ({
+  .step("Check features", (context) => {
+    return {
       ...context,
-      doubled: result.doubled,
-      featureOne: options.features[0],
-    })
-  )
-  .step(
-    "Step 3",
-    ({ context, options }) => ({
-      message: `${context.count} doubled is ${context.doubled}`,
-      featureTwo: options.features[1],
-    }))
-  .step(
-    "Step 4",
-    ({ context }) => console.log(context),
-);
-
-// Example of running workflows with different options
-async function runOptionsExample() {
-  const workflowRun = optionsWorkflow.run({
-    options: optionsExample,
+      hasSpeed: context.features.includes('speed'),
+      hasManeuver: context.features.includes('maneuver')
+    };
   })
+  .step("Process features", (context) => {
+    return {
+      ...context,
+      processed: true
+    };
+  });
+*/
 
-  const stepOne = await workflowRun.next()
-  console.log(stepOne.value?.options)
+/*
+// Example using the files extension - not yet supported in new DSL
+const fileWorkflow = createWorkflow<{}, FileExtension>("file example", [fileExtension, loggerExtension])
+  .files.read("input.txt")
+  .step("Process file content", (context) => {
+    return {
+      ...context,
+      processedContent: context.content.toUpperCase()
+    };
+  })
+  .files.write("output.txt")
+  .logger.info("File processing complete");
+*/
 
-  const workflowRunTwo = optionsWorkflow.run({
-    options: {
-      ...optionsExample,
-      workflowRunId: 4,
+// Example builder with multiple steps and extensions
+const myBuilder = createWorkflow([simpleExtension, anotherExtension, mathExtension])
+  .simple('message')
+  .math.add(1, 2)
+  .another()
+  .step('Add coolness', async context => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 500);
+    })
+    return {
+      cool: 'ness', ...context
     }
   })
+  .step('Identity', context => ({ bad: 'news', ...context }))
+  .step('final step', context => context)
+  .simple('maybe not')
+  .step('final final step v3', context => context);
 
-  const stepAgain = await workflowRunTwo.next()
-  console.log(stepAgain.value?.options)
-  console.log(stepAgain.value?.previousContext)
+async function executeWorkflow() {
+  for await (const event of myBuilder.run()) {
+    console.log('Event:', event);
+  }
 }
 
-// Example of a simpler workflow with just actions
-const actionOnlyWorkflow = createWorkflow("actions only")
-  .step("First step", () => ({ firstStep: "first" }))
-  .step("Second step", ({ context }) => ({ secondStep: context.firstStep }))
+executeWorkflow();
 
-// Example using the files extension
-const fileWorkflow = createWorkflow<{}, FileExtension>("file example", [fileExtension, loggerExtension]);
-fileWorkflow
-  .file("title", "/path")
-  .step('', ({ context }) => ({ ...context, stepOne: 'one' }))
-  .step('', ({ context }) => context);
+// Type testing
+type AssertEquals<T, U> =
+  0 extends (1 & T) ? false : // fails if T is any
+  0 extends (1 & U) ? false : // fails if U is any
+  [T] extends [U] ? [U] extends [T] ? true : false : false;
 
-// Run the file workflow
-(async () => {
-  const workflow = await fileWorkflow.run({});
+// Expected final context type
+type ExpectedFinalContext = {
+  message: string;
+  cool: string;
+  bad: string;
+  another: string;
+  result: number;
+};
 
-  for await (const event of workflow) {
-    if (event.completedStep) {
-      console.log(`Step "${event.completedStep.title}":`, event.newContext);
-    }
-  }
-})();
+// Type test
+type TestFinalContext = typeof myBuilder extends { step: (...args: any[]) => any } ?
+  Parameters<Parameters<typeof myBuilder['step']>[1]>[0] : never;
+
+// This will show a type error if the types don't match
+type TestResult = AssertEquals<TestFinalContext, ExpectedFinalContext>;
+
+// If you want to be even more explicit, you can add a const assertion
+const _typeTest: TestResult = true;
