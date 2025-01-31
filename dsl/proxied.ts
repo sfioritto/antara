@@ -8,7 +8,7 @@ interface WorkflowConfig {
   description?: string;
 }
 
-export interface Event<ContextIn extends Context, ContextOut extends Context, Options extends JsonObject = {}> {
+export interface Event<ContextIn extends Context, ContextOut extends Context, Options extends object = {}> {
   workflowName: string;
   description?: string;
   type: typeof WORKFLOW_EVENTS[keyof typeof WORKFLOW_EVENTS];
@@ -27,7 +27,7 @@ interface SerializedStep {
   context: Context;
 }
 
-type Action<TContextIn extends Context, TOptions extends JsonObject = {}, TContextOut extends Context = TContextIn & Context> =
+type Action<TContextIn extends Context, TOptions extends object = {}, TContextOut extends Context = TContextIn & Context> =
   (params: { context: TContextIn; options: TOptions }) => TContextOut | Promise<TContextOut>;
 
 type Flatten<T> = T extends object
@@ -38,18 +38,18 @@ type Flatten<T> = T extends object
 
 type ExtensionMethod<
   TContextIn extends Context,
-  TOptions extends JsonObject = {},
+  TOptions extends object = {},
   TArgs extends any[] = any[],
   TContextOut extends Context = TContextIn
 > = (...args: TArgs) => Action<TContextIn, TOptions, TContextOut extends Promise<infer R> ? R : TContextOut>;
 
-type Extension<TContextIn extends Context, TOptions extends JsonObject = {}> = {
+type Extension<TContextIn extends Context, TOptions extends object = {}> = {
   [name: string]: ExtensionMethod<TContextIn, TOptions> | {
     [name: string]: ExtensionMethod<TContextIn, TOptions>
   }
 };
 
-type StepBlock<ContextIn extends Context, Options extends JsonObject = {}> = {
+type StepBlock<ContextIn extends Context, Options extends object = {}> = {
   title: string;
   action: Action<ContextIn, Options, ContextIn extends Promise<infer R> ? R : ContextIn>;
 };
@@ -60,7 +60,7 @@ type MergeExtensions<T extends Extension<any>[]> = T extends [infer First extend
     : First & MergeExtensions<Rest>
   : never;
 
-function createExtensionStep<ContextIn extends Context, Options extends JsonObject>(
+function createExtensionStep<ContextIn extends Context, Options extends object>(
   key: string,
   extensionMethod: ExtensionMethod<ContextIn, Options>,
   args: any[]
@@ -74,7 +74,7 @@ function createExtensionStep<ContextIn extends Context, Options extends JsonObje
 
 type BuilderExtension<
   TContextIn extends Context,
-  TOptions extends JsonObject,
+  TOptions extends object,
   TExtension extends Extension<any>
 > = {
   [K in keyof TExtension]: TExtension[K] extends ExtensionMethod<any>
@@ -100,7 +100,7 @@ type BuilderExtension<
 
 export type Builder<
   TContextIn extends Context,
-  TOptions extends JsonObject,
+  TOptions extends object,
   TExtension extends Extension<Context>
 > = {
   step: <TContextOut extends Context>(
@@ -116,7 +116,7 @@ export type Builder<
 
 export const createWorkflow = <
   TContextIn extends Context,
-  TOptions extends JsonObject = {},
+  TOptions extends object = {},
   TExtensions extends Extension<TContextIn>[]= []
 >(
   nameOrConfig: string | WorkflowConfig,
@@ -131,7 +131,7 @@ export const createWorkflow = <
 
 function createBuilder<
   ContextIn extends Context,
-  Options extends JsonObject,
+  Options extends object,
   TExtension extends Extension<Context>
 >(
   extension: TExtension,
